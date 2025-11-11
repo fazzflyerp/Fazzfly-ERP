@@ -1,103 +1,199 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import HeroSection from "@/app/components/HeroSection";
+import NavBar from "@/app/components/NavBar";
+import ProblemSection from "@/app/components/ProblenSection";
+
+export default function LandingPage() {
+  const [scrollY, setScrollY] = useState(0);
+
+  useEffect(() => {
+    const handleScroll = () => setScrollY(window.scrollY);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const features = [
+    {
+      icon: (
+        <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      ),
+      title: "Real-time Analytics",
+      description: "ติดตามข้อมูลแบบเรียลไทม์ ตัดสินใจได้ทันที"
+    },
+    {
+      icon: (
+        <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+      ),
+      title: "Enterprise Security",
+      description: "ความปลอดภัยระดับธนาคาร เข้ารหัส End-to-End"
+    },
+    {
+      icon: (
+        <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+        </svg>
+      ),
+      title: "Cloud Native",
+      description: "เข้าถึงได้ทุกที่ ทุกเวลา ผ่านอุปกรณ์ใดก็ได้"
+    },
+    {
+      icon: (
+        <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+      ),
+      title: "Google Sheets Integration",
+      description: "เชื่อมต่อโดยตรงกับ Google Sheets ไม่ต้อง sync"
+    }
+  ];
+
+  const stats = [
+    { value: "10K+", label: "Active" },
+    { value: "99.9%", label: "Uptime" },
+    { value: "50M+", label: "Transactions" },
+    { value: "24/7", label: "Support" }
+  ];
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="min-h-screen bg-white">
+      {/* Navigation */}
+      <NavBar />
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+      {/* Hero Section - ใช้ Component */}
+      <HeroSection />
+
+      {/* Dashboard Preview Section */}
+      <ProblemSection />
+      {/* Stats Section */}
+      <section className="relative py-32 px-6 bg-gradient-to-r from-blue-500 to-cyan-300">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid md:grid-cols-2 gap-16 items-center">
+<div>
+              <h2 
+                className="text-5xl font-bold text-slate-900 mb-6"
+                style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
+              >
+                Trusted by Businesses Worldwide
+              </h2>
+              <p 
+                className="text-xl text-white text-slate-600 mb-8 leading-relaxed"
+                style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
+              >
+                ระบบของเรา ใช้งานโดยบริษัทชั้นนำ และธุรกิจขนาดกลางทั่วโลก
+              </p>
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 text-white">
+                  <svg className="w-6 h-6 text-blue-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span 
+                    className="font-medium text-white"
+                    style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
+                  >
+                    อัพเดทข้อมูลแบบ Real-time
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-white">
+                  <svg className="w-6 h-6 text-blue-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span 
+                    className="font-medium text-white"
+                    style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
+                  >
+                    ปลอดภัยระดับ Enterprise
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-white">
+                  <svg className="w-6 h-6 text-blue-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span 
+                    className="font-medium text-white"
+                    style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
+                  >
+                    รองรับ Google Sheets โดยตรง
+                  </span>
+                </div>
+              </div>
+            </div>
+
+<div className="space-y-4">
+              <div className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-blue-600 rounded-xl shadow-md hover:shadow-lg transition-shadow">
+                <div className="text-4xl font-black text-blue-600 mb-1" style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}>ปรึกษาฟรี</div>
+                <div className="text-slate-700 font-semibold text-sm" style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}>เริ่มต้นกับทีมของเรา</div>
+              </div>
+              <div className="p-6 bg-gradient-to-br from-sky-50 to-sky-100 border-l-4 border-sky-600 rounded-xl shadow-md hover:shadow-lg transition-shadow">
+                <div className="text-4xl font-black text-sky-600 mb-1" style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}>2-3 วัน</div>
+                <div className="text-slate-700 font-semibold text-sm" style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}>ติดตั้งแล้วใช้งานได้</div>
+              </div>
+              <div className="p-6 bg-gradient-to-br from-cyan-50 to-cyan-100 border-l-4 border-cyan-600 rounded-xl shadow-md hover:shadow-lg transition-shadow">
+                <div className="text-4xl font-black text-cyan-600 mb-1" style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}>100%</div>
+                <div className="text-slate-700 font-semibold text-sm" style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}>ข้อมูลของคุณเท่านั้น</div>
+              </div>
+            </div>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+      </section>
+
+      {/* CTA Section */}
+      <section className="relative py-32 px-6 bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-500">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-5xl font-bold text-white mb-6">
+            Ready to Transform Your Business?
+          </h2>
+          <p className="text-xl text-blue-50 mb-12">
+            เริ่มต้นฟรี ไม่ต้องใช้บัตรเครดิต ยกเลิกได้ทุกเมื่อ
+          </p>
+          <Link href="/login">
+            <button className="px-12 py-5 bg-white text-blue-600 rounded-xl font-bold text-lg hover:shadow-2xl hover:shadow-blue-500/30 transition-all">
+              Start Your Journey Now
+            </button>
+          </Link>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-slate-200 py-12 px-6 bg-white">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-lg"></div>
+              <span className="font-bold text-slate-900">Fazzfly ERP</span>
+            </div>
+            <div className="flex gap-8 text-sm text-slate-600">
+              <a href="#" className="hover:text-blue-600 transition">About</a>
+              <a href="#" className="hover:text-blue-600 transition">Contact</a>
+              <a href="#" className="hover:text-blue-600 transition">Privacy</a>
+              <a href="#" className="hover:text-blue-600 transition">Terms</a>
+            </div>
+          </div>
+          <div className="text-center text-sm text-slate-500 border-t border-slate-200 pt-8">
+            © 2025 Fazzfly ERP. All rights reserved.
+          </div>
+        </div>
       </footer>
+
+      <style jsx>{`
+        @keyframes blob {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          33% { transform: translate(30px, -50px) scale(1.1); }
+          66% { transform: translate(-20px, 20px) scale(0.9); }
+        }
+        .animate-blob {
+          animation: blob 7s infinite;
+        }
+        .animation-delay-2000 {
+          animation-delay: 2s;
+        }
+      `}</style>
     </div>
   );
 }
