@@ -1,7 +1,7 @@
 /**
  * Payroll Dashboard Utilities
  * Location: app/components/dashboards/payroll/payrollUtils.ts
- * ✅ Performance Scoring: Late (30) + Leave (30) + OT (40) = 100 points
+ *  Performance Scoring: Late (30) + Leave (30) + OT (40) = 100 points
  */
 
 export interface ConfigField {
@@ -24,16 +24,16 @@ export interface KPIData {
 
 /**
  * Parse numeric value from string or number
- * ✅ Handles: "฿1,000", "$1,000.50", "1000", 1000, "30%"
+ *  Handles: "1,000", "$1,000.50", "1000", 1000, "30%"
  */
 function parseNumericValue(raw: any): number | null {
   if (raw === null || raw === undefined) return null;
 
   if (typeof raw === "number") return raw;
   if (typeof raw === "string") {
-    // ✅ Remove: commas, currency symbols, %, spaces
+    //  Remove: commas, currency symbols, %, spaces
     const clean = raw
-      .replace(/[฿$€£¥₹,%\s]/g, "")
+      .replace(/[$,%\s]/g, "")
       .trim();
     
     if (clean === "") return null;
@@ -50,7 +50,7 @@ function parseNumericValue(raw: any): number | null {
 
 /**
  * Calculate Late Score (0-30 points)
- * ✅ 0 min = 30, 1-30 min = 27, 31-60 min = 22, 61-120 min = 15, >120 min = 0
+ *  0 min = 30, 1-30 min = 27, 31-60 min = 22, 61-120 min = 15, >120 min = 0
  */
 export function calculateLateScore(lateMinutes: number): number {
   if (lateMinutes === 0) return 30;
@@ -62,7 +62,7 @@ export function calculateLateScore(lateMinutes: number): number {
 
 /**
  * Calculate Leave Score (0-30 points)
- * ✅ 0 days = 30, 1-2 days = 27, 3-4 days = 22, 5 days = 15, >5 days = 0
+ *  0 days = 30, 1-2 days = 27, 3-4 days = 22, 5 days = 15, >5 days = 0
  */
 export function calculateLeaveScore(leaveDays: number): number {
   if (leaveDays === 0) return 30;
@@ -74,7 +74,7 @@ export function calculateLeaveScore(leaveDays: number): number {
 
 /**
  * Calculate OT Score (0-40 points)
- * ✅ >2400 min = 40, 1200-2400 min = 35, 600-1200 min = 30, 1-600 min = 20, 0 min = 10
+ *  >2400 min = 40, 1200-2400 min = 35, 600-1200 min = 30, 1-600 min = 20, 0 min = 10
  */
 export function calculateOTScore(otMinutes: number): number {
   if (otMinutes > 2400) return 40; // >40 hours
@@ -86,7 +86,7 @@ export function calculateOTScore(otMinutes: number): number {
 
 /**
  * Calculate Total Performance Score
- * ✅ Max 100 points = Late (30) + Leave (30) + OT (40)
+ *  Max 100 points = Late (30) + Leave (30) + OT (40)
  */
 export function calculateTotalScore(
   lateMinutes: number,
@@ -101,7 +101,7 @@ export function calculateTotalScore(
 
 /**
  * Get Performance Grade based on score
- * ✅ A: 90-100, B: 80-89, C: 70-79, D: 60-69, F: <60
+ *  A: 90-100, B: 80-89, C: 70-79, D: 60-69, F: <60
  */
 export function getPerformanceGrade(score: number): {
   grade: string;
@@ -129,30 +129,30 @@ export function getPerformanceGrade(score: number): {
 
 /**
  * Generate KPI data from rows
- * ✅ Returns: { salary: {...}, commission: {...}, staff_fees: {...}, etc. }
+ *  Returns: { salary: {...}, commission: {...}, staff_fees: {...}, etc. }
  */
 export function generateKPI(
   rows: any[],
   configFields: ConfigField[]
 ): { [key: string]: KPIData } {
-  console.log("━".repeat(60));
-  console.log("📊 [generateKPI] START - Payroll");
+  console.log("=".repeat(60));
+  console.log(" [generateKPI] START - Payroll");
   console.log("   Rows:", rows.length);
   console.log("   Config fields:", configFields.length);
-  console.log("━".repeat(60));
+  console.log("=".repeat(60));
 
   const newKpiData: { [key: string]: KPIData } = {};
   
-  // ✅ Get all number fields
+  //  Get all number fields
   const numericFields = configFields.filter((f) => f.type === "number");
 
-  console.log("🔢 Numeric fields found:", numericFields.length);
+  console.log(" Numeric fields found:", numericFields.length);
   numericFields.forEach((f, i) => {
     console.log(`   [${i}] ${f.fieldName} (type: ${f.type}, order: ${f.order})`);
   });
 
   numericFields.forEach((field) => {
-    console.log(`\n📍 Processing field: ${field.fieldName}`);
+    console.log(`\n Processing field: ${field.fieldName}`);
     
     // Sample first 3 rows
     console.log("   Sample raw values:");
@@ -170,7 +170,7 @@ export function generateKPI(
     }
 
     if (values.length === 0) {
-      console.warn(`   ⚠️ No valid numbers found for ${field.fieldName}!`);
+      console.warn(`    No valid numbers found for ${field.fieldName}!`);
       newKpiData[field.fieldName] = { sum: 0, avg: 0, max: 0, count: 0 };
     } else {
       const sum = values.reduce((acc, curr) => acc + curr, 0);
@@ -178,7 +178,7 @@ export function generateKPI(
       const max = Math.max(...values);
       const count = values.length;
 
-      console.log(`   ✅ Results: sum=${sum.toFixed(2)}, avg=${avg.toFixed(2)}, max=${max}, count=${count}`);
+      console.log(`    Results: sum=${sum.toFixed(2)}, avg=${avg.toFixed(2)}, max=${max}, count=${count}`);
 
       newKpiData[field.fieldName] = {
         sum: Number(sum.toFixed(2)),
@@ -189,10 +189,10 @@ export function generateKPI(
     }
   });
 
-  console.log("━".repeat(60));
-  console.log("✅ [generateKPI] DONE");
+  console.log("=".repeat(60));
+  console.log(" [generateKPI] DONE");
   console.log("   Generated KPIs:", Object.keys(newKpiData));
-  console.log("━".repeat(60));
+  console.log("=".repeat(60));
 
   return newKpiData;
 }
@@ -251,15 +251,15 @@ export function getMetricChange(
 
   const changePercent = ((currentSum - previousSum) / previousSum) * 100;
   
-  // ✅ For Late/Leave: decrease is good (green arrow down)
-  // ✅ For OT: increase is good (green arrow up)
-  // ✅ For Salary/Commission: increase is good (green arrow up)
+  //  For Late/Leave: decrease is good (green arrow down)
+  //  For OT: increase is good (green arrow up)
+  //  For Salary/Commission: increase is good (green arrow up)
   const isPositiveChange = 
-    (fieldName === "late" || fieldName === "gff") 
+    (fieldName === "late" || fieldName === "off") 
       ? changePercent < 0  // Lower is better
       : changePercent > 0; // Higher is better
 
-  const icon = changePercent > 0 ? "📈" : changePercent < 0 ? "📉" : "➡️";
+  const icon = changePercent > 0 ? "" : changePercent < 0 ? "" : "";
 
   return { change: changePercent, icon };
 }
@@ -270,13 +270,13 @@ export function getMetricChange(
 
 /**
  * Generate Performance Distribution (Pie Chart Data)
- * ✅ Groups employees by grade: A, B, C, D, F
+ *  Groups employees by grade: A, B, C, D, F
  */
 export function generatePerformanceDistribution(
   rows: any[],
   configFields: ConfigField[]
 ): any[] {
-  console.log("📊 Generating Performance Distribution...");
+  console.log(" Generating Performance Distribution...");
 
   // Group by employee
   const employeeData = groupByEmployee(rows, configFields);
@@ -302,19 +302,19 @@ export function generatePerformanceDistribution(
     percentage: total > 0 ? (count / total) * 100 : 0,
   }));
 
-  console.log("✅ Performance distribution:", result);
+  console.log(" Performance distribution:", result);
   return result;
 }
 
 /**
  * Generate Top Performers (Bar Chart Data)
- * ✅ Top 10 employees by score
+ *  Top 10 employees by score
  */
 export function generateTopPerformers(
   rows: any[],
   configFields: ConfigField[]
 ): any[] {
-  console.log("🏆 Generating Top Performers...");
+  console.log(" Generating Top Performers...");
 
   const employeeData = groupByEmployee(rows, configFields);
 
@@ -327,19 +327,19 @@ export function generateTopPerformers(
     score: emp.totalScore,
   }));
 
-  console.log("✅ Top performers:", result.length);
+  console.log(" Top performers:", result.length);
   return result;
 }
 
 /**
  * Generate OT Leaders (Bar Chart Data)
- * ✅ Top 10 employees by OT hours
+ *  Top 10 employees by OT hours
  */
 export function generateOTLeaders(
   rows: any[],
   configFields: ConfigField[]
 ): any[] {
-  console.log("⏱️ Generating OT Leaders...");
+  console.log(" Generating OT Leaders...");
 
   const employeeData = groupByEmployee(rows, configFields);
 
@@ -352,19 +352,19 @@ export function generateOTLeaders(
     ot: emp.ot,
   }));
 
-  console.log("✅ OT leaders:", result.length);
+  console.log(" OT leaders:", result.length);
   return result;
 }
 
 /**
  * Generate Attendance Data (Stacked Bar Chart)
- * ✅ Top 10 employees with attendance issues (late + leave)
+ *  Top 10 employees with attendance issues (late + leave)
  */
 export function generateAttendanceData(
   rows: any[],
   configFields: ConfigField[]
 ): any[] {
-  console.log("📊 Generating Attendance Data...");
+  console.log(" Generating Attendance Data...");
 
   const employeeData = groupByEmployee(rows, configFields);
 
@@ -383,19 +383,19 @@ export function generateAttendanceData(
     leave: emp.leave,
   }));
 
-  console.log("✅ Attendance data:", result.length);
+  console.log(" Attendance data:", result.length);
   return result;
 }
 
 /**
  * Generate Performance Table
- * ✅ All employees with full scoring breakdown
+ *  All employees with full scoring breakdown
  */
 export function generatePerformanceTable(
   rows: any[],
   configFields: ConfigField[]
 ): any[] {
-  console.log("📋 Generating Performance Table...");
+  console.log(" Generating Performance Table...");
 
   const employeeData = groupByEmployee(rows, configFields);
 
@@ -420,7 +420,7 @@ export function generatePerformanceTable(
     };
   });
 
-  console.log("✅ Performance table:", result.length, "employees");
+  console.log(" Performance table:", result.length, "employees");
   return result;
 }
 
@@ -437,7 +437,7 @@ function groupByEmployee(rows: any[], configFields: ConfigField[]): any[] {
   );
 
   if (!nameField) {
-    console.error("❌ Cannot find employee name field!");
+    console.error(" Cannot find employee name field!");
     return [];
   }
 
@@ -465,7 +465,7 @@ function groupByEmployee(rows: any[], configFields: ConfigField[]): any[] {
     grouped[name].commission += parseNumericValue(row["commission"]) || 0;
     grouped[name].staff_fees += parseNumericValue(row["staff_fees"]) || 0;
     grouped[name].late += parseNumericValue(row["late"]) || 0;
-    grouped[name].leave += parseNumericValue(row["gff"]) || 0;
+    grouped[name].leave += parseNumericValue(row["off"]) || 0;
     grouped[name].ot += parseNumericValue(row["ot"]) || 0;
     grouped[name].advPayments += parseNumericValue(row["adv_payments"]) || 0;
     grouped[name].count += 1;
@@ -498,17 +498,17 @@ export function getPeriodOptions(
   let periodField = configFields.find((f) => f.type === "period");
   
   if (!periodField) {
-    console.warn("⚠️ Period field not found by type, using fallback");
+    console.warn(" Period field not found by type, using fallback");
     periodField = configFields.find((f) => 
       f.fieldName === "period" ||
       f.fieldName === "Period" ||
       f.fieldName === "Month" ||
-      f.fieldName === "เดือน"
+      f.fieldName === ""
     );
   }
   
   if (!periodField) {
-    console.error("❌ Cannot find period field!");
+    console.error(" Cannot find period field!");
     console.log("Available fields:", configFields.map(f => f.fieldName));
     return [];
   }
@@ -526,4 +526,29 @@ export function getPeriodOptions(
         .map(String)
     )
   ).sort();
+}
+
+/**
+ * Get period options from filtered data
+ * Similar to Sales: filters data first, then extracts unique periods
+ */
+export function getPeriodOptionsFromData(
+  data: any[],
+  config: ConfigField[],
+  selectedYear?: string
+): string[] {
+  console.log("[PERIOD_OPTIONS] Payroll");
+  console.log("   Data rows:", data.length);
+  console.log("   Selected year:", selectedYear || "current");
+
+  let filteredData = data;
+  
+  if (selectedYear && selectedYear !== "current") {
+    filteredData = data;
+  }
+
+  const periods = getPeriodOptions(filteredData, config);
+  console.log("   Periods found:", periods);
+  
+  return periods;
 }

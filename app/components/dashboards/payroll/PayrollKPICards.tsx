@@ -1,7 +1,7 @@
 /**
  * Payroll KPI Cards Component
  * Location: app/components/dashboards/payroll/PayrollKPICards.tsx
- * ✅ Displays: 6 KPI cards in 2 rows (3 + 3)
+ * ✅ Displays: 9 KPI cards in 3 rows (3 + 3 + 3)
  */
 
 "use client";
@@ -30,9 +30,100 @@ const LABELS: Record<string, { label: string; icon: string; color: string; unit:
   salary: { label: "เงินเดือนรวม", icon: "💰", color: COLORS.salary, unit: "บาท" },
   commission: { label: "คอมมิชชั่นรวม", icon: "💵", color: COLORS.commission, unit: "บาท" },
   staff_fees: { label: "ค่าพนักงานรวม", icon: "💳", color: COLORS.staffFees, unit: "บาท" },
-  gff: { label: "ลารวม", icon: "🏖️", color: COLORS.leave, unit: "วัน" },
+  off: { label: "ลารวม", icon: "🏖️", color: COLORS.leave, unit: "วัน" },
   late: { label: "สายรวม", icon: "⏰", color: COLORS.late, unit: "นาที" },
   ot: { label: "OT รวม", icon: "⏱️", color: COLORS.ot, unit: "นาที" },
+};
+
+// Helper to render card
+const renderKPICard = (
+  fieldName: string,
+  kpiData: { [key: string]: KPIData },
+  allData: any[],
+  config: ConfigField[],
+  selectedPeriods: string[],
+  formatNumber: (num: number, unit: string) => string
+) => {
+  const data = kpiData[fieldName];
+  if (!data) return null;
+
+  const info = LABELS[fieldName];
+  if (!info) return null;
+
+  const currentPeriod = selectedPeriods.length === 1 ? selectedPeriods[0] : "";
+  const { change, icon } = getMetricChange(fieldName, currentPeriod, allData, config);
+
+  // ✅ Special handling for late/leave - lower is better
+  const isNegativeGood = fieldName === "late" || fieldName === "off";
+  const changeColor = change !== null && typeof change === 'number'
+    ? isNegativeGood
+      ? (change > 0 ? "text-red-600" : change < 0 ? "text-green-600" : "text-slate-600")
+      : (change > 0 ? "text-green-600" : change < 0 ? "text-red-600" : "text-slate-600")
+    : "text-slate-600";
+
+  return (
+    <div
+      key={fieldName}
+      className="bg-gradient-to-br from-white to-slate-50 rounded-2xl p-6 border-2 border-slate-100 hover:shadow-xl hover:scale-105 transition-all duration-300"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className={`p-3 rounded-xl bg-gradient-to-br ${info.color} text-white text-2xl shadow-lg`}>
+          {info.icon}
+        </div>
+        {change !== null && typeof change === 'number' && (
+          <div className="flex items-center gap-1 text-sm">
+            <span>{icon}</span>
+            <span className={changeColor}>
+              {change > 0 ? "+" : ""}{change.toFixed(1)}%
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Label */}
+      <p className="text-sm font-medium text-slate-600 mb-2">{info.label}</p>
+
+      {/* Main Value */}
+      <p className="text-3xl font-bold text-slate-800 mb-4">
+        {formatNumber(data.sum, info.unit)}
+      </p>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-200">
+        <div>
+          <p className="text-xs text-slate-500">เฉลี่ย</p>
+          <p className="text-sm font-semibold text-slate-700">
+            {formatNumber(data.avg, info.unit)}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-slate-500">สูงสุด</p>
+          <p className="text-sm font-semibold text-slate-700">
+            {formatNumber(data.max, info.unit)}
+          </p>
+        </div>
+      </div>
+
+      {/* Count */}
+      <div className="mt-3 pt-3 border-t border-slate-200">
+        <p className="text-xs text-slate-500">
+          จำนวน: <span className="font-semibold text-slate-700">{data.count} รายการ</span>
+        </p>
+      </div>
+
+      {/* Performance Hint for Late/Leave/OT */}
+      {(fieldName === "late" || fieldName === "off" || fieldName === "ot") && (
+        <div className="mt-3 pt-3 border-t border-slate-200">
+          <p className="text-xs text-slate-500">
+            {fieldName === "late" && "💡 สาย 0 นาที = 30 คะแนน"}
+            {fieldName === "off" && "💡 ลา 0 วัน = 30 คะแนน"}
+            {fieldName === "ot" && "💡 OT >40 ชม. = 40 คะแนน"}
+          </p>
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default function PayrollKPICards({
@@ -42,12 +133,12 @@ export default function PayrollKPICards({
   config,
   selectedPeriods,
 }: PayrollKPICardsProps) {
-  // ✅ Define order for cards
+  // ✅ Define order for cards (3 rows x 3 cards)
   const CARD_ORDER = [
     "salary",
     "commission",
     "staff_fees",
-    "gff",
+    "off",
     "late",
     "ot",
   ];
@@ -78,155 +169,16 @@ export default function PayrollKPICards({
     <div className="space-y-4">
       {/* Row 1: เงินเดือน, คอมมิชชั่น, ค่าพนักงาน */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {CARD_ORDER.slice(0, 3).map((fieldName) => {
-          const data = kpiData[fieldName];
-          if (!data) return null;
-
-          const info = LABELS[fieldName];
-          if (!info) return null;
-
-          const currentPeriod = selectedPeriods.length === 1 ? selectedPeriods[0] : "";
-          const { change, icon } = getMetricChange(fieldName, currentPeriod, allData, config);
-
-          return (
-            <div
-              key={fieldName}
-              className="bg-gradient-to-br from-white to-slate-50 rounded-2xl p-6 border-2 border-slate-100 hover:shadow-xl hover:scale-105 transition-all duration-300"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between mb-4">
-                <div className={`p-3 rounded-xl bg-gradient-to-br ${info.color} text-white text-2xl shadow-lg`}>
-                  {info.icon}
-                </div>
-                {change !== null && typeof change === 'number' && (
-                  <div className="flex items-center gap-1 text-sm">
-                    <span>{icon}</span>
-                    <span className={change > 0 ? "text-green-600" : change < 0 ? "text-red-600" : "text-slate-600"}>
-                      {change > 0 ? "+" : ""}{change.toFixed(1)}%
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Label */}
-              <p className="text-sm font-medium text-slate-600 mb-2">{info.label}</p>
-
-              {/* Main Value */}
-              <p className="text-3xl font-bold text-slate-800 mb-4">
-                {formatNumber(data.sum, info.unit)}
-              </p>
-
-              {/* Stats */}
-              <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-200">
-                <div>
-                  <p className="text-xs text-slate-500">เฉลี่ย</p>
-                  <p className="text-sm font-semibold text-slate-700">
-                    {formatNumber(data.avg, info.unit)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">สูงสุด</p>
-                  <p className="text-sm font-semibold text-slate-700">
-                    {formatNumber(data.max, info.unit)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Count */}
-              <div className="mt-3 pt-3 border-t border-slate-200">
-                <p className="text-xs text-slate-500">
-                  จำนวน: <span className="font-semibold text-slate-700">{data.count} รายการ</span>
-                </p>
-              </div>
-            </div>
-          );
-        })}
+        {CARD_ORDER.slice(0, 3).map((fieldName) =>
+          renderKPICard(fieldName, kpiData, allData, config, selectedPeriods, formatNumber)
+        )}
       </div>
 
       {/* Row 2: ลา, สาย, OT */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {CARD_ORDER.slice(3, 6).map((fieldName) => {
-          const data = kpiData[fieldName];
-          if (!data) return null;
-
-          const info = LABELS[fieldName];
-          if (!info) return null;
-
-          const currentPeriod = selectedPeriods.length === 1 ? selectedPeriods[0] : "";
-          const { change, icon } = getMetricChange(fieldName, currentPeriod, allData, config);
-
-          // ✅ Special handling for late/leave - lower is better
-          const isNegativeGood = fieldName === "late" || fieldName === "gff";
-          const changeColor = change !== null && typeof change === 'number'
-            ? isNegativeGood
-              ? (change > 0 ? "text-red-600" : change < 0 ? "text-green-600" : "text-slate-600")
-              : (change > 0 ? "text-green-600" : change < 0 ? "text-red-600" : "text-slate-600")
-            : "text-slate-600";
-
-          return (
-            <div
-              key={fieldName}
-              className="bg-gradient-to-br from-white to-slate-50 rounded-2xl p-6 border-2 border-slate-100 hover:shadow-xl hover:scale-105 transition-all duration-300"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between mb-4">
-                <div className={`p-3 rounded-xl bg-gradient-to-br ${info.color} text-white text-2xl shadow-lg`}>
-                  {info.icon}
-                </div>
-                {change !== null && typeof change === 'number' && (
-                  <div className="flex items-center gap-1 text-sm">
-                    <span>{icon}</span>
-                    <span className={changeColor}>
-                      {change > 0 ? "+" : ""}{change.toFixed(1)}%
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Label */}
-              <p className="text-sm font-medium text-slate-600 mb-2">{info.label}</p>
-
-              {/* Main Value */}
-              <p className="text-3xl font-bold text-slate-800 mb-4">
-                {formatNumber(data.sum, info.unit)}
-              </p>
-
-              {/* Stats */}
-              <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-200">
-                <div>
-                  <p className="text-xs text-slate-500">เฉลี่ย</p>
-                  <p className="text-sm font-semibold text-slate-700">
-                    {formatNumber(data.avg, info.unit)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">สูงสุด</p>
-                  <p className="text-sm font-semibold text-slate-700">
-                    {formatNumber(data.max, info.unit)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Count */}
-              <div className="mt-3 pt-3 border-t border-slate-200">
-                <p className="text-xs text-slate-500">
-                  จำนวน: <span className="font-semibold text-slate-700">{data.count} รายการ</span>
-                </p>
-              </div>
-
-              {/* Performance Hint for Late/Leave/OT */}
-              {(fieldName === "late" || fieldName === "gff" || fieldName === "ot") && (
-                <div className="mt-3 pt-3 border-t border-slate-200">
-                  <p className="text-xs text-slate-500">
-                    {fieldName === "late" && "💡 สาย 0 นาที = 30 คะแนน"}
-                    {fieldName === "gff" && "💡 ลา 0 วัน = 30 คะแนน"}
-                    {fieldName === "ot" && "💡 OT >40 ชม. = 40 คะแนน"}
-                  </p>
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {CARD_ORDER.slice(3, 6).map((fieldName) =>
+          renderKPICard(fieldName, kpiData, allData, config, selectedPeriods, formatNumber)
+        )}
       </div>
 
       {/* Performance Scoring Summary */}

@@ -500,38 +500,40 @@ export default function SalesDashboard({
   // ============================================================
   return (
     <div className="space-y-6">
-      {/* Debug: Show current state */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs">
-        <p className="font-bold text-blue-900 mb-2">🐛 Debug Info:</p>
-        <div className="grid grid-cols-2 gap-2 text-blue-800">
-          <div>✅ Config: {config.length} fields</div>
-          <div>✅ Data: {allData.length} rows</div>
-          <div>
-            📍 Periods:{" "}
-            {selectedPeriods.length > 0 ? selectedPeriods.join(", ") : "(none)"}
-          </div>
-          <div>📅 Date: {selectedDate || "(all)"}</div>
-          <div>🔍 Filtered: {filteredData.length} rows</div>
-          <div>
-            📆 Year: {selectedYear || "Current"}
-            {selectedYear && (
-              <span className="ml-1 text-xs">
-                (Archive: {availableYears.find((y) => y.year === selectedYear)?.fileName || "?"})
-              </span>
-            )}
-          </div>
-          <div>📁 Archives: {availableYears.length} available</div>
-          <div>
-            🌐 Source:{" "}
-            {selectedYear
-              ? `Archive ${selectedYear}`
-              : "Main Spreadsheet"}
-          </div>
-          <div>
-            🔧 Loading: {loading ? "YES" : "NO"}
+      {/* Debug: Show current state - ONLY IN DEVELOPMENT */}
+      {process.env.NODE_ENV === "development" && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs">
+          <p className="font-bold text-blue-900 mb-2">🐛 Debug Info:</p>
+          <div className="grid grid-cols-2 gap-2 text-blue-800">
+            <div>✅ Config: {config.length} fields</div>
+            <div>✅ Data: {allData.length} rows</div>
+            <div>
+              📍 Periods:{" "}
+              {selectedPeriods.length > 0 ? selectedPeriods.join(", ") : "(none)"}
+            </div>
+            <div>📅 Date: {selectedDate || "(all)"}</div>
+            <div>🔍 Filtered: {filteredData.length} rows</div>
+            <div>
+              📆 Year: {selectedYear || "Current"}
+              {selectedYear && (
+                <span className="ml-1 text-xs">
+                  (Archive: {availableYears.find((y) => y.year === selectedYear)?.fileName || "?"})
+                </span>
+              )}
+            </div>
+            <div>📁 Archives: {availableYears.length} available</div>
+            <div>
+              🌐 Source:{" "}
+              {selectedYear
+                ? `Archive ${selectedYear}`
+                : "Main Spreadsheet"}
+            </div>
+            <div>
+              🔧 Loading: {loading ? "YES" : "NO"}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Filters */}
       <SalesFilters

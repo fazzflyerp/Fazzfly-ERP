@@ -1,7 +1,7 @@
 /**
  * Payroll Charts Component
  * Location: app/components/dashboards/payroll/PayrollCharts.tsx
- * ✅ Charts: Performance Distribution (Pie), Top Performers (Bar), OT Leaders (Bar), Attendance Issues (Stacked Bar)
+ * ✅ Charts: Performance Distribution (Pie), OT Leaders (Vertical Bar), Attendance Issues (Stacked Bar)
  */
 
 "use client";
@@ -24,7 +24,6 @@ import { getPerformanceGrade } from "@/app/components/dashboards/payroll/payroll
 
 interface PayrollChartsProps {
   performanceDistribution: any[];
-  topPerformers: any[];
   otLeaders: any[];
   attendanceData: any[];
 }
@@ -40,7 +39,6 @@ const GRADE_COLORS: Record<string, string> = {
 
 export default function PayrollCharts({
   performanceDistribution,
-  topPerformers,
   otLeaders,
   attendanceData,
 }: PayrollChartsProps) {
@@ -52,118 +50,89 @@ export default function PayrollCharts({
 
   return (
     <div className="space-y-6">
-      {/* Row 1: Performance Distribution (Pie) + Top Performers (Bar) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Row 1: Performance Distribution (Pie) */}
+      <div className="grid grid-cols-1 gap-6">
         {/* Performance Distribution Pie Chart */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
-          <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+        <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm">
+          <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
             <span className="text-2xl">🎯</span>
             การกระจายคะแนน (Performance Distribution)
           </h3>
           
           {performanceDistribution.length === 0 ? (
-            <div className="flex items-center justify-center h-[300px]">
+            <div className="flex items-center justify-center h-[350px]">
               <p className="text-slate-500">ไม่มีข้อมูล</p>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={performanceDistribution}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={(entry) => `${entry.grade}: ${entry.count}`}
-                  outerRadius={100}
-                  fill="#8884d8"
-                  dataKey="count"
-                >
-                  {performanceDistribution.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={GRADE_COLORS[entry.grade] || "#64748b"} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value: number, name: string, props: any) => [
-                    `${value} คน (${props.payload.percentage.toFixed(1)}%)`,
-                    props.payload.grade,
-                  ]}
-                  contentStyle={{
-                    backgroundColor: "white",
-                    border: "1px solid #e2e8f0",
-                    borderRadius: "8px",
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
+            <>
+              <ResponsiveContainer width="100%" height={320}>
+                <PieChart>
+                  <Pie
+                    data={performanceDistribution}
+                    cx="50%"
+                    cy="45%"
+                    labelLine={false}
+                    label={false}
+                    outerRadius={115}
+                    fill="#8884d8"
+                    dataKey="count"
+                  >
+                    {performanceDistribution.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={GRADE_COLORS[entry.grade] || "#64748b"} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(value: number, name: string, props: any) => [
+                      `${value} คน (${props.payload.percentage.toFixed(1)}%)`,
+                      props.payload.grade,
+                    ]}
+                    contentStyle={{
+                      backgroundColor: "white",
+                      border: "2px solid #e2e8f0",
+                      borderRadius: "8px",
+                      boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
 
-          {/* Legend */}
-          <div className="mt-4 space-y-2">
-            {Object.entries(GRADE_COLORS).map(([grade, color]) => {
-              const data = performanceDistribution.find((d) => d.grade === grade);
-              return (
-                <div key={grade} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+              {/* Beautiful Legend Grid */}
+              <div className="mt-8 grid grid-cols-2 md:grid-cols-5 gap-4">
+                {Object.entries(GRADE_COLORS).map(([grade, color]) => {
+                  const data = performanceDistribution.find((d) => d.grade === grade);
+                  const count = data?.count || 0;
+                  const percentage = data?.percentage || 0;
+                  return (
                     <div
-                      className="w-4 h-4 rounded-full"
-                      style={{ backgroundColor: color }}
-                    ></div>
-                    <span className="text-sm text-slate-700">{grade}</span>
-                  </div>
-                  <span className="text-sm font-semibold text-slate-800">
-                    {data?.count || 0} คน
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Top Performers Bar Chart */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
-          <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <span className="text-2xl">🏆</span>
-            พนักงานยอดเยี่ยม (Top 10)
-          </h3>
-
-          {topPerformers.length === 0 ? (
-            <div className="flex items-center justify-center h-[300px]">
-              <p className="text-slate-500">ไม่มีข้อมูล</p>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={topPerformers} layout="horizontal">
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 12 }} />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={100}
-                  tick={{ fontSize: 11 }}
-                />
-                <Tooltip
-                  formatter={(value: any) => [`${Number(value).toFixed(1)} คะแนน`]}
-                  contentStyle={{
-                    backgroundColor: "white",
-                    border: "1px solid #e2e8f0",
-                    borderRadius: "8px",
-                  }}
-                />
-                <Bar
-                  dataKey="score"
-                  fill="#10b981"
-                  radius={[0, 8, 8, 0]}
-                  label={{ position: "right", fontSize: 11 }}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+                      key={grade}
+                      className="bg-gradient-to-br from-slate-50 to-white rounded-xl p-4 border-2 border-slate-200 hover:border-slate-400 hover:shadow-lg transition-all duration-200 cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        <div
+                          className="w-6 h-6 rounded-full shadow-md flex-shrink-0"
+                          style={{ backgroundColor: color }}
+                        ></div>
+                        <span className="text-xs font-bold text-slate-600 uppercase">{grade}</span>
+                      </div>
+                      <div className="ml-9">
+                        <div className="text-2xl font-bold text-slate-900">{count}</div>
+                        <div className="text-xs text-slate-500">
+                          <span className="font-semibold text-slate-600">{percentage.toFixed(1)}%</span>
+                          <span className="text-slate-400"> </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
       </div>
 
-      {/* Row 2: OT Leaders (Bar) + Attendance Issues (Stacked Bar) */}
+      {/* Row 2: OT Leaders + Attendance Issues */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* OT Leaders Bar Chart */}
+        {/* OT Leaders Bar Chart - Vertical with OT Minutes */}
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
           <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
             <span className="text-2xl">⏱️</span>
@@ -176,31 +145,32 @@ export default function PayrollCharts({
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={otLeaders} layout="horizontal">
+              <BarChart data={otLeaders}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis type="number" tick={{ fontSize: 12 }} />
-                <YAxis
-                  type="category"
+                <XAxis
                   dataKey="name"
-                  width={100}
                   tick={{ fontSize: 11 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
                 />
+                <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip
-                  formatter={(value: any) => [formatMinutes(Number(value))]}
                   contentStyle={{
                     backgroundColor: "white",
                     border: "1px solid #e2e8f0",
                     borderRadius: "8px",
                   }}
+                  formatter={(value: any) => formatMinutes(Number(value))}
                 />
                 <Bar
                   dataKey="ot"
                   fill="#8b5cf6"
-                  radius={[0, 8, 8, 0]}
-                  label={{ 
-                    position: "right", 
-                    fontSize: 11, 
-                    formatter: (value: any) => formatMinutes(Number(value))
+                  radius={[8, 8, 0, 0]}
+                  label={{
+                    position: "top",
+                    fontSize: 11,
+                    formatter: (value: any) => formatMinutes(Number(value)),
                   }}
                 />
               </BarChart>

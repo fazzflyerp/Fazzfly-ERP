@@ -1,7 +1,7 @@
 /**
- * Payroll Dashboard - Main Component
+ * Payroll Dashboard - Main Component (Updated with Year Filter)
  * Location: app/components/dashboards/payroll/PayrollDashboard.tsx
- * ✅ Complete payroll dashboard with 6 KPIs + Performance Scoring
+ * ✅ Complete payroll dashboard with Year Filter + Archive Integration
  */
 
 "use client";
@@ -16,7 +16,6 @@ import {
   KPIData,
   generateKPI,
   generatePerformanceDistribution,
-  generateTopPerformers,
   generateOTLeaders,
   generateAttendanceData,
   generatePerformanceTable,
@@ -41,6 +40,7 @@ interface Props {
   dataSheetName: string;
   accessToken: string;
   moduleName?: string;
+  archiveFolderId?: string;
 }
 
 export default function PayrollDashboard({
@@ -49,6 +49,7 @@ export default function PayrollDashboard({
   dataSheetName,
   accessToken,
   moduleName = "Payroll",
+  archiveFolderId,
 }: Props) {
   // ============================================================
   // STATE: Loading & Errors
@@ -63,6 +64,15 @@ export default function PayrollDashboard({
   const [allData, setAllData] = useState<any[]>([]);
 
   // ============================================================
+  // STATE: Year Filter
+  // ============================================================
+  const [selectedYear, setSelectedYear] = useState<string | null>(null);
+  const [availableYears, setAvailableYears] = useState<
+    { year: string; spreadsheetId: string; fileName: string }[]
+  >([]);
+  const [loadingYears, setLoadingYears] = useState(false);
+
+  // ============================================================
   // STATE: Filters
   // ============================================================
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>([]);
@@ -73,7 +83,6 @@ export default function PayrollDashboard({
   const [kpiData, setKpiData] = useState<{ [key: string]: KPIData }>({});
   const [filteredData, setFilteredData] = useState<any[]>([]);
   const [performanceDistribution, setPerformanceDistribution] = useState<any[]>([]);
-  const [topPerformers, setTopPerformers] = useState<any[]>([]);
   const [otLeaders, setOTLeaders] = useState<any[]>([]);
   const [attendanceData, setAttendanceData] = useState<any[]>([]);
   const [performanceTable, setPerformanceTable] = useState<any[]>([]);
@@ -87,6 +96,7 @@ export default function PayrollDashboard({
     console.log("   configSheetName:", configSheetName || "❌ MISSING");
     console.log("   dataSheetName:", dataSheetName || "❌ MISSING");
     console.log("   moduleName:", moduleName);
+    console.log("   archiveFolderId:", archiveFolderId || "❌ NOT SET");
 
     if (!spreadsheetId || !configSheetName || !dataSheetName || !accessToken) {
       setError("❌ Missing required props");
@@ -94,11 +104,20 @@ export default function PayrollDashboard({
   }, []);
 
   // ============================================================
-  // EFFECT: Fetch data on mount
+  // EFFECT: Fetch available years on mount (if archive enabled)
+  // ============================================================
+  useEffect(() => {
+    if (archiveFolderId) {
+      fetchAvailableYears();
+    }
+  }, [archiveFolderId]);
+
+  // ============================================================
+  // EFFECT: Fetch data on mount or when year changes
   // ============================================================
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [selectedYear]);
 
   // ============================================================
   // EFFECT: Filter visualizations when periods change (NO API CALL)
@@ -110,18 +129,73 @@ export default function PayrollDashboard({
   }, [selectedPeriods, allData, config]);
 
   // ============================================================
-  // API: Fetch Dashboard Data
+  // API: Fetch Available Years from Archive Folder
+  // ============================================================
+  const fetchAvailableYears = async () => {
+    if (!archiveFolderId) return;
+
+    try {
+      setLoadingYears(true);
+      console.log("📅 Fetching available years...");
+
+      const params = new URLSearchParams({
+        folderId: archiveFolderId,
+        sheetName: dataSheetName,
+      });
+
+      const res = await fetch(`/api/dashboard/archive-years?${params.toString()}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+
+      if (data.years) {
+        console.log("✅ Available years:", data.years);
+        setAvailableYears(data.years);
+      }
+    } catch (err: any) {
+      console.error("❌ Error fetching years:", err.message);
+    } finally {
+      setLoadingYears(false);
+    }
+  };
+
+  // ============================================================
+  // API: Fetch Dashboard Data (Current or Archive)
   // ============================================================
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
       setError(null);
 
+      let targetSpreadsheetId = spreadsheetId;
+
+      // If year is selected, find the archive spreadsheet
+      if (selectedYear && selectedYear !== "current") {
+        const yearData = availableYears.find((y) => y.year === selectedYear);
+        if (yearData) {
+          targetSpreadsheetId = yearData.spreadsheetId;
+          console.log(`📅 Switching to archive: ${selectedYear} (${targetSpreadsheetId})`);
+        }
+      }
+
       const params = new URLSearchParams({
-        spreadsheetId,
+        spreadsheetId: targetSpreadsheetId,
         configSheetName,
         dataSheetName,
       });
+
+      if (selectedYear) {
+        params.append("year", selectedYear);
+      }
 
       const res = await fetch(`/api/dashboard/data?${params.toString()}`, {
         method: "GET",
@@ -145,7 +219,11 @@ export default function PayrollDashboard({
 
       setConfig(data.config);
       setAllData(data.data);
-      generateVisualizations(data.data, selectedPeriods, data.config);
+      
+      // Clear period selection when year changes
+      setSelectedPeriods([]);
+      
+      generateVisualizations(data.data, [], data.config);
     } catch (err: any) {
       console.error("❌ Error fetching payroll data:", err.message);
       setError(err.message || "โหลดข้อมูลไม่สำเร็จ");
@@ -179,7 +257,6 @@ export default function PayrollDashboard({
     setFilteredData(filteredRows);
     setKpiData(generateKPI(filteredRows, configData));
     setPerformanceDistribution(generatePerformanceDistribution(filteredRows, configData));
-    setTopPerformers(generateTopPerformers(filteredRows, configData));
     setOTLeaders(generateOTLeaders(filteredRows, configData));
     setAttendanceData(generateAttendanceData(filteredRows, configData));
     setPerformanceTable(generatePerformanceTable(filteredRows, configData));
@@ -188,6 +265,12 @@ export default function PayrollDashboard({
   // ============================================================
   // HANDLERS: Filter actions
   // ============================================================
+  const handleYearChange = (year: string | null) => {
+    console.log("📅 Year changed:", year);
+    setSelectedYear(year);
+    setSelectedPeriods([]); // Clear period selection
+  };
+
   const handlePeriodToggle = (period: string) => {
     setSelectedPeriods((prev) =>
       prev.includes(period)
@@ -203,6 +286,7 @@ export default function PayrollDashboard({
   };
 
   const handleClearFilters = () => {
+    setSelectedYear(null);
     setSelectedPeriods([]);
   };
 
@@ -249,25 +333,34 @@ export default function PayrollDashboard({
   // ============================================================
   return (
     <div className="space-y-6">
-      {/* Debug Info */}
-      <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-xs">
-        <p className="font-bold text-purple-900 mb-2">💼 Payroll Dashboard Debug:</p>
-        <div className="grid grid-cols-2 gap-2 text-purple-800">
-          <div>✅ Config: {config.length} fields</div>
-          <div>✅ Data: {allData.length} rows</div>
-          <div>📍 Periods: {selectedPeriods.length > 0 ? selectedPeriods.join(", ") : "(none)"}</div>
-          <div>🔍 Filtered: {filteredData.length} rows</div>
-          <div>👥 Employees: {new Set(allData.map((d) => d.employees_name)).size} unique</div>
-          <div>📊 Performance: {performanceTable.length} scored</div>
+      {/* Debug Info - Only in Development */}
+      {process.env.NODE_ENV === "development" && (
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-xs">
+          <p className="font-bold text-purple-900 mb-2">💼 Payroll Dashboard Debug:</p>
+          <div className="grid grid-cols-2 gap-2 text-purple-800">
+            <div>✅ Config: {config.length} fields</div>
+            <div>✅ Data: {allData.length} rows</div>
+            <div>📅 Year: {selectedYear || "current"}</div>
+            <div>📍 Periods: {selectedPeriods.length > 0 ? selectedPeriods.join(", ") : "(none)"}</div>
+            <div>🔍 Filtered: {filteredData.length} rows</div>
+            <div>👥 Employees: {new Set(allData.map((d) => d.employees_name)).size} unique</div>
+            <div>📊 Performance: {performanceTable.length} scored</div>
+            <div>🗂️ Archive: {archiveFolderId ? "enabled" : "disabled"}</div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Filters */}
       <PayrollFilters
         config={config}
         allData={allData}
+        selectedYear={selectedYear}
         selectedPeriods={selectedPeriods}
+        availableYears={availableYears}
+        loadingYears={loadingYears}
+        archiveFolderId={archiveFolderId}
         loading={loading}
+        onYearChange={handleYearChange}
         onPeriodToggle={handlePeriodToggle}
         onSelectAll={handleSelectAll}
         onClearFilters={handleClearFilters}
@@ -282,10 +375,9 @@ export default function PayrollDashboard({
         selectedPeriods={selectedPeriods}
       />
 
-      {/* Charts (4 charts: Pie, Bar, Bar, Stacked Bar) */}
+      {/* Charts (3 charts: Pie, OT Leaders Bar, Attendance Stacked Bar) */}
       <PayrollCharts
         performanceDistribution={performanceDistribution}
-        topPerformers={topPerformers}
         otLeaders={otLeaders}
         attendanceData={attendanceData}
       />
