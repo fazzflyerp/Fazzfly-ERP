@@ -1,7 +1,7 @@
 /**
- * Financial Filters Component
+ * Financial Filters Component - Updated with Year Filter
  * Location: app/components/dashboards/financial/FinancialFilters.tsx
- * ✅ Filters: Year, Period (no date filter for financial)
+ * ✅ Filters: Year + Period (button grid, no date)
  */
 
 "use client";
@@ -20,12 +20,11 @@ interface FinancialFiltersProps {
   availableYears: { year: string; spreadsheetId: string; fileName: string }[];
   loadingYears: boolean;
   archiveFolderId?: string;
-  loading: boolean;
+  loading?: boolean;
   onYearChange: (year: string | null) => void;
   onPeriodToggle: (period: string) => void;
   onSelectAll: (periods: string[]) => void;
   onClearFilters: () => void;
-  onDefaultPeriodReady?: (period: string) => void;
 }
 
 export default function FinancialFilters({
@@ -36,46 +35,42 @@ export default function FinancialFilters({
   availableYears,
   loadingYears,
   archiveFolderId,
-  loading,
+  loading = false,
   onYearChange,
   onPeriodToggle,
   onSelectAll,
   onClearFilters,
-  onDefaultPeriodReady,
 }: FinancialFiltersProps) {
   const [periodOptions, setPeriodOptions] = useState<string[]>([]);
 
-  // Generate period options
+  // Update period options when data or year changes
   useEffect(() => {
     if (allData.length > 0 && config.length > 0) {
       const options = getPeriodOptions(allData, config);
       setPeriodOptions(options);
 
-      // Auto-select latest period if none selected
-      if (selectedPeriods.length === 0 && options.length > 0) {
+      // Auto-select latest period if none selected and not loading
+      if (selectedPeriods.length === 0 && options.length > 0 && !loading) {
         const latest = options[options.length - 1];
-        console.log("🔄 Auto-selecting latest period:", latest);
+        console.log("[Auto-select] Latest period:", latest);
         onPeriodToggle(latest);
-        if (onDefaultPeriodReady) {
-          onDefaultPeriodReady(latest);
-        }
       }
     }
-  }, [allData, config]);
+  }, [allData, config, selectedYear, loading]);
 
-  const hasFilters = selectedYear !== null || selectedPeriods.length > 0;
+  const hasFilters = selectedYear || selectedPeriods.length > 0;
 
   return (
-    <div className="bg-gradient-to-br from-green-50 to-blue-50 rounded-2xl p-6 border border-green-200 shadow-sm">
+    <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 border border-blue-200 shadow-sm">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <span className="text-2xl">🎛️</span>
+          <span className="text-2xl"></span>
           ตัวกรอง (Filters)
         </h3>
         {hasFilters && (
           <button
             onClick={onClearFilters}
-            className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium"
+            className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={loading}
           >
             ✕ ล้างทั้งหมด
@@ -83,71 +78,74 @@ export default function FinancialFilters({
         )}
       </div>
 
+      {/* Loading indicator */}
+      {loading && selectedYear && (
+        <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center gap-3">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+          <p className="text-blue-700 text-sm font-medium">
+            กำลังโหลดข้อมูลปี {selectedYear}...
+          </p>
+        </div>
+      )}
+
       <div className="space-y-6">
         {/* Year Filter */}
         {archiveFolderId && (
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">
-              📆 ปี (Year)
+              ปี 
             </label>
-            {loadingYears ? (
-              <div className="bg-white rounded-lg p-4 border border-slate-200 text-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600 mx-auto"></div>
-                <p className="text-sm text-slate-600 mt-2">กำลังโหลดปี...</p>
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {/* Current Year */}
-                <button
-                  onClick={() => onYearChange(null)}
-                  disabled={loading}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                    selectedYear === null
-                      ? "bg-green-600 text-white shadow-lg"
-                      : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-200"
-                  } ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
-                >
-                  ปีปัจจุบัน
-                </button>
-
-                {/* Archive Years */}
-                {availableYears.map((yearObj) => (
-                  <button
-                    key={yearObj.year}
-                    onClick={() => onYearChange(yearObj.year)}
-                    disabled={loading}
-                    className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                      selectedYear === yearObj.year
-                        ? "bg-green-600 text-white shadow-lg"
-                        : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-200"
-                    } ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
-                  >
-                    {yearObj.year}
-                  </button>
-                ))}
-              </div>
+            <select
+              value={selectedYear || ""}
+              onChange={(e) => {
+                const value = e.target.value;
+                onYearChange(value || null);
+              }}
+              className="w-full px-4 py-2.5 bg-white border border-slate-300 text-slate-900 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
+              disabled={loadingYears || loading}
+            >
+              <option value="">ปีปัจจุบัน</option>
+              {availableYears.map((yearData) => (
+                <option key={yearData.year} value={yearData.year}>
+                  {yearData.year}
+                </option>
+              ))}
+            </select>
+            {loadingYears && (
+              <p className="text-xs text-slate-500 mt-1.5">กำลังโหลดปีที่จัดเก็บ...</p>
             )}
           </div>
         )}
 
         {/* Period Filter */}
         <div>
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-3">
             <label className="text-sm font-semibold text-slate-700">
-              📊 ช่วง (Period)
+              ช่วงเวลา
             </label>
-            <button
-              onClick={() => onSelectAll(periodOptions)}
-              className="text-sm text-green-600 hover:text-green-700 font-medium"
-              disabled={loading}
-            >
-              {selectedPeriods.length === periodOptions.length ? "ยกเลิกทั้งหมด" : "เลือกทั้งหมด"}
-            </button>
+            {periodOptions.length > 0 && (
+              <button
+                onClick={() => onSelectAll(periodOptions)}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={loading}
+              >
+                {selectedPeriods.length === periodOptions.length
+                  ? "ยกเลิกเลือก"
+                  : "เลือกทั้งหมด"}
+              </button>
+            )}
           </div>
 
-          {periodOptions.length === 0 ? (
+          {loading ? (
             <div className="bg-white rounded-lg p-4 border border-slate-200 text-center">
-              <p className="text-sm text-slate-600">ไม่พบช่วงเวลา</p>
+              <div className="flex items-center justify-center gap-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                <p className="text-sm text-slate-600">กำลังโหลด...</p>
+              </div>
+            </div>
+          ) : periodOptions.length === 0 ? (
+            <div className="bg-white rounded-lg p-4 border border-slate-200 text-center">
+              <p className="text-sm text-slate-600">ไม่พบข้อมูลช่วง</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
@@ -158,11 +156,10 @@ export default function FinancialFilters({
                     key={period}
                     onClick={() => onPeriodToggle(period)}
                     disabled={loading}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                      isSelected
-                        ? "bg-green-600 text-white shadow-md"
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${isSelected
+                        ? "bg-blue-600 text-white shadow-md hover:bg-blue-700"
                         : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-200"
-                    } ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
+                      } ${loading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
                   >
                     {period}
                   </button>
@@ -173,7 +170,7 @@ export default function FinancialFilters({
         </div>
 
         {/* Filter Summary */}
-        <div className="pt-4 border-t border-green-200">
+        <div className="pt-4 border-t border-blue-200">
           <p className="text-sm text-slate-600">
             <span className="font-semibold">สรุป:</span>{" "}
             {selectedYear ? `ปี ${selectedYear}` : "ปีปัจจุบัน"}
@@ -183,6 +180,7 @@ export default function FinancialFilters({
               : "ทุกช่วง"}
           </p>
         </div>
+
       </div>
     </div>
   );

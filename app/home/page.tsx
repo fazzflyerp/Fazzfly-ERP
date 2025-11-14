@@ -49,7 +49,6 @@ interface ModuleConfig {
 }
 
 // ✅ Master Config Spreadsheet ID (from environment)
-// TODO: ตรวจสอบว่า .env.local ตั้งค่าถูกต้อง
 const MASTER_CONFIG_ID = process.env.NEXT_PUBLIC_MASTER_CONFIG_ID || "1j7LguHaX8pIvvQ1PqqenuguOsPT1QthJqXJyMYW2xo8";
 
 if (typeof window !== 'undefined') {
@@ -570,50 +569,32 @@ export default function HomePage() {
             </h2>
             {validDashboards.length > 0 ? (
               <>
-                {/* Grid ของ Dashboard Cards - เลือกได้ */}
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                  {validDashboards.map((dashboard) => (
-                    <div
-                      key={dashboard.dashboardId}
-                      onClick={() => setSelectedDashboard(dashboard)}
-                      className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-lg shadow-purple-100/50 p-7 border border-purple-100/50 hover:shadow-2xl hover:shadow-purple-200 hover:-translate-y-2 transition-all duration-300 cursor-pointer group h-full"
-                    >
-                      <div className="flex items-center justify-between mb-5">
-                        <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-300 via-purple-400 to-purple-500 text-white group-hover:scale-110 transition-transform">
-                          <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                          </svg>
-                        </div>
-                        <svg className="w-6 h-6 text-slate-300 group-hover:text-purple-600 group-hover:translate-x-2 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </div>
-                      <h3 className="text-xl font-bold text-slate-800 mb-2 group-hover:text-purple-600 transition-colors">{dashboard.dashboardName}</h3>
-                      {dashboard.notes && (
-                        <p className="text-sm text-slate-600 mb-5 line-clamp-2">{dashboard.notes}</p>
-                      )}
-                      <div className="pt-5 border-t border-slate-100">
-                        <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">รายละเอียด</p>
-                        <p className="text-sm text-slate-700 mt-2">Sheet: <span className="font-semibold">{dashboard.sheetName}</span></p>
-                        <p className="text-sm text-slate-700">Config: <span className="font-semibold">{dashboard.dashboardConfigName}</span></p>
-                      </div>
-                    </div>
-                  ))}
+                {/* ✅ Dashboard Navigation - Top Bar */}
+                <div className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-lg shadow-purple-100/50 p-4 border border-purple-100/50 mb-8 overflow-x-auto">
+                  <div className="flex gap-3 min-w-min">
+                    {validDashboards.map((dashboard) => (
+                      <button
+                        key={dashboard.dashboardId}
+                        onClick={() => setSelectedDashboard(dashboard)}
+                        className={`px-5 py-2.5 rounded-xl font-semibold transition-all whitespace-nowrap ${
+                          selectedDashboard?.dashboardId === dashboard.dashboardId
+                            ? "bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg"
+                            : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        }`}
+                      >
+                        {dashboard.dashboardName}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                {/* ✅ Dashboard Viewer - Render ตามชื่อ Dashboard */}
+                {/* ✅ Dashboard Content */}
                 {selectedDashboard && (
-                  <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-lg p-8 border border-purple-100/50">
+                  <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-lg p-8 border border-purple-100/50 animate-fadeIn">
                     <div className="flex items-center justify-between mb-8">
                       <h3 className="text-2xl font-bold text-slate-800">
                         {selectedDashboard.dashboardName}
                       </h3>
-                      <button
-                        onClick={() => setSelectedDashboard(null)}
-                        className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium"
-                      >
-                        ✕ ปิด
-                      </button>
                     </div>
 
                     {/* Loading state */}
@@ -636,32 +617,22 @@ export default function HomePage() {
                               configSheetName={selectedDashboard.dashboardConfigName}
                               dataSheetName={selectedDashboard.sheetName}
                               accessToken={(session as any)?.accessToken}
-                              archiveFolderId={archiveFolderId || undefined} // ✅ ส่ง undefined ถ้าไม่มี
+                              archiveFolderId={archiveFolderId || undefined}
                               moduleName="Sales"
                             />
                           ) : (
                             <div className="bg-red-50 border border-red-200 rounded-lg p-6">
                               <p className="text-red-700 font-semibold">❌ ไม่สามารถโหลด Sales Config</p>
                               <p className="text-red-600 text-sm mt-2">
-                                ตรวจสอบว่า Master Config มีข้อมูล Sales Module
+                                ตรวจสอบว่า Master Config มีข้อมูล Sales Module หรือ Refresh หน้านี้
                               </p>
-                              <button
-                                onClick={() => {
-                                  setSelectedDashboard(null);
-                                  setArchiveFolderId(null);
-                                  setModuleConfigs({});
-                                }}
-                                className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
-                              >
-                                ลองใหม่
-                              </button>
                             </div>
                           )
                         ) : null}
                       </>
                     )}
 
-                    {/* ✅ Expense Dashboard - เพิ่มส่วนนี้ */}
+                    {/* ✅ Expense Dashboard */}
                     {selectedDashboard.dashboardName.toLowerCase().includes("expense") && (
                       <>
                         {!loadingModuleConfigs && !loadingArchiveFolderId ? (
@@ -678,14 +649,15 @@ export default function HomePage() {
                             <div className="bg-red-50 border border-red-200 rounded-lg p-6">
                               <p className="text-red-700 font-semibold">❌ ไม่สามารถโหลด Expense Config</p>
                               <p className="text-red-600 text-sm mt-2">
-                                ตรวจสอบว่า Master Config มีข้อมูล Expense Module
+                                ตรวจสอบว่า Master Config มีข้อมูล Expense Module หรือ Refresh หน้านี้
                               </p>
                             </div>
                           )
                         ) : null}
                       </>
                     )}
-                    {/* ✅ Financial Dashboard - เพิ่มส่วนนี้ */}
+
+                    {/* ✅ Financial Dashboard */}
                     {selectedDashboard.dashboardName.toLowerCase().includes("financial") && (
                       <>
                         {!loadingModuleConfigs && !loadingArchiveFolderId ? (
@@ -702,7 +674,7 @@ export default function HomePage() {
                             <div className="bg-red-50 border border-red-200 rounded-lg p-6">
                               <p className="text-red-700 font-semibold">❌ ไม่สามารถโหลด Financial Config</p>
                               <p className="text-red-600 text-sm mt-2">
-                                ตรวจสอบว่า Master Config มีข้อมูล Financial Module
+                                ตรวจสอบว่า Master Config มีข้อมูล Financial Module หรือ Refresh หน้านี้
                               </p>
                             </div>
                           )
@@ -710,7 +682,7 @@ export default function HomePage() {
                       </>
                     )}
 
-                    {/* ✅ Payroll Dashboard - เพิ่มส่วนนี้ */}
+                    {/* ✅ Payroll Dashboard */}
                     {selectedDashboard.dashboardName.toLowerCase().includes("payroll") && (
                       <>
                         {!loadingModuleConfigs && !loadingArchiveFolderId ? (
@@ -720,13 +692,14 @@ export default function HomePage() {
                               configSheetName={selectedDashboard.dashboardConfigName}
                               dataSheetName={selectedDashboard.sheetName}
                               accessToken={(session as any)?.accessToken}
+                              archiveFolderId={archiveFolderId || undefined}
                               moduleName="Payroll"
                             />
                           ) : (
                             <div className="bg-red-50 border border-red-200 rounded-lg p-6">
                               <p className="text-red-700 font-semibold">❌ ไม่สามารถโหลด Payroll Config</p>
                               <p className="text-red-600 text-sm mt-2">
-                                ตรวจสอบว่า Master Config มีข้อมูล Payroll Module
+                                ตรวจสอบว่า Master Config มีข้อมูล Payroll Module หรือ Refresh หน้านี้
                               </p>
                             </div>
                           )
@@ -744,6 +717,17 @@ export default function HomePage() {
                           <p className="text-yellow-600 text-sm mt-2">กำลังพัฒนา {selectedDashboard.dashboardName} Dashboard</p>
                         </div>
                       )}
+                  </div>
+                )}
+
+                {/* Show hint if no dashboard selected */}
+                {!selectedDashboard && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-2xl p-8 text-center">
+                    <svg className="w-16 h-16 text-blue-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p className="text-blue-700 font-semibold text-lg">เลือก Dashboard จากด้านบน</p>
+                    <p className="text-blue-600 text-sm mt-2">คลิกที่ชื่อ Dashboard เพื่อดูข้อมูล</p>
                   </div>
                 )}
               </>

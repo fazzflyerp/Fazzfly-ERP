@@ -1,7 +1,8 @@
 /**
- * Expense Dashboard - Main Component
+ * Expense Dashboard - Main Component (FIXED - Debug only in dev)
  * Location: app/components/dashboards/expense/ExpenseDashboard.tsx
  * ✅ Customized for Expense module with fields: period, date, expense, amount
+ * ✅ FIXED: Debug info only shows in development mode
  */
 
 "use client";
@@ -468,35 +469,37 @@ export default function ExpenseDashboard({
   // ============================================================
   return (
     <div className="space-y-6">
-      {/* Debug: Show current state */}
-      <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs">
-        <p className="font-bold text-red-900 mb-2">💸 Expense Dashboard Debug:</p>
-        <div className="grid grid-cols-2 gap-2 text-red-800">
-          <div>✅ Config: {config.length} fields</div>
-          <div>✅ Data: {allData.length} rows</div>
-          <div>
-            📍 Periods:{" "}
-            {selectedPeriods.length > 0 ? selectedPeriods.join(", ") : "(none)"}
-          </div>
-          <div>📅 Date: {selectedDate || "(all)"}</div>
-          <div>🔍 Filtered: {filteredData.length} rows</div>
-          <div>
-            📆 Year: {selectedYear || "Current"}
-            {selectedYear && (
-              <span className="ml-1 text-xs">
-                (Archive: {availableYears.find((y) => y.year === selectedYear)?.fileName || "?"})
-              </span>
-            )}
-          </div>
-          <div>📁 Archives: {availableYears.length} available</div>
-          <div>
-            🌐 Source:{" "}
-            {selectedYear
-              ? `Archive ${selectedYear}`
-              : "Main Spreadsheet"}
+      {/* Debug: Show current state (Only in Development) */}
+      {process.env.NODE_ENV === "development" && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs">
+          <p className="font-bold text-red-900 mb-2">💸 Expense Dashboard Debug:</p>
+          <div className="grid grid-cols-2 gap-2 text-red-800">
+            <div>✅ Config: {config.length} fields</div>
+            <div>✅ Data: {allData.length} rows</div>
+            <div>
+              📍 Periods:{" "}
+              {selectedPeriods.length > 0 ? selectedPeriods.join(", ") : "(none)"}
+            </div>
+            <div>📅 Date: {selectedDate || "(all)"}</div>
+            <div>🔍 Filtered: {filteredData.length} rows</div>
+            <div>
+              📆 Year: {selectedYear || "Current"}
+              {selectedYear && (
+                <span className="ml-1 text-xs">
+                  (Archive: {availableYears.find((y) => y.year === selectedYear)?.fileName || "?"})
+                </span>
+              )}
+            </div>
+            <div>📁 Archives: {availableYears.length} available</div>
+            <div>
+              🌐 Source:{" "}
+              {selectedYear
+                ? `Archive ${selectedYear}`
+                : "Main Spreadsheet"}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Filters */}
       <ExpenseFilters

@@ -1,7 +1,7 @@
 /**
- * Financial Dashboard - Main Component
+ * Financial Dashboard - Main Component (Same pattern as Payroll)
  * Location: app/components/dashboards/financial/FinancialDashboard.tsx
- * ✅ Complete financial reporting dashboard with 6 KPIs
+ * ✅ FIXED: Year filter now properly reloads data (same as Payroll)
  */
 
 "use client";
@@ -39,8 +39,8 @@ interface Props {
   configSheetName: string;
   dataSheetName: string;
   accessToken: string;
-  archiveFolderId?: string;
   moduleName?: string;
+  archiveFolderId?: string;
 }
 
 export default function FinancialDashboard({
@@ -48,8 +48,8 @@ export default function FinancialDashboard({
   configSheetName,
   dataSheetName,
   accessToken,
-  archiveFolderId,
   moduleName = "Financial",
+  archiveFolderId,
 }: Props) {
   // ============================================================
   // STATE: Loading & Errors
@@ -64,14 +64,18 @@ export default function FinancialDashboard({
   const [allData, setAllData] = useState<any[]>([]);
 
   // ============================================================
-  // STATE: Filters
+  // STATE: Year Filter
   // ============================================================
-  const [selectedPeriods, setSelectedPeriods] = useState<string[]>([]);
   const [selectedYear, setSelectedYear] = useState<string | null>(null);
   const [availableYears, setAvailableYears] = useState<
     { year: string; spreadsheetId: string; fileName: string }[]
   >([]);
   const [loadingYears, setLoadingYears] = useState(false);
+
+  // ============================================================
+  // STATE: Filters
+  // ============================================================
+  const [selectedPeriods, setSelectedPeriods] = useState<string[]>([]);
 
   // ============================================================
   // STATE: Visualizations
@@ -80,8 +84,8 @@ export default function FinancialDashboard({
   const [filteredData, setFilteredData] = useState<any[]>([]);
   const [stackedBarData, setStackedBarData] = useState<any[]>([]);
   const [areaChartData, setAreaChartData] = useState<any[]>([]);
-  const [gaugeValue, setGaugeValue] = useState<number>(0);
-  const [summaryData, setSummaryData] = useState<any[]>([]);
+  const [gaugeData, setGaugeData] = useState<number>(0);
+  const [summaryTableData, setSummaryTableData] = useState<any[]>([]);
 
   // ============================================================
   // EFFECT: Validate props on mount
@@ -104,7 +108,10 @@ export default function FinancialDashboard({
   // ============================================================
   useEffect(() => {
     if (archiveFolderId) {
+      console.log("📁 archiveFolderId is set:", archiveFolderId);
       fetchAvailableYears();
+    } else {
+      console.log("ℹ️  No archiveFolderId - year filter disabled");
     }
   }, [archiveFolderId]);
 
@@ -112,13 +119,28 @@ export default function FinancialDashboard({
   // EFFECT: Fetch data when year changes
   // ============================================================
   useEffect(() => {
+    console.log("━".repeat(60));
+    console.log("🔄 [Data Fetch Effect] Triggered");
+
+    // ✅ Normalize: "" or null = "Current"
+    const normalizedYear = selectedYear?.trim() || null;
+
+    console.log("   selectedYear (raw):", selectedYear);
+    console.log("   selectedYear (normalized):", normalizedYear || "Current");
+    console.log("   availableYears.length:", availableYears.length);
+    console.log("━".repeat(60));
+
+    // ✅ Fetch data every time selectedYear changes
     fetchDashboardData();
-  }, [selectedYear]);
+  }, [selectedYear]); // ✅ Trigger on ANY change to selectedYear
 
   // ============================================================
   // EFFECT: Filter visualizations when periods change (NO API CALL)
   // ============================================================
   useEffect(() => {
+    console.log("🔄 Filters changed - regenerating visualizations");
+    console.log("   Periods:", selectedPeriods.length > 0 ? selectedPeriods : "all");
+
     if (allData.length > 0 && config.length > 0) {
       generateVisualizations(allData, selectedPeriods, config);
     }
@@ -129,14 +151,48 @@ export default function FinancialDashboard({
   // ============================================================
   const fetchAvailableYears = async () => {
     try {
+      console.log("━".repeat(60));
+      console.log("📅 [fetchAvailableYears] START - Financial");
+      console.log("━".repeat(60));
+
       setLoadingYears(true);
-      let folderId = (archiveFolderId || "").trim();
+      
+      // ✅ Debug: Check if archiveFolderId exists
+      console.log("🔍 [DEBUG] Initial checks:");
+      console.log("   archiveFolderId prop:", archiveFolderId || "❌ EMPTY/NULL");
+      console.log("   archiveFolderId type:", typeof archiveFolderId);
+      console.log("   archiveFolderId length:", archiveFolderId?.length || 0);
+      
+      if (!archiveFolderId) {
+        console.warn("⚠️ archiveFolderId is empty - Year filter will not work");
+        console.log("   This usually means:");
+        console.log("   1. Parent component didn't fetch archiveFolderId");
+        console.log("   2. API /api/dashboard/archive-folder-id returned empty");
+        console.log("   3. Google Sheet column J is empty");
+        setLoadingYears(false);
+        return;
+      }
+
+      let folderId = archiveFolderId.trim();
+
+      console.log("📁 Processing archiveFolderId:");
+      console.log("   Raw value:", folderId);
+      console.log("   Is URL?", folderId.includes("drive.google.com") || folderId.includes("https://"));
 
       if (folderId.includes("drive.google.com") || folderId.includes("https://")) {
+        console.log("🔗 Detected URL format, extracting ID...");
         const match = folderId.match(/folders\/([a-zA-Z0-9_-]+)/);
         if (match && match[1]) {
           folderId = match[1];
+          console.log("✅ Extracted Folder ID:", folderId);
+        } else {
+          console.error("❌ Cannot extract Folder ID from URL");
+          console.error("   URL format invalid:", folderId);
+          setLoadingYears(false);
+          return;
         }
+      } else {
+        console.log("🆔 Already in ID format:", folderId);
       }
 
       const params = new URLSearchParams({
@@ -144,19 +200,43 @@ export default function FinancialDashboard({
         ...(moduleName && { moduleName }),
       });
 
-      const res = await fetch(`/api/dashboard/archive/years?${params}`, {
+      const fullUrl = `/api/dashboard/archive/years?${params}`;
+      console.log("🌐 Full API URL:", fullUrl);
+      console.log("   Params breakdown:");
+      console.log("      archiveFolderId:", folderId);
+      console.log("      moduleName:", moduleName || "(none)");
+
+      console.log("📤 Sending request...");
+      const res = await fetch(fullUrl, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        setAvailableYears(data.years || []);
+      console.log("🔡 Response Status:", res.status);
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("❌ API Error:", errorText);
+        throw new Error(`HTTP ${res.status}: ${errorText}`);
       }
+
+      const yearData = await res.json();
+
+      console.log("✅ [fetchAvailableYears] Success:");
+      console.log("   Available years:", yearData.years?.length || 0);
+      if (yearData.years) {
+        console.log("   Years:", yearData.years.map((y: any) => y.year).join(", "));
+      }
+      console.log("━".repeat(60));
+
+      setAvailableYears(yearData.years || []);
     } catch (err: any) {
-      console.error("Error fetching years:", err.message);
+      console.error("━".repeat(60));
+      console.error("❌ [fetchAvailableYears] Error:", err.message);
+      console.error("━".repeat(60));
+      setAvailableYears([]);
     } finally {
       setLoadingYears(false);
     }
@@ -167,6 +247,11 @@ export default function FinancialDashboard({
   // ============================================================
   const fetchDashboardData = async () => {
     try {
+      console.log("━".repeat(60));
+      console.log("📊 [fetchDashboardData] START - Financial");
+      console.log("   selectedYear:", selectedYear || "Current");
+      console.log("━".repeat(60));
+
       setLoading(true);
       setError(null);
 
@@ -174,45 +259,60 @@ export default function FinancialDashboard({
         spreadsheetId,
         configSheetName,
         dataSheetName,
+        ...(selectedYear && { year: selectedYear }),
       });
 
-      const normalizedYear = selectedYear?.trim() || null;
+      const fullUrl = `/api/dashboard/data?${params}`;
+      console.log("🌐 Full API URL:", fullUrl);
 
-      if (normalizedYear && availableYears.length > 0) {
-        const found = availableYears.find((y) => y.year === normalizedYear);
-        if (found) {
-          params.append("year", normalizedYear);
-          params.append("archiveSpreadsheetId", found.spreadsheetId);
-        }
-      }
-
-      const res = await fetch(`/api/dashboard/data?${params.toString()}`, {
-        method: "GET",
+      console.log("📤 Sending request...");
+      const res = await fetch(fullUrl, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
       });
 
+      console.log("🔡 Response Status:", res.status);
+
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+        const errorText = await res.text();
+        console.error("❌ API Error:", errorText);
+        throw new Error(`HTTP ${res.status}: ${errorText}`);
       }
 
       const data: DashboardData = await res.json();
 
-      if (data.error || !data.config || !data.data) {
-        throw new Error(data.error || "Invalid response");
+      if (data.error) {
+        throw new Error(data.error + (data.message ? `: ${data.message}` : ""));
       }
 
-      console.log("✅ Financial data loaded:", data.data.length, "rows");
+      if (!data.config || !data.data) {
+        throw new Error("Invalid API response: missing config or data");
+      }
+
+      console.log("✅ [fetchDashboardData] Success:");
+      console.log("   Config fields:", data.config.length);
+      console.log("   Data records:", data.data.length);
+      console.log("   Metadata:", data.metadata);
+      console.log("━".repeat(60));
 
       setConfig(data.config);
       setAllData(data.data);
-      generateVisualizations(data.data, selectedPeriods, data.config);
+
+      // Clear period selection when year changes
+      setSelectedPeriods([]);
+
+      // Generate visualizations
+      generateVisualizations(data.data, [], data.config);
     } catch (err: any) {
-      console.error("❌ Error fetching financial data:", err.message);
+      console.error("━".repeat(60));
+      console.error("❌ [fetchDashboardData] Error:", err.message);
+      console.error("━".repeat(60));
       setError(err.message || "โหลดข้อมูลไม่สำเร็จ");
     } finally {
+      // ✅ CRITICAL: Always set loading to false
+      console.log("✅ Setting loading = false");
       setLoading(false);
     }
   };
@@ -226,6 +326,7 @@ export default function FinancialDashboard({
     configData: ConfigField[] = config
   ) => {
     console.log("📊 Generating Financial visualizations");
+    console.log(`   Periods: ${periods.length > 0 ? periods.join(",") : "all"}`);
 
     let filteredRows = rows;
 
@@ -233,9 +334,11 @@ export default function FinancialDashboard({
     if (periods.length > 0) {
       const periodField = configData.find((f) => f.type === "period");
       if (periodField) {
+        const beforePeriod = filteredRows.length;
         filteredRows = filteredRows.filter((row) =>
           periods.includes(String(row[periodField.fieldName]).trim())
         );
+        console.log(`   📍 Period: ${beforePeriod} → ${filteredRows.length} records`);
       }
     }
 
@@ -243,19 +346,31 @@ export default function FinancialDashboard({
     setKpiData(generateKPI(filteredRows, configData));
     setStackedBarData(generateStackedBarData(filteredRows, configData));
     setAreaChartData(generateAreaChartData(filteredRows, configData));
-    setGaugeValue(generateGaugeData(filteredRows, configData));
-    setSummaryData(generateSummaryTableData(filteredRows));
+    setGaugeData(generateGaugeData(filteredRows, configData));
+    setSummaryTableData(generateSummaryTableData(filteredRows));
   };
 
   // ============================================================
   // HANDLERS: Filter actions
   // ============================================================
+  const handleYearChange = (year: string | null) => {
+    console.log("━".repeat(60));
+    console.log("📅 [onYearChange] Year filter changed:");
+    console.log("   From:", selectedYear);
+    console.log("   To:", year);
+    console.log("━".repeat(60));
+    setSelectedYear(year);
+  };
+
   const handlePeriodToggle = (period: string) => {
-    setSelectedPeriods((prev) =>
-      prev.includes(period)
+    console.log("🔘 Period toggle clicked:", period);
+    setSelectedPeriods((prev) => {
+      const newSelection = prev.includes(period)
         ? prev.filter((p) => p !== period)
-        : [...prev, period]
-    );
+        : [...prev, period];
+      console.log("   📊 New selection:", newSelection);
+      return newSelection;
+    });
   };
 
   const handleSelectAll = (periodOptions: string[]) => {
@@ -265,6 +380,7 @@ export default function FinancialDashboard({
   };
 
   const handleClearFilters = () => {
+    console.log("🔄 Clearing all filters");
     setSelectedYear(null);
     setSelectedPeriods([]);
   };
@@ -276,7 +392,7 @@ export default function FinancialDashboard({
     return (
       <div className="flex items-center justify-center p-12">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-slate-600">กำลังโหลดข้อมูล Financial Dashboard...</p>
         </div>
       </div>
@@ -312,18 +428,31 @@ export default function FinancialDashboard({
   // ============================================================
   return (
     <div className="space-y-6">
-      {/* Debug Info */}
-      <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-xs">
-        <p className="font-bold text-green-900 mb-2">💰 Financial Dashboard Debug:</p>
-        <div className="grid grid-cols-2 gap-2 text-green-800">
-          <div>✅ Config: {config.length} fields</div>
-          <div>✅ Data: {allData.length} rows</div>
-          <div>📍 Periods: {selectedPeriods.length > 0 ? selectedPeriods.join(", ") : "(none)"}</div>
-          <div>🔍 Filtered: {filteredData.length} rows</div>
-          <div>📆 Year: {selectedYear || "Current"}</div>
-          <div>📁 Archives: {availableYears.length} available</div>
+      {/* Debug Info - Only in Development */}
+      {process.env.NODE_ENV === "development" && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs">
+          <p className="font-bold text-blue-900 mb-2">💼 Financial Dashboard Debug:</p>
+          <div className="grid grid-cols-2 gap-2 text-blue-800">
+            <div>✅ Config: {config.length} fields</div>
+            <div>✅ Data: {allData.length} rows</div>
+            <div>📍 Periods: {selectedPeriods.length > 0 ? selectedPeriods.join(", ") : "(none)"}</div>
+            <div>🔍 Filtered: {filteredData.length} rows</div>
+            <div>📈 Stacked: {stackedBarData.length} periods</div>
+            <div>📊 Area: {areaChartData.length} periods</div>
+            <div>
+              📆 Year: {selectedYear || "Current"}
+              {selectedYear && (
+                <span className="ml-1 text-xs">
+                  (Archive: {availableYears.find((y) => y.year === selectedYear)?.fileName || "?"})
+                </span>
+              )}
+            </div>
+            <div>📁 Archives: {availableYears.length} available</div>
+            <div>🌐 Source: {selectedYear ? `Archive ${selectedYear}` : "Main Spreadsheet"}</div>
+            <div>🔧 Loading: {loading ? "YES" : "NO"}</div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Filters */}
       <FinancialFilters
@@ -335,13 +464,13 @@ export default function FinancialDashboard({
         loadingYears={loadingYears}
         archiveFolderId={archiveFolderId}
         loading={loading}
-        onYearChange={setSelectedYear}
+        onYearChange={handleYearChange}
         onPeriodToggle={handlePeriodToggle}
         onSelectAll={handleSelectAll}
         onClearFilters={handleClearFilters}
       />
 
-      {/* KPI Cards (6 cards) */}
+      {/* KPI Cards (6 cards: total_sales, cost, profit, expense, net_profit, percent_net_profit) */}
       <FinancialKPICards
         kpiData={kpiData}
         allData={allData}
@@ -350,15 +479,15 @@ export default function FinancialDashboard({
         selectedPeriods={selectedPeriods}
       />
 
-      {/* Charts (Stacked Bar + Area + Gauge) */}
+      {/* Charts (3 charts: Stacked Bar, Area, Gauge) */}
       <FinancialCharts
         stackedBarData={stackedBarData}
         areaChartData={areaChartData}
-        gaugeValue={gaugeValue}
+        gaugeValue={gaugeData}
       />
 
       {/* Summary Table */}
-      <FinancialSummaryTable summaryData={summaryData} />
+      <FinancialSummaryTable summaryData={summaryTableData} />
     </div>
   );
 }

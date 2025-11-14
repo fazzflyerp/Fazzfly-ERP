@@ -75,7 +75,7 @@ export function generateKPI(
   });
 
   numericFields.forEach((field) => {
-    console.log(`\n📍 Processing field: ${field.fieldName}`);
+    console.log(`\n🔍 Processing field: ${field.fieldName}`);
     
     // Sample first 3 rows
     console.log("   Sample raw values:");
@@ -368,6 +368,31 @@ export function getPeriodOptions(
 }
 
 /**
+ * Get period options from filtered data
+ * Similar to Payroll: filters data first, then extracts unique periods
+ */
+export function getPeriodOptionsFromData(
+  data: any[],
+  config: ConfigField[],
+  selectedYear?: string
+): string[] {
+  console.log("[PERIOD_OPTIONS] Financial");
+  console.log("   Data rows:", data.length);
+  console.log("   Selected year:", selectedYear || "current");
+
+  let filteredData = data;
+  
+  if (selectedYear && selectedYear !== "current") {
+    filteredData = data;
+  }
+
+  const periods = getPeriodOptions(filteredData, config);
+  console.log("   Periods found:", periods);
+  
+  return periods;
+}
+
+/**
  * Get profit margin color based on percentage
  */
 export function getProfitMarginColor(percent: number): string {
@@ -384,5 +409,5 @@ export function getProfitMarginLabel(percent: number): string {
   if (percent >= 30) return "ดีมาก";
   if (percent >= 20) return "ดี";
   if (percent >= 10) return "พอใช้";
-  return "ควรปรับปรุง";
+  return "ต่ำ";
 }
