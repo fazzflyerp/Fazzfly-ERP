@@ -1,5 +1,5 @@
 "use client";
-
+import Image from 'next/image';
 import { useEffect, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -408,10 +408,14 @@ export default function HomePage() {
       <nav className="relative z-20 bg-white/80 backdrop-blur-xl border-b border-blue-100 sticky top-0">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 via-sky-500 to-cyan-400 rounded-xl flex items-center justify-center shadow-lg">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
+            <div className="w-10 h-10 flex items-center justify-center">
+              <Image
+                src="/logo2.png"
+                alt="Fazzfly Logo"
+                width={40}
+                height={40}
+                className="object-contain"
+              />
             </div>
             <span className="text-xl font-bold bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-500 bg-clip-text text-transparent">
               Fazzfly ERP
@@ -576,11 +580,10 @@ export default function HomePage() {
                       <button
                         key={dashboard.dashboardId}
                         onClick={() => setSelectedDashboard(dashboard)}
-                        className={`px-5 py-2.5 rounded-xl font-semibold transition-all whitespace-nowrap ${
-                          selectedDashboard?.dashboardId === dashboard.dashboardId
-                            ? "bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg"
-                            : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                        }`}
+                        className={`px-5 py-2.5 rounded-xl font-semibold transition-all whitespace-nowrap ${selectedDashboard?.dashboardId === dashboard.dashboardId
+                          ? "bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg"
+                          : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                          }`}
                       >
                         {dashboard.dashboardName}
                       </button>

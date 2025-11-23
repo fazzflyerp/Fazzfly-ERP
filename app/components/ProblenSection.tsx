@@ -5,96 +5,74 @@ import Image from 'next/image';
 export default function ProblemsSection() {
   const problems = [
     {
-      icon: (
-        <svg className="w-12 h-12 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-        </svg>
-      ),
-      title: "ระบบไม่เชื่อม ต่อกัน",
-      description: "ข้อมูลอากาศ่ายหายไปตลอด บัญชี ไม่รู้จัดจัง สต็อกไม่อัคเดต"
+      title: "ระบบไม่เชื่อมต่อกัน",
+      description: "ข้อมูลจากฝ่ายขายไม่ถึงบัญชี บัญชีไม่รู้ยอดจริง สต็อกไม่อัปเดตทันเวลา"
     },
     {
-      icon: (
-        <svg className="w-12 h-12 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
-      title: "ใช้ EXCEL หลาย ไฟล์อนลับสน",
-      description: "ไฟล์เอกสารซ้ำ ข้อมูลผิดพลาด และต้องจำแม่นทักเดือน"
+      title: "ใช้ EXCEL หลายไฟล์ยุ่งยาก",
+      description: "ไฟล์เวอร์ชันซ้ำ ข้อมูลผิดพลาด และต้องตามแก้ทุกเดือน"
     },
     {
-      icon: (
-        <svg className="w-12 h-12 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-      ),
-      title: "เสียเวลาป้อน งานซ้ำซ้อน",
-      description: "กรอกข้อมูลซ้ำในหลายระบบ หรือใช้เอกสารแบบสิ่งห่างๆ"
+      title: "เสียเวลาป้อนงานซ้ำซ้อน",
+      description: "กรอกข้อมูลซ้ำในหลายระบบ หรือใช้เอกสารแมนนวลที่หายง่าย"
     },
     {
-      icon: (
-        <svg className="w-12 h-12 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-        </svg>
-      ),
-      title: "ขาดความรวม ของธุรกิจ",
-      description: "ไม่มี DASHBOARD กลางที่เห็นรายได้ ทำให้ และสต็อกแบบเรียลไทม์"
+      title: "ขาดภาพรวมของธุรกิจ",
+      description: "ไม่มี Dashboard กลางที่เห็นรายได้ กำไร และสต็อกแบบเรียลไทม์"
     }
   ];
 
   return (
-    <section
-      className="relative py-20 px-6 min-h-screen flex items-center bg-gradient-to-r from-blue-300 to-cyan-200"
-    >
-      {/* Overlay */}
-      <div className="absolute inset-0 bg-black/5" />
+    <section className="relative min-h-screen flex items-center justify-center px-6 py-20 overflow-hidden pt-20">
+      {/* Background image - ใช้ Image component ของ Next.js */}
+      <Image
+        src="/problemsection-bg.jpg"
+        alt="Hero background"
+        fill
+        priority
+        quality={100}
+        className="object-cover object-center"
+        style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
+      />
+      {/* Decorative Dots */}
+      <div className="absolute top-20 left-10 w-2 h-2 bg-white/30 rounded-full"></div>
+      <div className="absolute top-32 left-24 w-3 h-3 bg-white/20 rounded-full"></div>
+      <div className="absolute bottom-40 right-16 w-2 h-2 bg-blue-300/40 rounded-full"></div>
 
       <div className="max-w-7xl mx-auto w-full relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+
           {/* Left Side - Text and Cards */}
           <div>
-            <h2
-              className="text-3xl md:text-5xl font-black text-slate-900 mb-6 leading-tight"
-              style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
-            >
+            <h2 className="text-4xl md:text-5xl font-semibold font-medium text-black mb-6 leading-tight font-thai">
               เหนื่อยไหมกับการจัดการ
               <br />
-              ธุรกิจที่กระจัดระจาย?
+              <span className="text-black">ธุรกิจที่กระจัดระจาย?</span>
             </h2>
-
-            <p
-              className="text-lg text-slate-800 mb-12 font-semibold leading-relaxed"
-              style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
-            >
-              ในยุคที่อีเมลร่วมกว่าเดิน ธุรกิจคีขาชั้นใช้ระบบแยกส่วน
-              <br />
-              หรือทำงานแบบแนนวล
-              <br />
-              อะสุสเสียเอลา ความแม่นยำ และโอกาสในการเติบโตไปอย่างเบียม ๆ
+            <p className="text-xl text-black mb-12 font-medium leading-relaxed drop-shadow-md">
+              ในยุคที่ข้อมูลไหลเร็วกว่าเดิม ธุรกิจที่ยังใช้ระบบแยกส่วน <br />
+              หรือทำงานแบบแมนนวล <br />
+              จะสูญเสียเวลา ความแม่นยำ และโอกาสในการเติบโตไปอย่างเงียบๆ
             </p>
 
             {/* Cards Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {problems.map((problem, index) => (
                 <div
                   key={index}
-                  className="bg-white rounded-3xl p-6 shadow-lg hover:shadow-xl transition-shadow duration-300"
+                  className="group bg-white/95 backdrop-blur-sm rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 border border-white/50"
                 >
-                  <div className="flex gap-4">
-                    <div className="flex-shrink-0">
-                      {problem.icon}
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
                     </div>
-                    <div>
-                      <h3
-                        className="font-bold text-slate-900 text-sm mb-2"
-                        style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
-                      >
+                    <div className="flex-1">
+                      <h3 className="font-bold text-slate-900 text-base mb-2 group-hover:text-blue-600 transition-colors">
                         {problem.title}
                       </h3>
-                      <p
-                        className="text-xs text-slate-600"
-                        style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
-                      >
+                      <p className="text-sm text-slate-600 leading-relaxed">
                         {problem.description}
                       </p>
                     </div>
@@ -104,30 +82,43 @@ export default function ProblemsSection() {
             </div>
 
             {/* Button */}
-            <button
-              className="mt-8 px-10 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-bold text-lg transition-all duration-300 hover:scale-105 shadow-lg"
-              style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
-            >
-              รับคำปรึกษาฟรี »
+            <button className="mt-10 px-12 py-5 bg-blue-600 hover:bg-blue-400 text-white rounded-full font-bold text-lg transition-all duration-300 hover:scale-105 shadow-2xl hover:shadow-3xl group">
+              <span className="flex items-center gap-2">
+                รับคำปรึกษาฟรี
+                <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </span>
             </button>
           </div>
 
-          {/* Right Side - Image (Hidden on Mobile) */}
+          {/* Right Side - Image */}
           <div className="hidden lg:flex relative items-center justify-center">
-            <div className="relative rounded-3xl overflow-hidden shadow-2xl max-w-sm">
-              <Image
-                src="/Pic1.jpg"
-                alt="Business person"
-                width={350}
-                height={450}
-                className="w-full h-auto object-cover"
-              />
+            <div className="relative">
+              {/* Glow Effect */}
+              <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/30 to-blue-600/30 blur-3xl rounded-3xl"></div>
 
-              {/* Puzzle piece decoration */}
-              <div className="absolute top-8 right-8 w-16 h-16 border-4 border-purple-400 rounded-lg opacity-50 transform -rotate-12"></div>
-              <div className="absolute top-12 right-24 w-12 h-12 border-4 border-purple-300 rounded-lg opacity-40 transform rotate-45"></div>
+              {/* Image Container */}
+              <div className="relative rounded-3xl overflow-hidden shadow-2xl max-w-md border-4 border-white/20">
+                <Image
+                  src="/Pic1.jpg"
+                  alt="Business person"
+                  width={400}
+                  height={500}
+                  className="w-full h-auto object-cover"
+                />
+
+                {/* Floating Elements */}
+                <div className="absolute top-8 right-8 w-16 h-16 bg-gradient-to-br from-purple-400 to-pink-400 rounded-2xl opacity-80 transform -rotate-12 animate-pulse shadow-lg"></div>
+                <div className="absolute bottom-12 left-8 w-12 h-12 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-xl opacity-70 transform rotate-45 animate-pulse shadow-lg" style={{ animationDelay: '0.5s' }}></div>
+
+                {/* Geometric Shapes */}
+                <div className="absolute top-20 -left-6 w-20 h-20 border-4 border-white/40 rounded-full"></div>
+                <div className="absolute bottom-32 -right-8 w-24 h-24 border-4 border-cyan-300/40 rounded-2xl transform rotate-12"></div>
+              </div>
             </div>
           </div>
+
         </div>
       </div>
     </section>
