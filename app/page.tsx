@@ -243,7 +243,7 @@ export default function LandingPage() {
       >
         {/* Background - Pure Image Only */}
         <Image
-          src="/bg2.jpg"
+          src="/4.jpg"
           alt="Hero background"
           fill
           priority
