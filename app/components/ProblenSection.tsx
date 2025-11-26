@@ -1,8 +1,12 @@
 "use client";
 
 import Image from 'next/image';
+import { useEffect, useRef, useState } from 'react';
 
 export default function ProblemsSection() {
+  const [isVisible, setIsVisible] = useState(false);
+  const sectionRef = useRef<HTMLDivElement>(null);
+
   const problems = [
     {
       title: "ระบบไม่เชื่อมต่อกัน",
@@ -22,9 +26,35 @@ export default function ProblemsSection() {
     }
   ];
 
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+        }
+      },
+      {
+        threshold: 0.2, // Trigger when 20% of the section is visible
+      }
+    );
+
+    if (sectionRef.current) {
+      observer.observe(sectionRef.current);
+    }
+
+    return () => {
+      if (sectionRef.current) {
+        observer.unobserve(sectionRef.current);
+      }
+    };
+  }, []);
+
   return (
-    <section className="relative min-h-screen flex items-center justify-center px-6 py-20 overflow-hidden pt-20">
-      {/* Background image - ใช้ Image component ของ Next.js */}
+    <section 
+      ref={sectionRef}
+      className="relative min-h-screen flex items-center justify-center px-6 py-20 overflow-hidden pt-20"
+    >
+      {/* Background image */}
       <Image
         src="/problemsection-bg.jpg"
         alt="Hero background"
@@ -32,8 +62,8 @@ export default function ProblemsSection() {
         priority
         quality={100}
         className="object-cover object-center"
-        style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
       />
+      
       {/* Decorative Dots */}
       <div className="absolute top-20 left-10 w-2 h-2 bg-white/30 rounded-full"></div>
       <div className="absolute top-32 left-24 w-3 h-3 bg-white/20 rounded-full"></div>
@@ -44,23 +74,48 @@ export default function ProblemsSection() {
 
           {/* Left Side - Text and Cards */}
           <div>
-            <h2 className="text-4xl md:text-5xl font-semibold font-medium text-black mb-6 leading-tight font-thai">
+            {/* Heading Animation */}
+            <h2 
+              className={`text-4xl md:text-5xl font-semibold font-medium text-black mb-6 leading-tight font-thai transition-all duration-1000 ${
+                isVisible 
+                  ? 'opacity-100 translate-y-0' 
+                  : 'opacity-0 translate-y-10'
+              }`}
+              style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
+            >
               เหนื่อยไหมกับการจัดการ
               <br />
               <span className="text-black">ธุรกิจที่กระจัดระจาย?</span>
             </h2>
-            <p className="text-xl text-black mb-12 font-medium leading-relaxed drop-shadow-md">
+
+            {/* Description Animation */}
+            <p 
+              className={`text-xl text-black mb-12 font-medium leading-relaxed drop-shadow-md transition-all duration-1000 delay-200 ${
+                isVisible 
+                  ? 'opacity-100 translate-y-0' 
+                  : 'opacity-0 translate-y-10'
+              }`}
+              style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
+            >
               ในยุคที่ข้อมูลไหลเร็วกว่าเดิม ธุรกิจที่ยังใช้ระบบแยกส่วน <br />
               หรือทำงานแบบแมนนวล <br />
               จะสูญเสียเวลา ความแม่นยำ และโอกาสในการเติบโตไปอย่างเงียบๆ
             </p>
 
-            {/* Cards Grid */}
+            {/* Cards Grid with Staggered Animation */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {problems.map((problem, index) => (
                 <div
                   key={index}
-                  className="group bg-white/95 backdrop-blur-sm rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 border border-white/50"
+                  className={`group bg-white/95 backdrop-blur-sm rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-700 hover:-translate-y-1 border border-white/50 ${
+                    isVisible 
+                      ? 'opacity-100 translate-y-0' 
+                      : 'opacity-0 translate-y-10'
+                  }`}
+                  style={{ 
+                    transitionDelay: `${400 + index * 150}ms`,
+                    fontFamily: 'var(--font-noto-sans-thai), sans-serif'
+                  }}
                 >
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
@@ -81,8 +136,18 @@ export default function ProblemsSection() {
               ))}
             </div>
 
-            {/* Button */}
-            <button className="mt-10 px-12 py-5 bg-blue-600 hover:bg-blue-400 text-white rounded-full font-bold text-lg transition-all duration-300 hover:scale-105 shadow-2xl hover:shadow-3xl group">
+            {/* Button Animation */}
+            <button 
+              className={`mt-10 px-12 py-5 bg-blue-600 hover:bg-blue-400 text-white rounded-full font-bold text-lg transition-all duration-1000 hover:scale-105 shadow-2xl hover:shadow-3xl group delay-1000 ${
+                isVisible 
+                  ? 'opacity-100 translate-y-0' 
+                  : 'opacity-0 translate-y-10'
+              }`}
+              style={{ 
+                transitionDelay: '1000ms',
+                fontFamily: 'var(--font-noto-sans-thai), sans-serif'
+              }}
+            >
               <span className="flex items-center gap-2">
                 รับคำปรึกษาฟรี
                 <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -92,29 +157,69 @@ export default function ProblemsSection() {
             </button>
           </div>
 
-          {/* Right Side - Image */}
+          {/* Right Side - Image with Animation */}
           <div className="hidden lg:flex relative items-center justify-center">
-            <div className="relative">
+            <div 
+              className={`relative transition-all duration-1200 ${
+                isVisible 
+                  ? 'opacity-100 scale-100 rotate-0' 
+                  : 'opacity-0 scale-90 rotate-3'
+              }`}
+              style={{ transitionDelay: '600ms' }}
+            >
               {/* Glow Effect */}
               <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/30 to-blue-600/30 blur-3xl rounded-3xl"></div>
 
               {/* Image Container */}
               <div className="relative rounded-3xl overflow-hidden shadow-2xl max-w-md border-4 border-white/20">
                 <Image
-                  src="/Pic1.jpg"
+                  src="/PIC1.jpg"
                   alt="Business person"
                   width={400}
                   height={500}
                   className="w-full h-auto object-cover"
                 />
 
-                {/* Floating Elements */}
-                <div className="absolute top-8 right-8 w-16 h-16 bg-gradient-to-br from-purple-400 to-pink-400 rounded-2xl opacity-80 transform -rotate-12 animate-pulse shadow-lg"></div>
-                <div className="absolute bottom-12 left-8 w-12 h-12 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-xl opacity-70 transform rotate-45 animate-pulse shadow-lg" style={{ animationDelay: '0.5s' }}></div>
+                {/* Floating Elements with Animation */}
+                <div 
+                  className={`absolute top-8 right-8 w-16 h-16 bg-gradient-to-br from-purple-400 to-pink-400 rounded-2xl opacity-80 transform -rotate-12 shadow-lg transition-all duration-1000 ${
+                    isVisible 
+                      ? 'animate-pulse translate-x-0 translate-y-0' 
+                      : 'translate-x-10 -translate-y-10 opacity-0'
+                  }`}
+                  style={{ transitionDelay: '800ms' }}
+                ></div>
+                
+                <div 
+                  className={`absolute bottom-12 left-8 w-12 h-12 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-xl opacity-70 transform rotate-45 shadow-lg transition-all duration-1000 ${
+                    isVisible 
+                      ? 'animate-pulse translate-x-0 translate-y-0' 
+                      : '-translate-x-10 translate-y-10 opacity-0'
+                  }`}
+                  style={{ 
+                    animationDelay: '0.5s',
+                    transitionDelay: '900ms'
+                  }}
+                ></div>
 
-                {/* Geometric Shapes */}
-                <div className="absolute top-20 -left-6 w-20 h-20 border-4 border-white/40 rounded-full"></div>
-                <div className="absolute bottom-32 -right-8 w-24 h-24 border-4 border-cyan-300/40 rounded-2xl transform rotate-12"></div>
+                {/* Geometric Shapes with Animation */}
+                <div 
+                  className={`absolute top-20 -left-6 w-20 h-20 border-4 border-white/40 rounded-full transition-all duration-1000 ${
+                    isVisible 
+                      ? 'scale-100 opacity-100' 
+                      : 'scale-0 opacity-0'
+                  }`}
+                  style={{ transitionDelay: '1000ms' }}
+                ></div>
+                
+                <div 
+                  className={`absolute bottom-32 -right-8 w-24 h-24 border-4 border-cyan-300/40 rounded-2xl transform rotate-12 transition-all duration-1000 ${
+                    isVisible 
+                      ? 'scale-100 opacity-100' 
+                      : 'scale-0 opacity-0'
+                  }`}
+                  style={{ transitionDelay: '1100ms' }}
+                ></div>
               </div>
             </div>
           </div>
