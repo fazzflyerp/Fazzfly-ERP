@@ -6,7 +6,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 // ✅ Import new dashboard components
 import SalesDashboard from "@/app/components/dashboards/sales/SalesDashboard";
+import UsageDashboard from "@/app/components/dashboards/usage/UsageDashboard";
+import PurchaseDashboard from "@/app/components/dashboards/purchase/PurchaseDashboard";
 import ExpenseDashboard from "@/app/components/dashboards/expense/ExpenseDashboard";
+import InventoryDashboard from "@/app/components/dashboards/inventory/InventoryDashboard";
 import PayrollDashboard from "@/app/components/dashboards/payroll/PayrollDashboard";
 import FinancialDashboard from "@/app/components/dashboards/financial/FinancialDashboard";
 
@@ -38,7 +41,6 @@ interface UserData {
   dashboardItems: DashboardItem[];
 }
 
-// ✅ Interface for module config from API
 interface ModuleConfig {
   moduleName: string;
   spreadsheetId: string;
@@ -48,7 +50,6 @@ interface ModuleConfig {
   enabled: boolean;
 }
 
-// ✅ Master Config Spreadsheet ID (from environment)
 const MASTER_CONFIG_ID = process.env.NEXT_PUBLIC_MASTER_CONFIG_ID || "1j7LguHaX8pIvvQ1PqqenuguOsPT1QthJqXJyMYW2xo8";
 
 if (typeof window !== 'undefined') {
@@ -66,13 +67,16 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<"modules" | "dashboard">("modules");
   const [selectedDashboard, setSelectedDashboard] = useState<DashboardItem | null>(null);
 
-  // ✅ State for dynamic module configs
   const [moduleConfigs, setModuleConfigs] = useState<Record<string, ModuleConfig>>({});
   const [loadingModuleConfigs, setLoadingModuleConfigs] = useState(false);
 
-  // ✅ State for archive folder ID (ดึงจาก API)
   const [archiveFolderId, setArchiveFolderId] = useState<string | null>(null);
   const [loadingArchiveFolderId, setLoadingArchiveFolderId] = useState(false);
+
+  // ✅ NEW: Low Stock Alert states
+  const [lowStockCount, setLowStockCount] = useState<number | null>(null);
+  const [loadingLowStock, setLoadingLowStock] = useState(false);
+  const [hasInventoryDashboard, setHasInventoryDashboard] = useState(false);
 
   useEffect(() => {
     console.log("📋 useSession status:", status);
@@ -155,9 +159,6 @@ export default function HomePage() {
     }
   };
 
-  /**
-   * ✅ Fetch module config dynamically from Master Config
-   */
   const fetchModuleConfig = async (moduleName: string): Promise<ModuleConfig | null> => {
     try {
       console.log("━".repeat(60));
@@ -213,11 +214,6 @@ export default function HomePage() {
     }
   };
 
-  /**
- * ✅ Fetch Archive Folder ID จาก API
- * ดึงจาก client_modules sheet โดยเทียบ clientId + moduleName
- * ✅ Silent fallback - ไม่แสดง error/warning ถ้าไม่มี
- */
   const fetchArchiveFolderIdFromAPI = async (clientId: string, moduleName: string) => {
     try {
       console.log("🔄 [fetchArchiveFolderIdFromAPI] Start");
@@ -239,7 +235,6 @@ export default function HomePage() {
 
       console.log(`   Response Status: ${res.status}`);
 
-      // ✅ ถ้า 404 = ไม่มี folder ID (ไม่ใช่ error - เป็นเรื่องปกติ)
       if (res.status === 404) {
         console.log("ℹ️ No archive folder configured for this client/module");
         setArchiveFolderId(null);
@@ -247,7 +242,6 @@ export default function HomePage() {
       }
 
       if (!res.ok) {
-        // ✅ ไม่แสดง error ให้ user เห็น - log เบาๆ
         console.log(`ℹ️ Could not fetch archive folder (HTTP ${res.status})`);
         setArchiveFolderId(null);
         return null;
@@ -265,7 +259,6 @@ export default function HomePage() {
       setArchiveFolderId(data.archiveFolderId);
       return data.archiveFolderId;
     } catch (error: any) {
-      // ✅ Network error - log เบาๆ ไม่ใช่ error
       console.log("ℹ️ Archive folder fetch skipped:", error.message);
       setArchiveFolderId(null);
       return null;
@@ -274,25 +267,122 @@ export default function HomePage() {
     }
   };
 
-  /**
-   * ✅ Load module config when dashboard is selected
-   */
+  // ✅ NEW: Fetch low stock count from Inventory module
+  const fetchLowStockCount = async () => {
+    try {
+      setLoadingLowStock(true);
+      
+      // Check if user has Inventory dashboard
+      const inventoryDash = userData?.dashboardItems.find(d => 
+        d.dashboardName.toLowerCase().includes("inventory")
+      );
+      
+      if (!inventoryDash) {
+        console.log("ℹ️ No Inventory Dashboard found");
+        setHasInventoryDashboard(false);
+        setLowStockCount(0);
+        return;
+      }
+      
+      setHasInventoryDashboard(true);
+      
+      const accessToken = (session as any)?.accessToken;
+      if (!accessToken) {
+        console.error("❌ No access token");
+        return;
+      }
+      
+      // Fetch data from Inventory sheet
+      const params = new URLSearchParams({
+        spreadsheetId: inventoryDash.spreadsheetId,
+        configSheetName: inventoryDash.dashboardConfigName,
+        dataSheetName: inventoryDash.sheetName,
+      });
+      
+      const response = await fetch(`/api/dashboard/data?${params}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+      
+      if (!response.ok) {
+        console.error("❌ Failed to fetch inventory data");
+        setLowStockCount(0);
+        return;
+      }
+      
+      const data = await response.json();
+      
+      // Find status field from config
+      const statusField = data.config.find((f: any) => 
+        f.fieldName === "status" || 
+        f.label?.toLowerCase().includes("สถานะ")
+      );
+      
+      if (!statusField) {
+        console.log("ℹ️ No status field found in config");
+        setLowStockCount(0);
+        return;
+      }
+      
+      // Count items with "สต๊อกต่ำ" or "ใกล้หมด"
+      const lowStockStatuses = ["สต๊อกต่ำ", "ใกล้หมด"];
+      const count = data.data.filter((row: any) => {
+        const status = String(row[statusField.fieldName] || "").trim();
+        return lowStockStatuses.includes(status);
+      }).length;
+      
+      console.log(`✅ Low stock count: ${count}`);
+      setLowStockCount(count);
+      
+    } catch (error) {
+      console.error("❌ Error fetching low stock:", error);
+      setLowStockCount(0);
+    } finally {
+      setLoadingLowStock(false);
+    }
+  };
+
+  // ✅ NEW: Navigate to Inventory Dashboard
+  const goToInventoryDashboard = () => {
+    const inventoryDash = userData?.dashboardItems.find(d => 
+      d.dashboardName.toLowerCase().includes("inventory")
+    );
+    
+    if (inventoryDash) {
+      setActiveTab("dashboard");
+      setSelectedDashboard(inventoryDash);
+      
+      // Scroll to top smoothly
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  // ✅ useEffect: Fetch low stock when userData is loaded
+  useEffect(() => {
+    if (userData && activeTab === "modules") {
+      fetchLowStockCount();
+    }
+  }, [userData, activeTab]);
+
   useEffect(() => {
     if (selectedDashboard && userData) {
       const dashboardName = selectedDashboard.dashboardName.toLowerCase();
 
-      // Determine module name from dashboard name
       let moduleName = "";
       if (dashboardName.includes("sales")) moduleName = "Sales";
       else if (dashboardName.includes("purchase")) moduleName = "Purchase";
       else if (dashboardName.includes("payroll")) moduleName = "Payroll";
       else if (dashboardName.includes("expense")) moduleName = "Expense";
+      else if (dashboardName.includes("inventory")) moduleName = "Inventory";
       else if (dashboardName.includes("financial")) moduleName = "Financial";
+      else if (dashboardName.includes("usage")) moduleName = "Usage";
 
       if (moduleName) {
         console.log(`🔄 Loading config for module: ${moduleName}`);
         setLoadingModuleConfigs(true);
-        setArchiveFolderId(null); // Reset
+        setArchiveFolderId(null);
 
         fetchModuleConfig(moduleName).then((config) => {
           if (config) {
@@ -302,7 +392,6 @@ export default function HomePage() {
               [moduleName]: config,
             }));
 
-            // ✅ ลองดึง archiveFolderId
             if (config.archiveFolderId) {
               console.log("✅ archiveFolderId found in config:", config.archiveFolderId);
               setArchiveFolderId(config.archiveFolderId);
@@ -310,7 +399,6 @@ export default function HomePage() {
             } else {
               console.log("⚠️ archiveFolderId not in config, trying API...");
               fetchArchiveFolderIdFromAPI(userData.clientId, moduleName).then((folderId) => {
-                // ✅ ไม่มีก็ไม่เป็นไร - Dashboard ยังทำงานได้
                 if (!folderId) {
                   console.log("ℹ️ No archive folder ID - Dashboard will work without year filter");
                 }
@@ -355,7 +443,6 @@ export default function HomePage() {
   }
 
   if (error && !userData) {
-    // ✅ Redirect after 3s
     useEffect(() => {
       const timer = setTimeout(() => {
         router.push("/login");
@@ -365,10 +452,10 @@ export default function HomePage() {
 
     return (
       <div
-        className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50"
+        className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 p-4"
         style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
       >
-        <div className="text-center bg-white rounded-3xl p-8 shadow-lg max-w-md">
+        <div className="text-center bg-white rounded-3xl p-6 lg:p-8 shadow-lg max-w-md w-full">
           <svg className="w-16 h-16 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4v.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -379,7 +466,7 @@ export default function HomePage() {
               setError(null);
               fetchUserModules();
             }}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            className="w-full px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
           >
             ลองใหม่อีกครั้ง
           </button>
@@ -388,27 +475,26 @@ export default function HomePage() {
     );
   }
 
-
   const daysLeft = userData ? getDaysUntilExpiry(userData.expiresAt) : -1;
   const isExpiringSoon = daysLeft >= 0 && daysLeft <= 5;
 
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50"
+      className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 pb-20 lg:pb-0"
       style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
     >
       {/* Animated Background */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-40 animate-blob"></div>
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-cyan-200 rounded-full mix-blend-multiply filter blur-3xl opacity-40 animate-blob animation-delay-2000"></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-sky-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
+        <div className="absolute -top-40 -right-40 w-80 lg:w-96 h-80 lg:h-96 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-40 animate-blob"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 lg:w-96 h-80 lg:h-96 bg-cyan-200 rounded-full mix-blend-multiply filter blur-3xl opacity-40 animate-blob animation-delay-2000"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 lg:w-96 h-80 lg:h-96 bg-sky-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
       </div>
 
-      {/* Top Navigation */}
+      {/* Top Navigation - Mobile Optimized */}
       <nav className="relative z-20 bg-white/80 backdrop-blur-xl border-b border-blue-100 sticky top-0">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 flex items-center justify-center">
+        <div className="max-w-7xl mx-auto px-4 lg:px-6 py-3 lg:py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2 lg:gap-3 min-w-0">
+            <div className="w-8 lg:w-10 h-8 lg:h-10 flex items-center justify-center flex-shrink-0">
               <Image
                 src="/logo2.png"
                 alt="Fazzfly Logo"
@@ -417,70 +503,135 @@ export default function HomePage() {
                 className="object-contain"
               />
             </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-500 bg-clip-text text-transparent">
+            <span className="text-lg lg:text-xl font-bold bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-500 bg-clip-text text-transparent hidden sm:inline">
               Fazzfly ERP
+            </span>
+            <span className="text-base font-bold bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-500 bg-clip-text text-transparent sm:hidden">
+              Fazzfly
             </span>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm text-slate-600">สวัสดี</p>
-              <p className="font-semibold text-slate-800">{(session as any)?.user?.name}</p>
+          <div className="flex items-center gap-2 lg:gap-4 ml-auto">
+            <div className="text-right hidden sm:block">
+              <p className="text-xs text-slate-600">สวัสดี</p>
+              <p className="font-semibold text-slate-800 text-sm truncate max-w-[120px] lg:max-w-none">{(session as any)?.user?.name}</p>
             </div>
             <button
               onClick={() => signOut({ callbackUrl: "/" })}
-              className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors font-medium"
+              className="px-3 lg:px-4 py-2 text-xs lg:text-sm bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors font-medium whitespace-nowrap flex-shrink-0"
             >
-              ออกจากระบบ
+              <span className="hidden sm:inline">ออกจากระบบ</span>
+              <span className="sm:hidden">ออก</span>
             </button>
           </div>
         </div>
       </nav>
 
-      {/* Main Content */}
-      <div className="relative z-10 max-w-7xl mx-auto px-6 py-12">
+      {/* Main Content - Mobile Optimized */}
+      <div className="relative z-10 max-w-7xl mx-auto px-4 lg:px-6 py-6 lg:py-12">
         {/* Welcome Section */}
-        <div className="mb-10">
-          <h1 className="text-5xl font-bold text-slate-800 mb-3">
-            ยินดีต้อนรับกลับ, <span className="bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">{userData?.clientName}</span>
+        <div className="mb-6 lg:mb-10">
+          <h1 className="text-3xl lg:text-5xl font-bold text-slate-800 mb-2 lg:mb-3 break-words">
+            ยินดีต้อนรับกลับ,{' '}
+            <span className="bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">
+              {userData?.clientName}
+            </span>
           </h1>
-          <p className="text-lg text-slate-600">
-            จัดการข้อมูล ติดตามสถิติ และใช้งานโมดูลต่างๆ ได้ที่นี่
+          <p className="text-base lg:text-lg text-slate-600">
+            จัดการข้อมูล ติดตามสถิติ และใช้งานโมดูลต่างๆ
           </p>
         </div>
 
-        {/* Account Status Card */}
+        {/* ✅ UPDATED: Account Status Card with Low Stock Alert */}
         {userData && (
-          <div className={`rounded-3xl p-8 mb-10 border backdrop-blur-md transition-all duration-300 ${isExpiringSoon
-            ? 'bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-300 shadow-lg shadow-yellow-100'
-            : 'bg-gradient-to-r from-blue-50 via-sky-50 to-cyan-50 border-blue-200 shadow-lg shadow-blue-100/50'
-            }`}>
-            <div className="grid md:grid-cols-4 gap-6">
-              <div className="p-4 rounded-2xl bg-white/60 backdrop-blur-sm border border-blue-100">
-                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">แพ็คเจจ</p>
-                <p className="text-2xl font-bold text-slate-800">{userData.planType}</p>
+          <div className={`rounded-2xl lg:rounded-3xl p-4 lg:p-8 mb-6 lg:mb-10 border backdrop-blur-md transition-all duration-300 ${
+            isExpiringSoon
+              ? 'bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-300 shadow-lg shadow-yellow-100'
+              : 'bg-gradient-to-r from-blue-50 via-sky-50 to-cyan-50 border-blue-200 shadow-lg shadow-blue-100/50'
+          }`}>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6">
+              {/* 1. แพ็คเจจ */}
+              <div className="p-3 lg:p-4 rounded-xl lg:rounded-2xl bg-white/60 backdrop-blur-sm border border-blue-100">
+                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1 lg:mb-2">แพ็คเจจ</p>
+                <p className="text-xl lg:text-2xl font-bold text-slate-800 truncate">{userData.planType}</p>
               </div>
-              <div className="p-4 rounded-2xl bg-white/60 backdrop-blur-sm border border-blue-100">
-                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">ลูกค้า ID</p>
-                <p className="text-2xl font-bold text-blue-600">{userData.clientId}</p>
+              
+              {/* 2. ลูกค้า ID */}
+              <div className="p-3 lg:p-4 rounded-xl lg:rounded-2xl bg-white/60 backdrop-blur-sm border border-blue-100">
+                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1 lg:mb-2">ลูกค้า ID</p>
+                <p className="text-xl lg:text-2xl font-bold text-blue-600 truncate">{userData.clientId}</p>
               </div>
-              <div className="p-4 rounded-2xl bg-white/60 backdrop-blur-sm border border-blue-100">
-                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">โมดูล</p>
-                <p className="text-2xl font-bold text-cyan-600">{validModules.length}</p>
+              
+              {/* 3. ✅ NEW: แจ้งเตือนสินค้าใกล้หมด - CLICKABLE */}
+              <div 
+                onClick={hasInventoryDashboard && lowStockCount && lowStockCount > 0 ? goToInventoryDashboard : undefined}
+                className={`p-3 lg:p-4 rounded-xl lg:rounded-2xl backdrop-blur-sm border transition-all ${
+                  loadingLowStock 
+                    ? 'bg-slate-100/50 border-slate-300 cursor-wait'
+                    : lowStockCount && lowStockCount > 0
+                      ? 'bg-orange-100/50 border-orange-300 cursor-pointer hover:bg-orange-200/50 hover:shadow-lg hover:-translate-y-1 active:scale-95'
+                      : 'bg-green-100/50 border-green-300 cursor-default'
+                }`}
+              >
+                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1 lg:mb-2">
+                  แจ้งเตือนสินค้า
+                </p>
+                
+                {loadingLowStock ? (
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-600"></div>
+                    <p className="text-sm text-slate-600">กำลังโหลด...</p>
+                  </div>
+                ) : (
+                  <>
+                    {!hasInventoryDashboard ? (
+                      <div>
+                        <p className="text-base lg:text-lg font-bold text-slate-600">
+                          ไม่มี Inventory Dashboard
+                        </p>
+                      </div>
+                    ) : lowStockCount === null || lowStockCount === 0 ? (
+                      <div>
+                        <p className="text-base lg:text-lg font-bold text-green-700">
+                          ไม่มีสินค้าใกล้หมด
+                        </p>
+                        <p className="text-xs text-green-600 mt-1">
+                          สต๊อกปกติ ✓
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-xl lg:text-2xl font-bold text-orange-700">
+                          {lowStockCount} รายการ
+                        </p>
+                        <p className="text-xs text-orange-600 mt-1 flex items-center gap-1">
+                          คลิกเพื่อดู
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
-              <div className={`p-4 rounded-2xl backdrop-blur-sm border ${isExpiringSoon
-                ? 'bg-yellow-100/50 border-yellow-300'
-                : 'bg-green-100/50 border-green-300'
-                }`}>
-                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">คงเหลือ</p>
-                <p className={`text-2xl font-bold ${isExpiringSoon ? 'text-yellow-700' : 'text-green-700'}`}>
+              
+              {/* 4. คงเหลือ */}
+              <div className={`p-3 lg:p-4 rounded-xl lg:rounded-2xl backdrop-blur-sm border ${
+                isExpiringSoon
+                  ? 'bg-yellow-100/50 border-yellow-300'
+                  : 'bg-green-100/50 border-green-300'
+              }`}>
+                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1 lg:mb-2">คงเหลือ</p>
+                <p className={`text-xl lg:text-2xl font-bold ${isExpiringSoon ? 'text-yellow-700' : 'text-green-700'}`}>
                   {daysLeft >= 0 ? daysLeft : 0} วัน
                 </p>
               </div>
             </div>
+            
             {userData.expiryWarning && (
-              <div className="mt-6 pt-6 border-t border-yellow-200">
-                <p className="text-sm text-yellow-800 font-medium">
+              <div className="mt-4 lg:mt-6 pt-4 lg:pt-6 border-t border-yellow-200">
+                <p className="text-xs lg:text-sm text-yellow-800 font-medium">
                   ⚠️ {userData.expiryWarning}
                 </p>
               </div>
@@ -488,17 +639,17 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Tab Navigation */}
-        <div className="flex gap-2 mb-8 border-b border-blue-200 bg-white/50 backdrop-blur-md rounded-2xl p-2">
+        {/* Tab Navigation - Mobile Optimized */}
+        <div className="flex gap-2 mb-6 lg:mb-8 overflow-x-auto scrollbar-hide bg-white/50 backdrop-blur-md rounded-xl lg:rounded-2xl p-2 border border-blue-100/50">
           <button
             onClick={() => setActiveTab("modules")}
-            className={`px-6 py-3 font-semibold transition-all relative ${activeTab === "modules"
+            className={`px-4 lg:px-6 py-2.5 lg:py-3 font-semibold transition-all relative whitespace-nowrap text-sm lg:text-base ${activeTab === "modules"
               ? "text-blue-600"
               : "text-slate-600 hover:text-slate-800"
               }`}
           >
-            <span className="flex items-center gap-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <span className="flex items-center gap-1 lg:gap-2">
+              <svg className="w-4 lg:w-5 h-4 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
               โมดูล
@@ -509,13 +660,13 @@ export default function HomePage() {
           </button>
           <button
             onClick={() => setActiveTab("dashboard")}
-            className={`px-6 py-3 font-semibold transition-all relative ${activeTab === "dashboard"
+            className={`px-4 lg:px-6 py-2.5 lg:py-3 font-semibold transition-all relative whitespace-nowrap text-sm lg:text-base ${activeTab === "dashboard"
               ? "text-blue-600"
               : "text-slate-600 hover:text-slate-800"
               }`}
           >
-            <span className="flex items-center gap-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <span className="flex items-center gap-1 lg:gap-2">
+              <svg className="w-4 lg:w-5 h-4 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
               Dashboard
@@ -529,34 +680,34 @@ export default function HomePage() {
         {/* Tab Content - Modules */}
         {activeTab === "modules" && validModules.length > 0 && (
           <div className="animate-fadeIn">
-            <h2 className="text-3xl font-bold text-slate-800 mb-8">
+            <h2 className="text-2xl lg:text-3xl font-bold text-slate-800 mb-4 lg:mb-8">
               โมดูลที่สามารถใช้งาน <span className="text-blue-600">({validModules.length})</span>
             </h2>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
               {validModules.map((module) => (
                 <Link
                   key={module.moduleId}
                   href={`/form?moduleId=${module.moduleId}&spreadsheetId=${module.spreadsheetId}&configName=${module.configName}&sheetName=${module.sheetName}`}
                 >
-                  <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-lg shadow-blue-100/50 p-7 border border-blue-100/50 hover:shadow-2xl hover:shadow-blue-200 hover:-translate-y-2 transition-all duration-300 cursor-pointer group h-full">
-                    <div className="flex items-center justify-between mb-5">
-                      <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-500 via-sky-500 to-cyan-500 text-white group-hover:scale-110 transition-transform">
-                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="bg-white/90 backdrop-blur-xl rounded-2xl lg:rounded-3xl shadow-lg shadow-blue-100/50 p-5 lg:p-7 border border-blue-100/50 hover:shadow-2xl hover:shadow-blue-200 hover:-translate-y-2 transition-all duration-300 cursor-pointer group h-full">
+                    <div className="flex items-center justify-between mb-4 lg:mb-5">
+                      <div className="p-3 lg:p-4 rounded-xl lg:rounded-2xl bg-gradient-to-br from-blue-500 via-sky-500 to-cyan-500 text-white group-hover:scale-110 transition-transform">
+                        <svg className="w-5 lg:w-7 h-5 lg:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
                       </div>
-                      <svg className="w-6 h-6 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-2 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 lg:w-6 h-5 lg:h-6 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-2 transition-all flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
                     </div>
-                    <h3 className="text-xl font-bold text-slate-800 mb-2 group-hover:text-blue-600 transition-colors">{module.moduleName}</h3>
+                    <h3 className="text-lg lg:text-xl font-bold text-slate-800 mb-2 group-hover:text-blue-600 transition-colors">{module.moduleName}</h3>
                     {module.notes && (
-                      <p className="text-sm text-slate-600 mb-5 line-clamp-2">{module.notes}</p>
+                      <p className="text-xs lg:text-sm text-slate-600 mb-4 lg:mb-5 line-clamp-2">{module.notes}</p>
                     )}
-                    <div className="pt-5 border-t border-slate-100">
+                    <div className="pt-4 lg:pt-5 border-t border-slate-100">
                       <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">รายละเอียด</p>
-                      <p className="text-sm text-slate-700 mt-2">Sheet: <span className="font-semibold">{module.sheetName}</span></p>
-                      <p className="text-sm text-slate-700">Config: <span className="font-semibold">{module.configName}</span></p>
+                      <p className="text-xs lg:text-sm text-slate-700 mt-2">Sheet: <span className="font-semibold">{module.sheetName}</span></p>
+                      <p className="text-xs lg:text-sm text-slate-700">Config: <span className="font-semibold">{module.configName}</span></p>
                     </div>
                   </div>
                 </Link>
@@ -568,19 +719,19 @@ export default function HomePage() {
         {/* Tab Content - Dashboard */}
         {activeTab === "dashboard" && (
           <div className="animate-fadeIn">
-            <h2 className="text-3xl font-bold text-slate-800 mb-8">
+            <h2 className="text-2xl lg:text-3xl font-bold text-slate-800 mb-4 lg:mb-8">
               Dashboard <span className="text-purple-600">({validDashboards.length})</span>
             </h2>
             {validDashboards.length > 0 ? (
               <>
-                {/* ✅ Dashboard Navigation - Top Bar */}
-                <div className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-lg shadow-purple-100/50 p-4 border border-purple-100/50 mb-8 overflow-x-auto">
-                  <div className="flex gap-3 min-w-min">
+                {/* Dashboard Navigation - Horizontal Scroll on Mobile */}
+                <div className="bg-white/90 backdrop-blur-xl rounded-xl lg:rounded-2xl shadow-lg shadow-purple-100/50 p-3 lg:p-4 border border-purple-100/50 mb-4 lg:mb-8 overflow-x-auto scrollbar-hide">
+                  <div className="flex gap-2 lg:gap-3 min-w-min lg:min-w-0">
                     {validDashboards.map((dashboard) => (
                       <button
                         key={dashboard.dashboardId}
                         onClick={() => setSelectedDashboard(dashboard)}
-                        className={`px-5 py-2.5 rounded-xl font-semibold transition-all whitespace-nowrap ${selectedDashboard?.dashboardId === dashboard.dashboardId
+                        className={`px-4 lg:px-5 py-2 lg:py-2.5 rounded-lg font-semibold transition-all whitespace-nowrap text-sm lg:text-base ${selectedDashboard?.dashboardId === dashboard.dashboardId
                           ? "bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg"
                           : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                           }`}
@@ -591,26 +742,26 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                {/* ✅ Dashboard Content */}
+                {/* Dashboard Content */}
                 {selectedDashboard && (
-                  <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-lg p-8 border border-purple-100/50 animate-fadeIn">
-                    <div className="flex items-center justify-between mb-8">
-                      <h3 className="text-2xl font-bold text-slate-800">
+                  <div className="bg-white/90 backdrop-blur-xl rounded-2xl lg:rounded-3xl shadow-lg p-4 lg:p-8 border border-purple-100/50 animate-fadeIn">
+                    <div className="flex items-center justify-between mb-6 lg:mb-8">
+                      <h3 className="text-xl lg:text-2xl font-bold text-slate-800">
                         {selectedDashboard.dashboardName}
                       </h3>
                     </div>
 
                     {/* Loading state */}
                     {(loadingModuleConfigs || loadingArchiveFolderId) && (
-                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 flex items-center gap-3">
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600"></div>
-                        <p className="text-purple-700 font-medium">
+                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 lg:p-6 flex items-center gap-3">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600 flex-shrink-0"></div>
+                        <p className="text-purple-700 font-medium text-sm lg:text-base">
                           {loadingModuleConfigs ? "กำลังโหลด Config..." : "กำลังดึง Archive Folder ID..."}
                         </p>
                       </div>
                     )}
 
-                    {/* ✅ Sales Dashboard */}
+                    {/* Sales Dashboard */}
                     {selectedDashboard.dashboardName.toLowerCase().includes("sales") && (
                       <>
                         {!loadingModuleConfigs && !loadingArchiveFolderId ? (
@@ -624,9 +775,9 @@ export default function HomePage() {
                               moduleName="Sales"
                             />
                           ) : (
-                            <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-                              <p className="text-red-700 font-semibold">❌ ไม่สามารถโหลด Sales Config</p>
-                              <p className="text-red-600 text-sm mt-2">
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4 lg:p-6">
+                              <p className="text-red-700 font-semibold text-sm lg:text-base">❌ ไม่สามารถโหลด Sales Config</p>
+                              <p className="text-red-600 text-xs lg:text-sm mt-2">
                                 ตรวจสอบว่า Master Config มีข้อมูล Sales Module หรือ Refresh หน้านี้
                               </p>
                             </div>
@@ -635,7 +786,57 @@ export default function HomePage() {
                       </>
                     )}
 
-                    {/* ✅ Expense Dashboard */}
+                    {/* Usage Dashboard */}
+                    {selectedDashboard.dashboardName.toLowerCase().includes("usage") && (
+                      <>
+                        {!loadingModuleConfigs && !loadingArchiveFolderId ? (
+                          moduleConfigs["Usage"] ? (
+                            <UsageDashboard
+                              spreadsheetId={selectedDashboard.spreadsheetId}
+                              configSheetName={selectedDashboard.dashboardConfigName}
+                              dataSheetName={selectedDashboard.sheetName}
+                              accessToken={(session as any)?.accessToken}
+                              archiveFolderId={archiveFolderId || undefined}
+                              moduleName="Usage"
+                            />
+                          ) : (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4 lg:p-6">
+                              <p className="text-red-700 font-semibold text-sm lg:text-base">❌ ไม่สามารถโหลด Usage Config</p>
+                              <p className="text-red-600 text-xs lg:text-sm mt-2">
+                                ตรวจสอบว่า Master Config มีข้อมูล Usage Module หรือ Refresh หน้านี้
+                              </p>
+                            </div>
+                          )
+                        ) : null}
+                      </>
+                    )}
+
+                    {/* Purchase Dashboard */}
+                    {selectedDashboard.dashboardName.toLowerCase().includes("purchase") && (
+                      <>
+                        {!loadingModuleConfigs && !loadingArchiveFolderId ? (
+                          moduleConfigs["Purchase"] ? (
+                            <PurchaseDashboard
+                              spreadsheetId={selectedDashboard.spreadsheetId}
+                              configSheetName={selectedDashboard.dashboardConfigName}
+                              dataSheetName={selectedDashboard.sheetName}
+                              accessToken={(session as any)?.accessToken}
+                              archiveFolderId={archiveFolderId || undefined}
+                              moduleName="Purchase"
+                            />
+                          ) : (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4 lg:p-6">
+                              <p className="text-red-700 font-semibold text-sm lg:text-base">❌ ไม่สามารถโหลด Purchase Config</p>
+                              <p className="text-red-600 text-xs lg:text-sm mt-2">
+                                ตรวจสอบว่า Master Config มีข้อมูล Purchase Module หรือ Refresh หน้านี้
+                              </p>
+                            </div>
+                          )
+                        ) : null}
+                      </>
+                    )}
+
+                    {/* Expense Dashboard */}
                     {selectedDashboard.dashboardName.toLowerCase().includes("expense") && (
                       <>
                         {!loadingModuleConfigs && !loadingArchiveFolderId ? (
@@ -649,9 +850,9 @@ export default function HomePage() {
                               moduleName="Expense"
                             />
                           ) : (
-                            <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-                              <p className="text-red-700 font-semibold">❌ ไม่สามารถโหลด Expense Config</p>
-                              <p className="text-red-600 text-sm mt-2">
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4 lg:p-6">
+                              <p className="text-red-700 font-semibold text-sm lg:text-base">❌ ไม่สามารถโหลด Expense Config</p>
+                              <p className="text-red-600 text-xs lg:text-sm mt-2">
                                 ตรวจสอบว่า Master Config มีข้อมูล Expense Module หรือ Refresh หน้านี้
                               </p>
                             </div>
@@ -660,7 +861,32 @@ export default function HomePage() {
                       </>
                     )}
 
-                    {/* ✅ Financial Dashboard */}
+                    {/* Inventory Dashboard */}
+                    {selectedDashboard.dashboardName.toLowerCase().includes("inventory") && (
+                      <>
+                        {!loadingModuleConfigs && !loadingArchiveFolderId ? (
+                          moduleConfigs["Inventory"] ? (
+                            <InventoryDashboard
+                              spreadsheetId={selectedDashboard.spreadsheetId}
+                              configSheetName={selectedDashboard.dashboardConfigName}
+                              dataSheetName={selectedDashboard.sheetName}
+                              accessToken={(session as any)?.accessToken}
+                              archiveFolderId={archiveFolderId || undefined}
+                              moduleName="Inventory"
+                            />
+                          ) : (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4 lg:p-6">
+                              <p className="text-red-700 font-semibold text-sm lg:text-base">❌ ไม่สามารถโหลด Inventory Config</p>
+                              <p className="text-red-600 text-xs lg:text-sm mt-2">
+                                ตรวจสอบว่า Master Config มีข้อมูล Inventory Module หรือ Refresh หน้านี้
+                              </p>
+                            </div>
+                          )
+                        ) : null}
+                      </>
+                    )}
+
+                    {/* Financial Dashboard */}
                     {selectedDashboard.dashboardName.toLowerCase().includes("financial") && (
                       <>
                         {!loadingModuleConfigs && !loadingArchiveFolderId ? (
@@ -674,9 +900,9 @@ export default function HomePage() {
                               moduleName="Financial"
                             />
                           ) : (
-                            <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-                              <p className="text-red-700 font-semibold">❌ ไม่สามารถโหลด Financial Config</p>
-                              <p className="text-red-600 text-sm mt-2">
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4 lg:p-6">
+                              <p className="text-red-700 font-semibold text-sm lg:text-base">❌ ไม่สามารถโหลด Financial Config</p>
+                              <p className="text-red-600 text-xs lg:text-sm mt-2">
                                 ตรวจสอบว่า Master Config มีข้อมูล Financial Module หรือ Refresh หน้านี้
                               </p>
                             </div>
@@ -685,7 +911,7 @@ export default function HomePage() {
                       </>
                     )}
 
-                    {/* ✅ Payroll Dashboard */}
+                    {/* Payroll Dashboard */}
                     {selectedDashboard.dashboardName.toLowerCase().includes("payroll") && (
                       <>
                         {!loadingModuleConfigs && !loadingArchiveFolderId ? (
@@ -699,9 +925,9 @@ export default function HomePage() {
                               moduleName="Payroll"
                             />
                           ) : (
-                            <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-                              <p className="text-red-700 font-semibold">❌ ไม่สามารถโหลด Payroll Config</p>
-                              <p className="text-red-600 text-sm mt-2">
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4 lg:p-6">
+                              <p className="text-red-700 font-semibold text-sm lg:text-base">❌ ไม่สามารถโหลด Payroll Config</p>
+                              <p className="text-red-600 text-xs lg:text-sm mt-2">
                                 ตรวจสอบว่า Master Config มีข้อมูล Payroll Module หรือ Refresh หน้านี้
                               </p>
                             </div>
@@ -710,14 +936,17 @@ export default function HomePage() {
                       </>
                     )}
 
-                    {/* 🚀 More dashboards coming soon... */}
+                    {/* More dashboards coming soon... */}
                     {!selectedDashboard.dashboardName.toLowerCase().includes("sales") &&
                       !selectedDashboard.dashboardName.toLowerCase().includes("expense") &&
+                      !selectedDashboard.dashboardName.toLowerCase().includes("purchase") &&
                       !selectedDashboard.dashboardName.toLowerCase().includes("payroll") &&
-                      !selectedDashboard.dashboardName.toLowerCase().includes("financial") && (
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-                          <p className="text-yellow-700 font-semibold">🚀 Dashboard นี้ยังไม่พร้อม</p>
-                          <p className="text-yellow-600 text-sm mt-2">กำลังพัฒนา {selectedDashboard.dashboardName} Dashboard</p>
+                      !selectedDashboard.dashboardName.toLowerCase().includes("financial") &&
+                      !selectedDashboard.dashboardName.toLowerCase().includes("inventory") &&
+                      !selectedDashboard.dashboardName.toLowerCase().includes("usage") && (
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 lg:p-6 text-center">
+                          <p className="text-yellow-700 font-semibold text-sm lg:text-base">🚀 Dashboard นี้ยังไม่พร้อม</p>
+                          <p className="text-yellow-600 text-xs lg:text-sm mt-2">กำลังพัฒนา {selectedDashboard.dashboardName} Dashboard</p>
                         </div>
                       )}
                   </div>
@@ -725,22 +954,22 @@ export default function HomePage() {
 
                 {/* Show hint if no dashboard selected */}
                 {!selectedDashboard && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-2xl p-8 text-center">
-                    <svg className="w-16 h-16 text-blue-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl lg:rounded-2xl p-6 lg:p-8 text-center">
+                    <svg className="w-12 lg:w-16 h-12 lg:h-16 text-blue-300 mx-auto mb-3 lg:mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <p className="text-blue-700 font-semibold text-lg">เลือก Dashboard จากด้านบน</p>
+                    <p className="text-blue-700 font-semibold text-base lg:text-lg">เลือก Dashboard จากด้านบน</p>
                     <p className="text-blue-600 text-sm mt-2">คลิกที่ชื่อ Dashboard เพื่อดูข้อมูล</p>
                   </div>
                 )}
               </>
             ) : (
-              <div className="bg-purple-50 border border-purple-200 rounded-3xl p-12 text-center">
-                <svg className="w-16 h-16 text-purple-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="bg-purple-50 border border-purple-200 rounded-2xl lg:rounded-3xl p-8 lg:p-12 text-center">
+                <svg className="w-12 lg:w-16 h-12 lg:h-16 text-purple-300 mx-auto mb-3 lg:mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
-                <p className="text-purple-700 text-lg font-semibold">ยังไม่มี Dashboard ที่สามารถใช้งาน</p>
-                <p className="text-purple-600 text-sm mt-2">กรุณาติดต่อผู้ดูแลระบบเพื่อเพิ่ม Dashboard</p>
+                <p className="text-purple-700 text-base lg:text-lg font-semibold">ยังไม่มี Dashboard ที่สามารถใช้งาน</p>
+                <p className="text-purple-600 text-xs lg:text-sm mt-2">กรุณาติดต่อผู้ดูแลระบบเพื่อเพิ่ม Dashboard</p>
               </div>
             )}
           </div>
@@ -748,12 +977,12 @@ export default function HomePage() {
 
         {/* Empty State - Modules */}
         {activeTab === "modules" && validModules.length === 0 && !error && (
-          <div className="bg-blue-50 border border-blue-200 rounded-3xl p-12 text-center">
-            <svg className="w-16 h-16 text-blue-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl lg:rounded-3xl p-8 lg:p-12 text-center">
+            <svg className="w-12 lg:w-16 h-12 lg:h-16 text-blue-300 mx-auto mb-3 lg:mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
-            <p className="text-blue-700 text-lg font-semibold">ยังไม่มีโมดูลที่สามารถใช้งาน</p>
-            <p className="text-blue-600 text-sm mt-2">กรุณาติดต่อผู้ดูแลระบบเพื่อเพิ่มโมดูล</p>
+            <p className="text-blue-700 text-base lg:text-lg font-semibold">ยังไม่มีโมดูลที่สามารถใช้งาน</p>
+            <p className="text-blue-600 text-xs lg:text-sm mt-2">กรุณาติดต่อผู้ดูแลระบบเพื่อเพิ่มโมดูล</p>
           </div>
         )}
       </div>
@@ -785,6 +1014,13 @@ export default function HomePage() {
         }
         .animate-fadeIn {
           animation: fadeIn 0.3s ease-out;
+        }
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
         }
       `}</style>
     </div>

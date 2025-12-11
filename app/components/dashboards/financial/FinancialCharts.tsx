@@ -49,7 +49,7 @@ export default function FinancialCharts({
         {/* Stacked Bar Chart */}
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
           <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <span className="text-2xl">📊</span>
+            <span className="text-2xl"></span>
             รายรับ vs รายจ่ายแยกตามช่วง
           </h3>
           <ResponsiveContainer width="100%" height={300}>
@@ -107,7 +107,7 @@ export default function FinancialCharts({
         {/* Area Chart */}
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
           <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <span className="text-2xl">📈</span>
+            <span className="text-2xl"></span>
             แนวโน้มกำไรขั้นต้นและกำไรสุทธิ
           </h3>
           <ResponsiveContainer width="100%" height={300}>
@@ -173,7 +173,7 @@ export default function FinancialCharts({
       {/* Row 2: Gauge Chart (Full Width) */}
       <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
         <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-          <span className="text-2xl">🎯</span>
+          <span className="text-2xl"></span>
           อัตรากำไรสุทธิเฉลี่ย
         </h3>
         

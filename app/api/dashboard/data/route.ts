@@ -1,7 +1,7 @@
 /**
- * Dashboard Data API - Fixed to handle multiple periods
+ * Dashboard Data API - With Thai Error Messages
  * Location: app/api/dashboard/data/route.ts
- * ✅ FIXED: Handle multiple period params properly
+ * ✅ FIXED: NextAuth token handling + Thai error messages
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -168,7 +168,7 @@ export async function GET(request: NextRequest) {
     const dataSheetName = searchParams.get("dataSheetName");
     const year = searchParams.get("year");
     const archiveSpreadsheetId = searchParams.get("archiveSpreadsheetId");
-    const periods = searchParams.getAll("period"); // ✅ Get ALL period params
+    const periods = searchParams.getAll("period");
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
 
@@ -179,14 +179,36 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // ============================================================
+    // ✅ NextAuth Token Validation with Thai Messages
+    // ============================================================
     const token = await getToken({
       req: request,
       secret: process.env.NEXTAUTH_SECRET,
     });
 
     if (!token || !(token as any)?.accessToken) {
+      console.error("❌ Authentication failed: No access token");
       return NextResponse.json(
-        { error: "Not authenticated" },
+        { 
+          error: "Token หมดอายุ",
+          message: "เซสชันของคุณหมดอายุ กรุณา Refresh Browser เพื่อเข้าสู่ระบบใหม่",
+          status: 401
+        },
+        { status: 401 }
+      );
+    }
+
+    // ตรวจสอบ token expiry
+    const expiresAt = (token as any).expiresAt;
+    if (expiresAt && Date.now() > expiresAt) {
+      console.error("❌ Token expired at:", new Date(expiresAt));
+      return NextResponse.json(
+        { 
+          error: "Token หมดอายุ",
+          message: "เซสชันของคุณหมดอายุ กรุณา Refresh Browser เพื่อเข้าสู่ระบบใหม่",
+          status: 401
+        },
         { status: 401 }
       );
     }
@@ -209,6 +231,19 @@ export async function GET(request: NextRequest) {
     });
 
     if (!configResponse.ok) {
+      console.error(`❌ Config sheet error: ${configResponse.status}`);
+      
+      if (configResponse.status === 401) {
+        return NextResponse.json(
+          { 
+            error: "Token หมดอายุ",
+            message: "เซสชันของคุณหมดอายุ กรุณา Refresh Browser เพื่อเข้าสู่ระบบใหม่",
+            status: 401
+          },
+          { status: 401 }
+        );
+      }
+      
       throw new Error(`Failed to fetch config sheet: ${configResponse.status}`);
     }
 
@@ -235,6 +270,19 @@ export async function GET(request: NextRequest) {
     });
 
     if (!dataResponse.ok) {
+      console.error(`❌ Data sheet error: ${dataResponse.status}`);
+      
+      if (dataResponse.status === 401) {
+        return NextResponse.json(
+          { 
+            error: "Token หมดอายุ",
+            message: "เซสชันของคุณหมดอายุ กรุณา Refresh Browser เพื่อเข้าสู่ระบบใหม่",
+            status: 401
+          },
+          { status: 401 }
+        );
+      }
+      
       throw new Error(`Failed to fetch data sheet: ${dataResponse.status}`);
     }
 
@@ -280,7 +328,11 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("❌ ERROR:", error.message);
     return NextResponse.json(
-      { error: "Failed to fetch dashboard data", message: error.message },
+      { 
+        error: "เกิดข้อผิดพลาด", 
+        message: error.message || "ไม่สามารถโหลดข้อมูล Dashboard ได้",
+        status: 500
+      },
       { status: 500 }
     );
   }

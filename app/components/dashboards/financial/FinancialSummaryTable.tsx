@@ -37,7 +37,7 @@ export default function FinancialSummaryTable({
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="p-6 border-b border-slate-200 bg-gradient-to-r from-green-50 to-blue-50">
         <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <span className="text-2xl">📋</span>
+          <span className="text-2xl"></span>
           สรุปงบการเงิน (Financial Summary)
         </h3>
         <p className="text-sm text-slate-600 mt-1">
@@ -111,19 +111,19 @@ export default function FinancialSummaryTable({
                   <td className="px-6 py-4 text-center border-b border-slate-100">
                     {row.percent_net_profit >= 30 ? (
                       <span className="inline-flex items-center gap-1 text-sm font-semibold text-green-600">
-                        🟢 ดีมาก
+                        ดีมาก
                       </span>
                     ) : row.percent_net_profit >= 20 ? (
                       <span className="inline-flex items-center gap-1 text-sm font-semibold text-yellow-600">
-                        🟡 ดี
+                        ดี
                       </span>
                     ) : row.percent_net_profit >= 10 ? (
                       <span className="inline-flex items-center gap-1 text-sm font-semibold text-orange-600">
-                        🟠 พอใช้
+                        พอใช้
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-sm font-semibold text-red-600">
-                        🔴 ควรปรับปรุง
+                        ควรปรับปรุง
                       </span>
                     )}
                   </td>

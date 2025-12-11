@@ -25,6 +25,8 @@ const MODULE_NAME_TO_ID: Record<string, string> = {
   "Payroll": "M003",
   "Expense": "M004",
   "Financial": "M005",
+  "Usage": "M006",
+  "Inventory": "M007",
   // เพิ่มเติมถ้าต้อง
 };
 

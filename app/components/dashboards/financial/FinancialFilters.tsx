@@ -1,7 +1,9 @@
 /**
- * Financial Filters Component - Updated with Year Filter
+ * Financial Filters Component - Mobile/Tablet Friendly (Usage Style)
  * Location: app/components/dashboards/financial/FinancialFilters.tsx
- * ✅ Filters: Year + Period (button grid, no date)
+ * ✅ Filters: Year + Period (dropdown style, no date filter)
+ * ✅ UI matches Usage filters exactly
+ * ✅ NO auto-select period
  */
 
 "use client";
@@ -42,58 +44,41 @@ export default function FinancialFilters({
   onClearFilters,
 }: FinancialFiltersProps) {
   const [periodOptions, setPeriodOptions] = useState<string[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   // Update period options when data or year changes
   useEffect(() => {
     if (allData.length > 0 && config.length > 0) {
       const options = getPeriodOptions(allData, config);
       setPeriodOptions(options);
-
-      // Auto-select latest period if none selected and not loading
-      if (selectedPeriods.length === 0 && options.length > 0 && !loading) {
-        const latest = options[options.length - 1];
-        console.log("[Auto-select] Latest period:", latest);
-        onPeriodToggle(latest);
-      }
+      
+      // ❌ REMOVED: Auto-select logic
     }
   }, [allData, config, selectedYear, loading]);
 
-  const hasFilters = selectedYear || selectedPeriods.length > 0;
-
   return (
-    <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 border border-blue-200 shadow-sm">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <span className="text-2xl"></span>
-          ตัวกรอง (Filters)
-        </h3>
-        {hasFilters && (
-          <button
-            onClick={onClearFilters}
-            className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={loading}
-          >
-            ✕ ล้างทั้งหมด
-          </button>
-        )}
-      </div>
+    <div className="bg-white rounded-xl lg:rounded-2xl p-4 lg:p-6 border border-slate-200 shadow-sm">
+      <h3 className="text-base lg:text-lg font-semibold text-slate-900 mb-4 lg:mb-6">
+        ตัวกรองข้อมูล
+      </h3>
 
       {/* Loading indicator */}
       {loading && selectedYear && (
         <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center gap-3">
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-          <p className="text-blue-700 text-sm font-medium">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 flex-shrink-0"></div>
+          <p className="text-blue-700 text-xs lg:text-sm font-medium">
             กำลังโหลดข้อมูลปี {selectedYear}...
           </p>
         </div>
       )}
 
-      <div className="space-y-6">
+      {/* Filters Grid - Responsive: 1 col mobile, 2 col tablet/desktop */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:gap-4">
         {/* Year Filter */}
         {archiveFolderId && (
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">
-              ปี 
+            <label className="block text-xs lg:text-sm font-medium text-slate-900 mb-2">
+              ปี
             </label>
             <select
               value={selectedYear || ""}
@@ -101,7 +86,7 @@ export default function FinancialFilters({
                 const value = e.target.value;
                 onYearChange(value || null);
               }}
-              className="w-full px-4 py-2.5 bg-white border border-slate-300 text-slate-900 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
+              className="w-full px-3 lg:px-4 py-2 lg:py-2.5 bg-white border border-slate-300 text-slate-900 rounded-lg text-xs lg:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
               disabled={loadingYears || loading}
             >
               <option value="">ปีปัจจุบัน</option>
@@ -112,76 +97,139 @@ export default function FinancialFilters({
               ))}
             </select>
             {loadingYears && (
-              <p className="text-xs text-slate-500 mt-1.5">กำลังโหลดปีที่จัดเก็บ...</p>
+              <p className="text-xs text-slate-500 mt-1.5">กำลังโหลดปี...</p>
             )}
           </div>
         )}
 
-        {/* Period Filter */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <label className="text-sm font-semibold text-slate-700">
-              ช่วงเวลา
-            </label>
-            {periodOptions.length > 0 && (
-              <button
-                onClick={() => onSelectAll(periodOptions)}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={loading}
-              >
-                {selectedPeriods.length === periodOptions.length
-                  ? "ยกเลิกเลือก"
-                  : "เลือกทั้งหมด"}
-              </button>
-            )}
-          </div>
+        {/* Period Filter - Dropdown */}
+        <div className="relative">
+          <label className="block text-xs lg:text-sm font-medium text-slate-900 mb-2">
+            ช่วงเวลา
+          </label>
 
-          {loading ? (
-            <div className="bg-white rounded-lg p-4 border border-slate-200 text-center">
-              <div className="flex items-center justify-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                <p className="text-sm text-slate-600">กำลังโหลด...</p>
+          <button
+            onClick={() => !loading && periodOptions.length > 0 && setShowDropdown(!showDropdown)}
+            disabled={loading || periodOptions.length === 0}
+            className="w-full px-3 lg:px-4 py-2 lg:py-2.5 bg-white border border-slate-300 text-slate-900 rounded-lg text-xs lg:text-sm font-medium text-left flex items-center justify-between hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed transition-all active:scale-95 lg:active:scale-100"
+          >
+            <span className="truncate">
+              {loading ? (
+                "กำลังโหลด..."
+              ) : periodOptions.length === 0 ? (
+                "ไม่มีข้อมูล"
+              ) : selectedPeriods.length === 0 ? (
+                "เลือกช่วงเวลา"
+              ) : selectedPeriods.length === periodOptions.length ? (
+                "ทั้งหมด"
+              ) : selectedPeriods.length === 1 ? (
+                selectedPeriods[0]
+              ) : (
+                `${selectedPeriods.length} ช่วง`
+              )}
+            </span>
+            <svg
+              className={`w-4 h-4 text-slate-500 transition-transform flex-shrink-0 ml-2 ${
+                showDropdown ? "rotate-180" : ""
+              }`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          </button>
+
+          {/* Dropdown Menu */}
+          {showDropdown && periodOptions.length > 0 && (
+            <>
+              <div className="absolute z-50 mt-2 w-full bg-white border border-slate-300 rounded-lg shadow-xl overflow-hidden">
+                {/* Select All */}
+                <div className="border-b border-slate-200 bg-slate-50 p-2 lg:p-3">
+                  <label className="flex items-center gap-3 cursor-pointer hover:bg-slate-100 p-2 rounded-md transition-colors text-xs lg:text-sm">
+                    <input
+                      type="checkbox"
+                      checked={
+                        selectedPeriods.length === periodOptions.length &&
+                        periodOptions.length > 0
+                      }
+                      onChange={() => onSelectAll(periodOptions)}
+                      className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <span className="font-semibold text-slate-900">
+                      เลือกทั้งหมด ({periodOptions.length})
+                    </span>
+                  </label>
+                </div>
+
+                {/* Options */}
+                <div className="max-h-48 sm:max-h-64 overflow-y-auto">
+                  {periodOptions.map((period) => (
+                    <label
+                      key={period}
+                      className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 p-2 lg:p-3 border-b border-slate-100 last:border-b-0 transition-colors text-xs lg:text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedPeriods.includes(period)}
+                        onChange={() => onPeriodToggle(period)}
+                        className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer flex-shrink-0"
+                      />
+                      <span className="text-slate-900 font-medium">
+                        {period}
+                      </span>
+                    </label>
+                  ))}
+                </div>
               </div>
-            </div>
-          ) : periodOptions.length === 0 ? (
-            <div className="bg-white rounded-lg p-4 border border-slate-200 text-center">
-              <p className="text-sm text-slate-600">ไม่พบข้อมูลช่วง</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-              {periodOptions.map((period) => {
-                const isSelected = selectedPeriods.includes(period);
-                return (
-                  <button
-                    key={period}
-                    onClick={() => onPeriodToggle(period)}
-                    disabled={loading}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${isSelected
-                        ? "bg-blue-600 text-white shadow-md hover:bg-blue-700"
-                        : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-200"
-                      } ${loading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-                  >
-                    {period}
-                  </button>
-                );
-              })}
-            </div>
+
+              {/* Backdrop */}
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setShowDropdown(false)}
+              />
+            </>
           )}
         </div>
-
-        {/* Filter Summary */}
-        <div className="pt-4 border-t border-blue-200">
-          <p className="text-sm text-slate-600">
-            <span className="font-semibold">สรุป:</span>{" "}
-            {selectedYear ? `ปี ${selectedYear}` : "ปีปัจจุบัน"}
-            {" • "}
-            {selectedPeriods.length > 0
-              ? `${selectedPeriods.length} ช่วง`
-              : "ทุกช่วง"}
-          </p>
-        </div>
-
       </div>
+
+      {/* Clear Filters Buttons - Responsive */}
+      {(selectedPeriods.length > 0 || selectedYear) && (
+        <div className="mt-4 lg:mt-6 flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
+          {/* Clear Period */}
+          {selectedPeriods.length > 0 && (
+            <button
+              onClick={() => {
+                selectedPeriods.forEach((p) => onPeriodToggle(p));
+              }}
+              disabled={loading}
+              className="px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 lg:active:scale-100"
+            >
+              ล้างช่วงเวลา
+            </button>
+          )}
+
+          {/* Clear All */}
+          {selectedYear && (
+            <button
+              onClick={() => {
+                onYearChange(null);
+                selectedPeriods.forEach((p) => onPeriodToggle(p));
+                onClearFilters();
+              }}
+              disabled={loading}
+              className="px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 lg:active:scale-100"
+            >
+              ✕ ล้างทั้งหมด
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

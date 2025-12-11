@@ -1,39 +1,40 @@
 /**
- * Payroll Filters Component - Mobile/Tablet Friendly (Usage Style)
- * Location: app/components/dashboards/payroll/PayrollFilters.tsx
- * ✅ Filters: Year + Period (dropdown style)
- * ✅ UI matches Usage/Financial filters exactly
- * ✅ NO auto-select period
+ * Usage Filters Component - Mobile/Tablet Friendly
+ * Location: app/components/dashboards/usage/UsageFilters.tsx
+ * ✅ Fully responsive design for mobile, tablet, and desktop
  */
-
-"use client";
 
 import React, { useState, useEffect } from "react";
 import {
   ConfigField,
-  getPeriodOptionsFromData,
-} from "@/app/components/dashboards/payroll/payrollUtils";
+  getAvailableDatesFromData,
+  getPeriodOptions,
+} from "./usageUtils";
 
-interface PayrollFiltersProps {
+interface UsageFiltersProps {
   config: ConfigField[];
   allData: any[];
   selectedYear: string | null;
   selectedPeriods: string[];
+  selectedDate: string;
   availableYears: { year: string; spreadsheetId: string; fileName: string }[];
   loadingYears: boolean;
   archiveFolderId?: string;
   loading?: boolean;
   onYearChange: (year: string | null) => void;
   onPeriodToggle: (period: string) => void;
-  onSelectAll: (periods: string[]) => void;
+  onSelectAll: (periodOptions: string[]) => void;
+  onDateChange: (date: string) => void;
   onClearFilters: () => void;
+  onDefaultPeriodReady?: (period: string) => void;
 }
 
-export default function PayrollFilters({
+export default function UsageFilters({
   config,
   allData,
   selectedYear,
   selectedPeriods,
+  selectedDate,
   availableYears,
   loadingYears,
   archiveFolderId,
@@ -41,24 +42,34 @@ export default function PayrollFilters({
   onYearChange,
   onPeriodToggle,
   onSelectAll,
+  onDateChange,
   onClearFilters,
-}: PayrollFiltersProps) {
-  const [periodOptions, setPeriodOptions] = useState<string[]>([]);
+  onDefaultPeriodReady,
+}: UsageFiltersProps) {
   const [showDropdown, setShowDropdown] = useState(false);
+  const [hasAttemptedDefault, setHasAttemptedDefault] = useState(false);
 
-  // Update period options when data or year changes
+  const periodOptions = getPeriodOptions(allData, config);
+
+  /**
+   * Reset period selection when year changes
+   */
   useEffect(() => {
-    if (allData.length > 0 && config.length > 0) {
-      const options = getPeriodOptionsFromData(
-        allData,
-        config,
-        selectedYear || undefined
-      );
-      setPeriodOptions(options);
-      
-      // ❌ REMOVED: Auto-select logic
-    }
-  }, [allData, config, selectedYear, loading]);
+    setHasAttemptedDefault(false);
+  }, [selectedYear]);
+
+  const availableDates =
+    selectedPeriods.length === 1
+      ? getAvailableDatesFromData(
+          allData,
+          config.find((f) => f.type === "period")?.fieldName || "",
+          config.find((f) => f.type === "date")?.fieldName || "",
+          selectedPeriods[0]
+        )
+      : [];
+
+  const canSelectDate =
+    selectedPeriods.length === 1 && availableDates.length > 0;
 
   return (
     <div className="bg-white rounded-xl lg:rounded-2xl p-4 lg:p-6 border border-slate-200 shadow-sm">
@@ -76,8 +87,8 @@ export default function PayrollFilters({
         </div>
       )}
 
-      {/* Filters Grid - Responsive: 1 col mobile, 2 col tablet/desktop */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:gap-4">
+      {/* Filters Grid - Responsive: 1 col mobile, 2 col tablet, 4 col desktop */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
         {/* Year Filter */}
         {archiveFolderId && (
           <div>
@@ -107,7 +118,7 @@ export default function PayrollFilters({
         )}
 
         {/* Period Filter - Dropdown */}
-        <div className="relative">
+        <div className="relative sm:col-span-1">
           <label className="block text-xs lg:text-sm font-medium text-slate-900 mb-2">
             ช่วงเวลา
           </label>
@@ -200,21 +211,57 @@ export default function PayrollFilters({
             </>
           )}
         </div>
+
+        {/* Date Filter */}
+        <div>
+          <label className="block text-xs lg:text-sm font-medium text-slate-900 mb-2">
+            วันที่
+            {selectedPeriods.length !== 1 && !loading && (
+              <span className="text-xs text-slate-500 font-normal ml-1 block lg:inline">
+                (เลือก 1 ช่วง)
+              </span>
+            )}
+          </label>
+          <select
+            value={selectedDate}
+            onChange={(e) => onDateChange(e.target.value)}
+            disabled={loading || !canSelectDate}
+            className="w-full px-3 lg:px-4 py-2 lg:py-2.5 bg-white border border-slate-300 text-slate-900 rounded-lg text-xs lg:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
+          >
+            <option value="">ทุกวัน</option>
+            {availableDates.map((date) => (
+              <option key={date} value={date}>
+                {new Date(date).toLocaleDateString("th-TH", {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                })}
+              </option>
+            ))}
+          </select>
+          {canSelectDate && !loading && (
+            <p className="text-xs text-slate-500 mt-1.5">
+              {availableDates.length} วันที่มีข้อมูล
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Clear Filters Buttons - Responsive */}
-      {(selectedPeriods.length > 0 || selectedYear) && (
+      {(selectedDate || selectedPeriods.length > 0 || selectedYear) && (
         <div className="mt-4 lg:mt-6 flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
-          {/* Clear Period */}
-          {selectedPeriods.length > 0 && (
+          {/* Clear Period & Date */}
+          {(selectedDate || selectedPeriods.length > 0) && (
             <button
               onClick={() => {
                 selectedPeriods.forEach((p) => onPeriodToggle(p));
+                onDateChange("");
+                setHasAttemptedDefault(true);
               }}
               disabled={loading}
               className="px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 lg:active:scale-100"
             >
-              ล้างช่วงเวลา
+              ล้างช่วงเวลา/วัน
             </button>
           )}
 
@@ -224,7 +271,9 @@ export default function PayrollFilters({
               onClick={() => {
                 onYearChange(null);
                 selectedPeriods.forEach((p) => onPeriodToggle(p));
+                onDateChange("");
                 onClearFilters();
+                setHasAttemptedDefault(true);
               }}
               disabled={loading}
               className="px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 lg:active:scale-100"

@@ -1,6 +1,7 @@
 /**
- * Sales Dashboard Utilities - FIXED DATE PARSING
- * Location: app/components/dashboards/sales/salesUtils.ts
+ * Purchase Dashboard Utilities
+ * Location: app/components/dashboards/purchase/purchaseUtils.ts
+ * ✅ Customized for Purchase module with fields: period, date, product, quantity, cost, suppliers, status
  */
 
 export interface ConfigField {
@@ -22,7 +23,7 @@ export interface KPIData {
 // ============================================================
 
 /**
- * ✅ FIXED: Normalize date to YYYY-MM-DD
+ * ✅ Normalize date to YYYY-MM-DD
  * Support: "1/9/2025", "2025-09-01", "09-01-2025"
  * Handle D/M/YYYY format (1/9/2025 = 1 Sept, not 9 Jan)
  */
@@ -30,18 +31,11 @@ export function normalizeDate(dateStr: string): string | null {
   if (!dateStr) return null;
 
   const val = String(dateStr).trim();
-  
-  // 🔍 DEBUG: Log date format on first call
-  if (Math.random() < 0.01) { // Log 1% of calls
-    console.log("🔍 DATE DEBUG:", { raw: dateStr, normalized: val });
-  }
 
-  // ✅ Already YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
     return val;
   }
 
-  // ✅ Parse M/D/YYYY or D/M/YYYY format
   const parts = val.split(/[\/\-\.]/);
   if (parts.length === 3) {
     const nums = parts.map((p) => parseInt(p, 10));
@@ -49,33 +43,24 @@ export function normalizeDate(dateStr: string): string | null {
 
     let year: number, month: number, day: number;
 
-    // Determine format based on value ranges
     if (third >= 1900 && third <= 2100) {
-      // Format: ?/?/YYYY (need to figure out first 2 parts)
       year = third;
       
-      // ✅ KEY FIX: If first > 12, it MUST be day (can't be month)
-      // If second > 12, it MUST be day (can't be month)
       if (first > 12) {
-        // first is definitely day
         day = first;
         month = second;
       } else if (second > 12) {
-        // second is definitely day
         month = first;
         day = second;
       } else {
-        // Both <= 12, ambiguous: assume D/M/YYYY (Thai convention)
         day = first;
         month = second;
       }
     } else if (first >= 1900 && first <= 2100) {
-      // Format: YYYY/M/D
       year = first;
       month = second;
       day = third;
     } else if (third < 100) {
-      // Format: M/D/YY or D/M/YY
       year = third > 50 ? 1900 + third : 2000 + third;
       
       if (first > 12) {
@@ -85,7 +70,6 @@ export function normalizeDate(dateStr: string): string | null {
         month = first;
         day = second;
       } else {
-        // Both <= 12, ambiguous: assume D/M/YYYY (Thai convention)
         day = first;
         month = second;
       }
@@ -93,7 +77,6 @@ export function normalizeDate(dateStr: string): string | null {
       return null;
     }
 
-    // Validate
     if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) {
       return null;
     }
@@ -103,7 +86,6 @@ export function normalizeDate(dateStr: string): string | null {
     return `${year}-${m}-${d}`;
   }
 
-  // ✅ Try Date object as fallback
   try {
     const d = new Date(val);
     if (!isNaN(d.getTime())) {
@@ -163,7 +145,7 @@ export function filterByDateRange(
 }
 
 /**
- * Get available dates from data (เฉพาะ Period ที่เลือก)
+ * Get available dates from data
  */
 export function getAvailableDatesFromData(
   data: any[],
@@ -175,7 +157,6 @@ export function getAvailableDatesFromData(
 
   console.log(`🔍 Getting available dates for period: ${selectedPeriod}`);
 
-  // Filter by period
   const filteredRows = data.filter((row) => {
     const rowPeriod = String(row[periodFieldName] || "").trim();
     return rowPeriod === String(selectedPeriod).trim();
@@ -183,7 +164,6 @@ export function getAvailableDatesFromData(
 
   console.log(`   Found ${filteredRows.length} rows for this period`);
 
-  // Get raw dates
   const rawDates = filteredRows
     .map((r) => {
       const val = r[dateFieldName];
@@ -193,14 +173,12 @@ export function getAvailableDatesFromData(
 
   console.log(`   Found ${rawDates.length} dates (before normalization)`);
 
-  // Normalize dates
   const normalizedDates = rawDates
     .map((val) => normalizeDate(val))
     .filter((d): d is string => !!d);
 
   console.log(`   Normalized to ${normalizedDates.length} dates`);
 
-  // Remove duplicates and sort
   const uniqueSorted = Array.from(new Set(normalizedDates)).sort();
 
   return uniqueSorted;
@@ -212,40 +190,78 @@ export function getAvailableDatesFromData(
 
 /**
  * Parse numeric value from string or number
+ * ✅ EXPORTED for use in other functions
+ * ✅ Handles: numbers, "100", "100.50", "1,000", "฿9.45", "$100"
  */
-function parseNumericValue(raw: any): number | null {
+export function parseNumericValue(raw: any): number | null {
   if (raw === null || raw === undefined) return null;
 
-  if (typeof raw === "number") return raw;
-  if (typeof raw === "string") {
-    const clean = raw.replace(/,/g, "").trim();
-    return clean === "" ? null : parseFloat(clean);
+  if (typeof raw === "number") {
+    return isNaN(raw) ? null : raw;
   }
+  
+  if (typeof raw === "string") {
+    // Remove currency symbols: ฿, $, €, etc.
+    let clean = raw
+      .replace(/[฿$€£¥]/g, "")  // Remove currency symbols
+      .replace(/,/g, "")         // Remove commas
+      .trim();
+    
+    if (clean === "") return null;
+    
+    const parsed = parseFloat(clean);
+    return isNaN(parsed) ? null : parsed;
+  }
+  
   return null;
 }
 
 /**
  * Generate KPI data from rows
+ * ✅ With detailed logging for debugging
  */
 export function generateKPI(
   rows: any[],
   configFields: ConfigField[]
 ): { [key: string]: KPIData } {
+  console.log("━".repeat(60));
+  console.log("📊 [generateKPI] START");
+  console.log(`   Total rows: ${rows.length}`);
+  console.log(`   Config fields: ${configFields.length}`);
+  
   const newKpiData: { [key: string]: KPIData } = {};
   const numberFields = configFields.filter((f) => f.type === "number");
+  
+  console.log(`   Number fields found: ${numberFields.map(f => f.fieldName).join(", ")}`);
 
   numberFields.forEach((field) => {
+    console.log(`\n   📈 Processing field: ${field.fieldName}`);
+    
     const values = rows
-      .map((r) => parseNumericValue(r[field.fieldName]))
+      .map((r, idx) => {
+        const raw = r[field.fieldName];
+        const parsed = parseNumericValue(raw);
+        
+        if (idx < 3) {
+          console.log(`      Row ${idx}: raw="${raw}" → parsed=${parsed}`);
+        }
+        
+        return parsed;
+      })
       .filter((v): v is number => typeof v === "number" && !isNaN(v));
 
+    console.log(`      Valid values: ${values.length}/${rows.length}`);
+
     if (values.length === 0) {
+      console.log(`      ⚠️ NO VALUES FOUND!`);
       newKpiData[field.fieldName] = { sum: 0, avg: 0, max: 0, count: 0 };
     } else {
       const sum = values.reduce((acc, curr) => acc + curr, 0);
       const avg = sum / values.length;
       const max = Math.max(...values);
       const count = values.length;
+
+      console.log(`      ✅ sum=${sum.toFixed(2)}, avg=${avg.toFixed(2)}, max=${max.toFixed(2)}, count=${count}`);
 
       newKpiData[field.fieldName] = {
         sum: Number(sum.toFixed(2)),
@@ -256,6 +272,7 @@ export function generateKPI(
     }
   });
 
+  console.log("━".repeat(60));
   return newKpiData;
 }
 
@@ -297,26 +314,6 @@ export function getMetricChange(
     (row) => String(row[periodField.fieldName]).trim() === previousMonth
   );
 
-  if (fieldName === "cust_status") {
-    const currentCount = currentData.filter(
-      (r) => r.cust_status && String(r.cust_status).trim() !== ""
-    ).length;
-    const previousCount = previousData.filter(
-      (r) => r.cust_status && String(r.cust_status).trim() !== ""
-    ).length;
-
-    if (previousCount === 0) {
-      return { change: null, icon: "" };
-    }
-
-    const changePercent =
-      ((currentCount - previousCount) / previousCount) * 100;
-    const icon =
-      changePercent > 0 ? "📈" : changePercent < 0 ? "📉" : "➡️";
-
-    return { change: changePercent, icon };
-  }
-
   const calculateSum = (data: any[], field: string) => {
     return data
       .map((r) => parseNumericValue(r[field]))
@@ -343,7 +340,8 @@ export function getMetricChange(
 // ============================================================
 
 /**
- * Generate line chart data (Daily View)
+ * Generate line chart data (Daily Purchase Trend)
+ * ✅ Show: cost over time
  */
 export function generateLineChartData(
   rows: any[],
@@ -355,7 +353,6 @@ export function generateLineChartData(
     return [];
   }
 
-  const TARGET_FIELDS = ["total_sales", "cost", "profit"];
   const grouped: Record<string, any> = {};
 
   rows.forEach((row) => {
@@ -369,10 +366,12 @@ export function generateLineChartData(
 
     if (!grouped[dateKey]) grouped[dateKey] = { date: dateKey };
 
-    TARGET_FIELDS.forEach((f) => {
-      const val = parseNumericValue(row[f]) || 0;
-      grouped[dateKey][f] = (grouped[dateKey][f] || 0) + val;
-    });
+    // Purchase has: quantity, cost
+    const quantity = parseNumericValue(row.quantity) || 0;
+    const cost = parseNumericValue(row.cost) || 0;
+
+    grouped[dateKey].quantity = (grouped[dateKey].quantity || 0) + quantity;
+    grouped[dateKey].cost = (grouped[dateKey].cost || 0) + cost;
   });
 
   const sorted = Object.values(grouped).sort(
@@ -385,128 +384,140 @@ export function generateLineChartData(
 }
 
 /**
- * Generate pie chart data (Customer channels)
+ * Generate pie chart data (Cost by Product)
+ * ✅ Show: ต้นทุนต่อ Product
  */
 export function generatePieChartData(rows: any[]): any[] {
   const grouped: Record<string, number> = {};
 
   rows.forEach((row) => {
-    const chan = String(row["cust_chan"] || "").trim();
-    if (!chan) return;
+    const product = String(row.product || "").trim();
+    if (!product) return;
 
-    grouped[chan] = (grouped[chan] || 0) + 1;
+    const costValue = parseNumericValue(row.cost) || 0;
+    grouped[product] = (grouped[product] || 0) + costValue;
   });
 
   const result = Object.entries(grouped)
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value);
 
+  console.log(`✅ Pie chart generated: ${result.length} products`);
   return result;
 }
 
 /**
- * Generate waterfall chart data (Profit by Program)
- */
-export function generateWaterfallData(rows: any[]): any[] {
-  const grouped: Record<string, { profit: number; sales: number }> = {};
-
-  rows.forEach((row) => {
-    const program = String(row["program"] || "").trim();
-    if (!program) return;
-
-    //const programLower = program.toLowerCase();
-    //if (programLower.includes("member") || programLower.includes("มัดจำ")) {
-      //return;
-    //}
-
-    const profitValue = parseNumericValue(row["profit"]) || 0;
-    const salesValue = parseNumericValue(row["total_sales"]) || 0;
-
-    if (!grouped[program]) {
-      grouped[program] = { profit: 0, sales: 0 };
-    }
-    grouped[program].profit += profitValue;
-    grouped[program].sales += salesValue;
-  });
-
-  const sortedPrograms = Object.entries(grouped)
-    .map(([name, data]) => ({
-      name,
-      value: data.profit,
-      sales: data.sales,
-      profitMargin:
-        data.sales > 0 ? (data.profit / data.sales) * 100 : 0,
-    }))
-    .sort((a, b) => b.value - a.value);
-
-  let cumulative = 0;
-  let totalSales = 0;
-  const waterfallData = sortedPrograms.map((item) => {
-    const start = cumulative;
-    cumulative += item.value;
-    totalSales += item.sales;
-
-    return {
-      name: item.name,
-      value: item.value,
-      sales: item.sales,
-      profitMargin: item.profitMargin,
-      start: start,
-      end: cumulative,
-      fill: item.value >= 0 ? "#10b981" : "#ef4444",
-    };
-  });
-
-  const totalProfitMargin =
-    totalSales > 0 ? (cumulative / totalSales) * 100 : 0;
-  waterfallData.push({
-    name: "รวมทั้งหมด",
-    value: cumulative,
-    sales: totalSales,
-    profitMargin: totalProfitMargin,
-    start: 0,
-    end: cumulative,
-    fill: "#3b82f6",
-  });
-
-  return waterfallData;
-}
-
-/**
- * Generate ranking table data (Top 10 Customers)
+ * Generate ranking table data (Top 10 Suppliers by Total Cost)
+ * ✅ Show: ผู้ขายที่จ่ายมากสุด
  */
 export function generateRankingTableData(rows: any[]): any[] {
+  console.log("━".repeat(60));
+  console.log("📊 [generateRankingTableData] START");
+  console.log(`   Total rows: ${rows.length}`);
+  
+  // ✅ DEBUG: Show first row structure
+  if (rows.length > 0) {
+    console.log("   First row structure:");
+    const firstRow = rows[0];
+    console.log(`     Keys: ${Object.keys(firstRow).join(", ")}`);
+    console.log(`     Full row:`, firstRow);
+    console.log(`     suppliers field: "${firstRow.suppliers}"`);
+  }
+  
   const grouped: {
-    [key: string]: { count: number; total_sales: number; profit: number };
+    [key: string]: { count: number; total_cost: number };
   } = {};
 
-  rows.forEach((row) => {
-    const custName = String(row["cust_name"] || "").trim();
-    if (!custName) return;
+  let suppliersFound = 0;
+  let suppliersEmpty = 0;
 
-    const salesValue = parseNumericValue(row["total_sales"]) || 0;
-    const profitValue = parseNumericValue(row["profit"]) || 0;
-
-    if (!grouped[custName]) {
-      grouped[custName] = { count: 0, total_sales: 0, profit: 0 };
+  rows.forEach((row, idx) => {
+    const supplier = String(row.suppliers || "").trim();
+    
+    // Log first 5 rows to see what's in suppliers field
+    if (idx < 5) {
+      console.log(`   Row ${idx}: suppliers="${supplier}" (raw: ${JSON.stringify(row.suppliers)})`);
     }
-    grouped[custName].count += 1;
-    grouped[custName].total_sales += salesValue;
-    grouped[custName].profit += profitValue;
+    
+    if (!supplier) {
+      suppliersEmpty++;
+      return;
+    }
+
+    suppliersFound++;
+    const costValue = parseNumericValue(row.cost) || 0;
+
+    if (!grouped[supplier]) {
+      grouped[supplier] = { count: 0, total_cost: 0 };
+    }
+    grouped[supplier].count += 1;
+    grouped[supplier].total_cost += costValue;
   });
+
+  console.log(`   ✅ Suppliers found: ${suppliersFound}, empty: ${suppliersEmpty}`);
+  console.log(`   ✅ Unique suppliers: ${Object.keys(grouped).length}`);
+  
+  if (Object.keys(grouped).length > 0) {
+    console.log(`   ✅ Top suppliers: ${Object.keys(grouped).slice(0, 5).join(", ")}`);
+  }
 
   const tableData = Object.entries(grouped)
     .map(([name, data]) => ({
-      cust_name: name,
+      supplier_name: name,
       count: data.count,
-      total_sales: data.total_sales,
-      profit: data.profit,
+      total_cost: data.total_cost,
     }))
-    .sort((a, b) => b.total_sales - a.total_sales)
+    .sort((a, b) => b.total_cost - a.total_cost)
     .slice(0, 10);
 
   console.log(`✅ Ranking table generated: ${tableData.length} rows`);
+  console.log("━".repeat(60));
   return tableData;
+}
+
+/**
+ * Generate pending items (Status = "รอรับของ")
+ * ✅ Show: สินค้าที่ยังไม่ถูกจัดส่ง
+ */
+export function generatePendingItems(rows: any[]): any[] {
+  const pending = rows.filter((row) => {
+    const status = String(row.status || "").trim();
+    return status === "รอรับของ";
+  });
+
+  // Group by product
+  const grouped: Record<string, {count: number; suppliers: string[]; dates: string[]}> = {};
+
+  pending.forEach((row) => {
+    const product = String(row.product || "").trim();
+    if (!product) return;
+
+    const supplier = String(row.suppliers || "").trim();
+    const date = String(row.date || "").trim();
+
+    if (!grouped[product]) {
+      grouped[product] = { count: 0, suppliers: [], dates: [] };
+    }
+    grouped[product].count += 1;
+    if (supplier && !grouped[product].suppliers.includes(supplier)) {
+      grouped[product].suppliers.push(supplier);
+    }
+    if (date) {
+      grouped[product].dates.push(date);
+    }
+  });
+
+  const result = Object.entries(grouped)
+    .map(([name, data]) => ({
+      product_name: name,
+      pending_count: data.count,
+      suppliers: data.suppliers.join(", "),
+      earliest_date: data.dates.length > 0 ? data.dates.sort()[0] : "-",
+    }))
+    .sort((a, b) => b.pending_count - a.pending_count);
+
+  console.log(`✅ Pending items generated: ${result.length} products`);
+  return result;
 }
 
 // ============================================================
@@ -515,6 +526,7 @@ export function generateRankingTableData(rows: any[]): any[] {
 
 /**
  * Get unique periods from data
+ * ✅ With fallback for missing period field
  */
 export function getPeriodOptions(
   data: any[],
@@ -523,24 +535,35 @@ export function getPeriodOptions(
   // ✅ Try finding by type first
   let periodField = configFields.find((f) => f.type === "period");
   
-  // ✅ Fallback: use known field name
+  console.log("🔍 Looking for period field...");
+  console.log("   Type 'period':", periodField?.fieldName);
+  
+  // ✅ Fallback: use known field names
   if (!periodField) {
-    console.warn("⚠️ Period field not found by type, using fallback");
-    // 🔧 เปลี่ยนชื่อ field ตรงนี้ให้ตรงกับข้อมูลจริง
+    console.warn("⚠️ Period field not found by type, trying fallbacks...");
     periodField = configFields.find((f) => 
-      f.fieldName === "Period" ||  // ลองเปลี่ยนเป็นชื่อจริง
+      f.fieldName === "period" ||
+      f.fieldName === "Period" ||
       f.fieldName === "Month" ||
-      f.fieldName === "เดือน"
+      f.fieldName === "เดือน" ||
+      f.order === 1  // Check if order 1 is period
     );
+    
+    if (periodField) {
+      console.log(`   ✅ Found by fallback: ${periodField.fieldName}`);
+    }
   }
   
+  // ✅ If STILL no period field, return empty (don't error out)
   if (!periodField) {
-    console.error("❌ Cannot find period field!");
-    console.log("Available fields:", configFields.map(f => f.fieldName));
+    console.warn("⚠️ No period field found - period filter will be disabled");
+    console.log("   Available fields:", configFields.map(f => `${f.fieldName}(type:${f.type})`).join(", "));
     return [];
   }
 
-  return Array.from(
+  console.log(`✅ Using period field: ${periodField.fieldName}`);
+  
+  const periods = Array.from(
     new Set(
       data
         .map((d) => d[periodField.fieldName])
@@ -553,49 +576,7 @@ export function getPeriodOptions(
         .map(String)
     )
   ).sort();
-}
 
-/**
- * Count customer status
- */
-export function getCustomerStatusCounts(data: any[]): {
-  newCount: number;
-  oldCount: number;
-  total: number;
-} {
-  const newCount = data.filter(
-    (r) =>
-      r.cust_status &&
-      String(r.cust_status).toLowerCase().includes("ใหม่")
-  ).length;
-
-  const oldCount = data.filter(
-    (r) =>
-      r.cust_status &&
-      String(r.cust_status).toLowerCase().includes("เก่า")
-  ).length;
-
-  return {
-    newCount,
-    oldCount,
-    total: newCount + oldCount,
-  };
-}
-
-/**
- * Generate transaction details table (All records, sorted by customer name)
- */
-export function generateTransactionTableData(rows: any[]): any[] {
-  return rows
-    .map((row) => ({
-      date: row.date || "-",
-      cust_name: String(row.cust_name || "-").trim(),
-      program: String(row.program || "-").trim(),
-      quantity: parseNumericValue(row.quantity) || 0,
-      total_sales: parseNumericValue(row.total_sales) || 0,
-      cost: parseNumericValue(row.cost) || 0,
-      profit: parseNumericValue(row.profit) || 0,
-    }))
-    .filter((row) => row.cust_name !== "-") // Filter out empty names
-    .sort((a, b) => a.cust_name.localeCompare(b.cust_name, "th-TH")); // Sort by customer name
+  console.log(`   Found ${periods.length} unique periods: ${periods.join(", ")}`);
+  return periods;
 }

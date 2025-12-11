@@ -1,6 +1,7 @@
 /**
- * Sales Dashboard Utilities - FIXED DATE PARSING
- * Location: app/components/dashboards/sales/salesUtils.ts
+ * Usage Dashboard Utilities
+ * Location: app/components/dashboards/usage/usageUtils.ts
+ * ✅ Customized for Usage module with fields: date, product, quantity, cust_name, cost, staff
  */
 
 export interface ConfigField {
@@ -30,18 +31,11 @@ export function normalizeDate(dateStr: string): string | null {
   if (!dateStr) return null;
 
   const val = String(dateStr).trim();
-  
-  // 🔍 DEBUG: Log date format on first call
-  if (Math.random() < 0.01) { // Log 1% of calls
-    console.log("🔍 DATE DEBUG:", { raw: dateStr, normalized: val });
-  }
 
-  // ✅ Already YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
     return val;
   }
 
-  // ✅ Parse M/D/YYYY or D/M/YYYY format
   const parts = val.split(/[\/\-\.]/);
   if (parts.length === 3) {
     const nums = parts.map((p) => parseInt(p, 10));
@@ -49,33 +43,24 @@ export function normalizeDate(dateStr: string): string | null {
 
     let year: number, month: number, day: number;
 
-    // Determine format based on value ranges
     if (third >= 1900 && third <= 2100) {
-      // Format: ?/?/YYYY (need to figure out first 2 parts)
       year = third;
       
-      // ✅ KEY FIX: If first > 12, it MUST be day (can't be month)
-      // If second > 12, it MUST be day (can't be month)
       if (first > 12) {
-        // first is definitely day
         day = first;
         month = second;
       } else if (second > 12) {
-        // second is definitely day
         month = first;
         day = second;
       } else {
-        // Both <= 12, ambiguous: assume D/M/YYYY (Thai convention)
         day = first;
         month = second;
       }
     } else if (first >= 1900 && first <= 2100) {
-      // Format: YYYY/M/D
       year = first;
       month = second;
       day = third;
     } else if (third < 100) {
-      // Format: M/D/YY or D/M/YY
       year = third > 50 ? 1900 + third : 2000 + third;
       
       if (first > 12) {
@@ -85,7 +70,6 @@ export function normalizeDate(dateStr: string): string | null {
         month = first;
         day = second;
       } else {
-        // Both <= 12, ambiguous: assume D/M/YYYY (Thai convention)
         day = first;
         month = second;
       }
@@ -93,7 +77,6 @@ export function normalizeDate(dateStr: string): string | null {
       return null;
     }
 
-    // Validate
     if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) {
       return null;
     }
@@ -103,7 +86,6 @@ export function normalizeDate(dateStr: string): string | null {
     return `${year}-${m}-${d}`;
   }
 
-  // ✅ Try Date object as fallback
   try {
     const d = new Date(val);
     if (!isNaN(d.getTime())) {
@@ -163,7 +145,7 @@ export function filterByDateRange(
 }
 
 /**
- * Get available dates from data (เฉพาะ Period ที่เลือก)
+ * Get available dates from data
  */
 export function getAvailableDatesFromData(
   data: any[],
@@ -175,7 +157,6 @@ export function getAvailableDatesFromData(
 
   console.log(`🔍 Getting available dates for period: ${selectedPeriod}`);
 
-  // Filter by period
   const filteredRows = data.filter((row) => {
     const rowPeriod = String(row[periodFieldName] || "").trim();
     return rowPeriod === String(selectedPeriod).trim();
@@ -183,7 +164,6 @@ export function getAvailableDatesFromData(
 
   console.log(`   Found ${filteredRows.length} rows for this period`);
 
-  // Get raw dates
   const rawDates = filteredRows
     .map((r) => {
       const val = r[dateFieldName];
@@ -193,14 +173,12 @@ export function getAvailableDatesFromData(
 
   console.log(`   Found ${rawDates.length} dates (before normalization)`);
 
-  // Normalize dates
   const normalizedDates = rawDates
     .map((val) => normalizeDate(val))
     .filter((d): d is string => !!d);
 
   console.log(`   Normalized to ${normalizedDates.length} dates`);
 
-  // Remove duplicates and sort
   const uniqueSorted = Array.from(new Set(normalizedDates)).sort();
 
   return uniqueSorted;
@@ -212,8 +190,9 @@ export function getAvailableDatesFromData(
 
 /**
  * Parse numeric value from string or number
+ * ✅ EXPORTED for use in other functions
  */
-function parseNumericValue(raw: any): number | null {
+export function parseNumericValue(raw: any): number | null {
   if (raw === null || raw === undefined) return null;
 
   if (typeof raw === "number") return raw;
@@ -226,26 +205,50 @@ function parseNumericValue(raw: any): number | null {
 
 /**
  * Generate KPI data from rows
+ * ✅ With detailed logging for debugging
  */
 export function generateKPI(
   rows: any[],
   configFields: ConfigField[]
 ): { [key: string]: KPIData } {
+  console.log("━".repeat(60));
+  console.log("📊 [generateKPI] START");
+  console.log(`   Total rows: ${rows.length}`);
+  console.log(`   Config fields: ${configFields.length}`);
+  
   const newKpiData: { [key: string]: KPIData } = {};
   const numberFields = configFields.filter((f) => f.type === "number");
+  
+  console.log(`   Number fields found: ${numberFields.map(f => f.fieldName).join(", ")}`);
 
   numberFields.forEach((field) => {
+    console.log(`\n   📈 Processing field: ${field.fieldName}`);
+    
     const values = rows
-      .map((r) => parseNumericValue(r[field.fieldName]))
+      .map((r, idx) => {
+        const raw = r[field.fieldName];
+        const parsed = parseNumericValue(raw);
+        
+        if (idx < 3) {  // Log first 3 rows
+          console.log(`      Row ${idx}: raw="${raw}" → parsed=${parsed}`);
+        }
+        
+        return parsed;
+      })
       .filter((v): v is number => typeof v === "number" && !isNaN(v));
 
+    console.log(`      Valid values: ${values.length}/${rows.length}`);
+
     if (values.length === 0) {
+      console.log(`      ⚠️ NO VALUES FOUND!`);
       newKpiData[field.fieldName] = { sum: 0, avg: 0, max: 0, count: 0 };
     } else {
       const sum = values.reduce((acc, curr) => acc + curr, 0);
       const avg = sum / values.length;
       const max = Math.max(...values);
       const count = values.length;
+
+      console.log(`      ✅ sum=${sum.toFixed(2)}, avg=${avg.toFixed(2)}, max=${max.toFixed(2)}, count=${count}`);
 
       newKpiData[field.fieldName] = {
         sum: Number(sum.toFixed(2)),
@@ -256,6 +259,7 @@ export function generateKPI(
     }
   });
 
+  console.log("━".repeat(60));
   return newKpiData;
 }
 
@@ -297,26 +301,6 @@ export function getMetricChange(
     (row) => String(row[periodField.fieldName]).trim() === previousMonth
   );
 
-  if (fieldName === "cust_status") {
-    const currentCount = currentData.filter(
-      (r) => r.cust_status && String(r.cust_status).trim() !== ""
-    ).length;
-    const previousCount = previousData.filter(
-      (r) => r.cust_status && String(r.cust_status).trim() !== ""
-    ).length;
-
-    if (previousCount === 0) {
-      return { change: null, icon: "" };
-    }
-
-    const changePercent =
-      ((currentCount - previousCount) / previousCount) * 100;
-    const icon =
-      changePercent > 0 ? "📈" : changePercent < 0 ? "📉" : "➡️";
-
-    return { change: changePercent, icon };
-  }
-
   const calculateSum = (data: any[], field: string) => {
     return data
       .map((r) => parseNumericValue(r[field]))
@@ -343,7 +327,8 @@ export function getMetricChange(
 // ============================================================
 
 /**
- * Generate line chart data (Daily View)
+ * Generate line chart data (Daily Cost Trend Only)
+ * ✅ Show: cost over time (NO quantity)
  */
 export function generateLineChartData(
   rows: any[],
@@ -355,7 +340,6 @@ export function generateLineChartData(
     return [];
   }
 
-  const TARGET_FIELDS = ["total_sales", "cost", "profit"];
   const grouped: Record<string, any> = {};
 
   rows.forEach((row) => {
@@ -369,10 +353,9 @@ export function generateLineChartData(
 
     if (!grouped[dateKey]) grouped[dateKey] = { date: dateKey };
 
-    TARGET_FIELDS.forEach((f) => {
-      const val = parseNumericValue(row[f]) || 0;
-      grouped[dateKey][f] = (grouped[dateKey][f] || 0) + val;
-    });
+    const cost = parseNumericValue(row.cost) || 0;
+
+    grouped[dateKey].cost = (grouped[dateKey].cost || 0) + cost;
   });
 
   const sorted = Object.values(grouped).sort(
@@ -380,135 +363,76 @@ export function generateLineChartData(
       new Date(a.date).getTime() - new Date(b.date).getTime()
   );
 
-  console.log(`✅ Line chart generated (${sorted.length} daily records)`);
+  console.log(`✅ Line chart generated (${sorted.length} daily records, cost only)`);
   return sorted;
 }
-
 /**
- * Generate pie chart data (Customer channels)
+ * Generate pie chart data (Cost by Product)
+ * ✅ Show: ต้นทุนต่อ Product
+ * 
+ * Uses field names: product, cost
  */
 export function generatePieChartData(rows: any[]): any[] {
   const grouped: Record<string, number> = {};
 
   rows.forEach((row) => {
-    const chan = String(row["cust_chan"] || "").trim();
-    if (!chan) return;
+    const product = String(row.product || "").trim();
+    if (!product) return;
 
-    grouped[chan] = (grouped[chan] || 0) + 1;
+    const costValue = parseNumericValue(row.cost) || 0;
+    grouped[product] = (grouped[product] || 0) + costValue;
   });
 
   const result = Object.entries(grouped)
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value);
 
+  console.log(`✅ Pie chart generated: ${result.length} products`);
   return result;
 }
 
 /**
- * Generate waterfall chart data (Profit by Program)
- */
-export function generateWaterfallData(rows: any[]): any[] {
-  const grouped: Record<string, { profit: number; sales: number }> = {};
-
-  rows.forEach((row) => {
-    const program = String(row["program"] || "").trim();
-    if (!program) return;
-
-    //const programLower = program.toLowerCase();
-    //if (programLower.includes("member") || programLower.includes("มัดจำ")) {
-      //return;
-    //}
-
-    const profitValue = parseNumericValue(row["profit"]) || 0;
-    const salesValue = parseNumericValue(row["total_sales"]) || 0;
-
-    if (!grouped[program]) {
-      grouped[program] = { profit: 0, sales: 0 };
-    }
-    grouped[program].profit += profitValue;
-    grouped[program].sales += salesValue;
-  });
-
-  const sortedPrograms = Object.entries(grouped)
-    .map(([name, data]) => ({
-      name,
-      value: data.profit,
-      sales: data.sales,
-      profitMargin:
-        data.sales > 0 ? (data.profit / data.sales) * 100 : 0,
-    }))
-    .sort((a, b) => b.value - a.value);
-
-  let cumulative = 0;
-  let totalSales = 0;
-  const waterfallData = sortedPrograms.map((item) => {
-    const start = cumulative;
-    cumulative += item.value;
-    totalSales += item.sales;
-
-    return {
-      name: item.name,
-      value: item.value,
-      sales: item.sales,
-      profitMargin: item.profitMargin,
-      start: start,
-      end: cumulative,
-      fill: item.value >= 0 ? "#10b981" : "#ef4444",
-    };
-  });
-
-  const totalProfitMargin =
-    totalSales > 0 ? (cumulative / totalSales) * 100 : 0;
-  waterfallData.push({
-    name: "รวมทั้งหมด",
-    value: cumulative,
-    sales: totalSales,
-    profitMargin: totalProfitMargin,
-    start: 0,
-    end: cumulative,
-    fill: "#3b82f6",
-  });
-
-  return waterfallData;
-}
-
-/**
- * Generate ranking table data (Top 10 Customers)
+ * Generate ranking table: Top 10 สินค้าที่มีต้นทุนรวมสูงที่สุด
  */
 export function generateRankingTableData(rows: any[]): any[] {
   const grouped: {
-    [key: string]: { count: number; total_sales: number; profit: number };
+    [product: string]: {
+      count: number;
+      total_quantity: number;
+      total_cost: number;
+    };
   } = {};
 
   rows.forEach((row) => {
-    const custName = String(row["cust_name"] || "").trim();
-    if (!custName) return;
+    const product = String(row["product"] || "").trim();
+    if (!product) return;
 
-    const salesValue = parseNumericValue(row["total_sales"]) || 0;
-    const profitValue = parseNumericValue(row["profit"]) || 0;
+    const quantityValue = parseNumericValue(row["quantity"]) || 0;
+    const costValue = parseNumericValue(row["cost"]) || 0;
 
-    if (!grouped[custName]) {
-      grouped[custName] = { count: 0, total_sales: 0, profit: 0 };
+    if (!grouped[product]) {
+      grouped[product] = {
+        count: 0,
+        total_quantity: 0,
+        total_cost: 0,
+      };
     }
-    grouped[custName].count += 1;
-    grouped[custName].total_sales += salesValue;
-    grouped[custName].profit += profitValue;
+
+    grouped[product].count += 1;
+    grouped[product].total_quantity += quantityValue;
+    grouped[product].total_cost += costValue;
   });
 
-  const tableData = Object.entries(grouped)
-    .map(([name, data]) => ({
-      cust_name: name,
+  return Object.entries(grouped)
+    .map(([product, data]) => ({
+      product,
       count: data.count,
-      total_sales: data.total_sales,
-      profit: data.profit,
+      total_quantity: data.total_quantity,
+      total_cost: data.total_cost,
     }))
-    .sort((a, b) => b.total_sales - a.total_sales)
+    .sort((a, b) => b.total_cost - a.total_cost) // ✔ sort by cost มาก → น้อย
     .slice(0, 10);
-
-  console.log(`✅ Ranking table generated: ${tableData.length} rows`);
-  return tableData;
 }
-
 // ============================================================
 // HELPER FUNCTIONS
 // ============================================================
@@ -520,17 +444,14 @@ export function getPeriodOptions(
   data: any[],
   configFields: ConfigField[]
 ): string[] {
-  // ✅ Try finding by type first
   let periodField = configFields.find((f) => f.type === "period");
   
-  // ✅ Fallback: use known field name
   if (!periodField) {
     console.warn("⚠️ Period field not found by type, using fallback");
-    // 🔧 เปลี่ยนชื่อ field ตรงนี้ให้ตรงกับข้อมูลจริง
     periodField = configFields.find((f) => 
-      f.fieldName === "Period" ||  // ลองเปลี่ยนเป็นชื่อจริง
-      f.fieldName === "Month" ||
-      f.fieldName === "เดือน"
+      f.fieldName === "period" ||
+      f.fieldName === "Period" ||
+      f.fieldName === "Month"
     );
   }
   
@@ -556,46 +477,35 @@ export function getPeriodOptions(
 }
 
 /**
- * Count customer status
+ * Generate transaction details table data
+ * ✅ Use configFields to map field names correctly
  */
-export function getCustomerStatusCounts(data: any[]): {
-  newCount: number;
-  oldCount: number;
-  total: number;
-} {
-  const newCount = data.filter(
-    (r) =>
-      r.cust_status &&
-      String(r.cust_status).toLowerCase().includes("ใหม่")
-  ).length;
-
-  const oldCount = data.filter(
-    (r) =>
-      r.cust_status &&
-      String(r.cust_status).toLowerCase().includes("เก่า")
-  ).length;
-
-  return {
-    newCount,
-    oldCount,
-    total: newCount + oldCount,
-  };
-}
-
 /**
- * Generate transaction details table (All records, sorted by customer name)
+ * Generate transaction details table data
+ * ✅ Use configFields to find correct field names
+ * Maps: date, product, quantity, cust_name, cost, staff
  */
-export function generateTransactionTableData(rows: any[]): any[] {
+export function generateTransactionTableData(
+  rows: any[],
+  configFields?: ConfigField[]
+): any[] {
+  // Find field names from config if provided
+  const dateFieldName = configFields?.find((f) => f.type === "date")?.fieldName || "date";
+  const productFieldName = configFields?.find((f) => f.fieldName === "product")?.fieldName || "product";
+  const quantityFieldName = configFields?.find((f) => f.fieldName === "quantity")?.fieldName || "quantity";
+  const custNameFieldName = configFields?.find((f) => f.fieldName === "cust_name")?.fieldName || "cust_name";
+  const costFieldName = configFields?.find((f) => f.fieldName === "cost")?.fieldName || "cost";
+  const staffFieldName = configFields?.find((f) => f.fieldName === "staff")?.fieldName || "staff";
+
   return rows
     .map((row) => ({
-      date: row.date || "-",
-      cust_name: String(row.cust_name || "-").trim(),
-      program: String(row.program || "-").trim(),
-      quantity: parseNumericValue(row.quantity) || 0,
-      total_sales: parseNumericValue(row.total_sales) || 0,
-      cost: parseNumericValue(row.cost) || 0,
-      profit: parseNumericValue(row.profit) || 0,
+      date: row[dateFieldName] || "-",
+      product: String(row[productFieldName] || "-").trim(),
+      quantity: parseNumericValue(row[quantityFieldName]) || 0,
+      cust_name: String(row[custNameFieldName] || "-").trim(),
+      cost: parseNumericValue(row[costFieldName]) || 0,
+      staff: String(row[staffFieldName] || "-").trim(),
     }))
-    .filter((row) => row.cust_name !== "-") // Filter out empty names
-    .sort((a, b) => a.cust_name.localeCompare(b.cust_name, "th-TH")); // Sort by customer name
+    .filter((row) => row.cust_name !== "-")
+    .sort((a, b) => a.cust_name.localeCompare(b.cust_name, "th-TH"));
 }

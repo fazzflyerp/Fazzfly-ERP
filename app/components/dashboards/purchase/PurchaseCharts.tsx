@@ -1,6 +1,6 @@
 /**
- * Expense Charts Component - Mobile/Tablet Friendly
- * Location: app/components/dashboards/expense/ExpenseCharts.tsx
+ * Purchase Charts Component - Mobile/Tablet Friendly
+ * Location: app/components/dashboards/purchase/PurchaseCharts.tsx
  * ✅ Pie Chart, Line Chart - Fully Responsive
  */
 
@@ -21,26 +21,26 @@ import {
   Cell,
 } from "recharts";
 
-interface ExpenseChartsProps {
+interface PurchaseChartsProps {
   pieChartData: any[];
   lineChartData: any[];
 }
 
 const COLORS = [
-  "#ef4444",
-  "#f59e0b",
-  "#10b981",
-  "#3b82f6",
-  "#8b5cf6",
-  "#ec4899",
-  "#14b8a6",
-  "#f43f5e",
+  "#e18ee2ff",
+  "#5B5FAE",
+  "#3F86F7",
+  "#79A9E0",
+  "#F5D4EA",
+  "#ed71afff",
+  "#C9B7EB",
+  "#40347A",
 ];
 
-export default function ExpenseCharts({
+export default function PurchaseCharts({
   pieChartData,
   lineChartData,
-}: ExpenseChartsProps) {
+}: PurchaseChartsProps) {
   // Detect screen size for responsive chart sizing
   const [isMobile, setIsMobile] = React.useState(false);
   React.useEffect(() => {
@@ -53,13 +53,13 @@ export default function ExpenseCharts({
   return (
     <div className="space-y-4 lg:space-y-6">
       {/* ============================================================ */}
-      {/* Pie Chart: สัดส่วนค่าใช้จ่ายแยกตามหมวดหมู่ */}
+      {/* Pie Chart: ต้นทุนแยกตามสินค้า */}
       {/* ============================================================ */}
       {pieChartData.length > 0 && (
         <div className="bg-white rounded-xl lg:rounded-2xl p-4 lg:p-6 border border-slate-200 shadow-sm">
           <h3 className="text-base lg:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <span className="text-lg lg:text-2xl"></span>
-            สัดส่วนค่าใช้จ่ายแยกตามหมวดหมู่
+            <span className="text-lg lg:text-2xl"> </span>
+            ต้นทุนแยกตามสินค้า
           </h3>
 
           <div className="flex justify-center items-center w-full">
@@ -152,13 +152,13 @@ export default function ExpenseCharts({
       )}
 
       {/* ============================================================ */}
-      {/* Line Chart: แนวโน้มค่าใช้จ่ายรายวัน */}
+      {/* Line Chart: แนวโน้มต้นทุนรายวัน */}
       {/* ============================================================ */}
       {lineChartData.length > 0 && (
         <div className="bg-white rounded-xl lg:rounded-2xl p-4 lg:p-6 border border-slate-200 shadow-sm">
           <h3 className="text-base lg:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
             <span className="text-lg lg:text-2xl"></span>
-            <span>แนวโน้มค่าใช้จ่ายรายวัน</span>
+            <span>แนวโน้มต้นทุนรายวัน</span>
           </h3>
           <ResponsiveContainer width="100%" height={isMobile ? 250 : 300}>
             <LineChart data={lineChartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
@@ -176,8 +176,17 @@ export default function ExpenseCharts({
               <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }} />
               <Line
                 type="monotone"
-                dataKey="amount"
-                name="ค่าใช้จ่าย"
+                dataKey="quantity"
+                name="จำนวน"
+                stroke="#3b82f6"
+                dot={false}
+                strokeWidth={2}
+                isAnimationActive={!isMobile}
+              />
+              <Line
+                type="monotone"
+                dataKey="cost"
+                name="ต้นทุน"
                 stroke="#ef4444"
                 dot={false}
                 strokeWidth={2}

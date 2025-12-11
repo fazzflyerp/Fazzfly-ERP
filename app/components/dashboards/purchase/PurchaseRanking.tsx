@@ -1,25 +1,32 @@
 /**
- * Expense Ranking Component - Mobile/Tablet Friendly
- * Location: app/components/dashboards/expense/ExpenseRanking.tsx
+ * Purchase Ranking Component - Mobile/Tablet Friendly
+ * Location: app/components/dashboards/purchase/PurchaseRanking.tsx
+ * ✅ Top 10 Suppliers by Total Cost
  * ✅ Desktop: Table view | Mobile: Card view
  */
 
 import React from "react";
 
 interface RankingRow {
-  expense_name: string;
+  supplier_name: string;
   count: number;
-  total_amount: number;
+  total_cost: number;
 }
 
-interface ExpenseRankingProps {
+interface PurchaseRankingProps {
   rankingTableData: RankingRow[];
 }
 
-export default function ExpenseRanking({
+export default function PurchaseRanking({
   rankingTableData,
-}: ExpenseRankingProps) {
-  if (rankingTableData.length === 0) {
+}: PurchaseRankingProps) {
+  console.log("📊 [PurchaseRanking] Rendering with data:", {
+    length: rankingTableData.length,
+    firstItem: rankingTableData[0],
+  });
+
+  if (!rankingTableData || rankingTableData.length === 0) {
+    console.log("⚠️ No ranking data to display");
     return null;
   }
 
@@ -28,7 +35,7 @@ export default function ExpenseRanking({
       {/* Desktop Table - Hidden on Mobile */}
       <div className="hidden lg:block bg-white rounded-xl lg:rounded-2xl p-4 lg:p-6 border border-slate-200 shadow-sm overflow-x-auto">
         <h3 className="text-base lg:text-lg font-bold text-slate-800 mb-4">
-          Top 10 หมวดหมู่ค่าใช้จ่าย
+          Suppliers Leaderboard
         </h3>
         <table className="w-full text-xs lg:text-sm">
           <thead>
@@ -37,7 +44,7 @@ export default function ExpenseRanking({
                 ลำดับ
               </th>
               <th className="px-2 lg:px-4 py-2 lg:py-3 text-left font-bold text-slate-700">
-                หมวดหมู่
+                ผู้ขาย
               </th>
               <th className="px-2 lg:px-4 py-2 lg:py-3 text-right font-bold text-slate-700 whitespace-nowrap">
                 จำนวนครั้ง
@@ -63,7 +70,7 @@ export default function ExpenseRanking({
                   {idx + 1 > 3 && idx + 1}
                 </td>
                 <td className="px-2 lg:px-4 py-2 lg:py-3 font-semibold text-slate-800 truncate">
-                  {row.expense_name}
+                  {row.supplier_name}
                 </td>
                 <td className="px-2 lg:px-4 py-2 lg:py-3 text-right text-slate-700 whitespace-nowrap text-xs lg:text-sm">
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
@@ -71,13 +78,13 @@ export default function ExpenseRanking({
                   </span>
                 </td>
                 <td className="px-2 lg:px-4 py-2 lg:py-3 text-right font-semibold text-red-600 whitespace-nowrap text-xs lg:text-sm">
-                  {row.total_amount.toLocaleString("th-TH", {
+                  {row.total_cost.toLocaleString("th-TH", {
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 0,
                   })} ฿
                 </td>
                 <td className="px-2 lg:px-4 py-2 lg:py-3 text-right font-semibold text-slate-700 whitespace-nowrap text-xs lg:text-sm">
-                  {(row.total_amount / row.count).toLocaleString("th-TH", {
+                  {(row.total_cost / row.count).toLocaleString("th-TH", {
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 0,
                   })} ฿
@@ -91,7 +98,7 @@ export default function ExpenseRanking({
       {/* Mobile Card View - Hidden on Desktop */}
       <div className="lg:hidden bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
         <h3 className="text-base font-bold text-slate-800 mb-4">
-          Top 10 หมวดหมู่ค่าใช้จ่าย
+          Suppliers Leaderboard
         </h3>
         <div className="space-y-3">
           {rankingTableData.map((row, idx) => (
@@ -108,7 +115,7 @@ export default function ExpenseRanking({
                     {idx + 1 > 3 && <span className="text-sm text-black bg-slate-100 px-2 py-0.5 rounded">{idx + 1}</span>}
                   </span>
                   <span className="font-semibold text-slate-800 truncate flex-1">
-                    {row.expense_name}
+                    {row.supplier_name}
                   </span>
                 </div>
               </div>
@@ -121,7 +128,7 @@ export default function ExpenseRanking({
                 <div className="flex flex-col">
                   <span className="text-slate-500">ยอดรวม</span>
                   <span className="font-bold text-red-600">
-                    {row.total_amount.toLocaleString("th-TH", {
+                    {row.total_cost.toLocaleString("th-TH", {
                       minimumFractionDigits: 0,
                       maximumFractionDigits: 0,
                     })} ฿
@@ -130,7 +137,7 @@ export default function ExpenseRanking({
                 <div className="flex flex-col">
                   <span className="text-slate-500">เฉลี่ย</span>
                   <span className="font-bold text-slate-700">
-                    {(row.total_amount / row.count).toLocaleString("th-TH", {
+                    {(row.total_cost / row.count).toLocaleString("th-TH", {
                       minimumFractionDigits: 0,
                       maximumFractionDigits: 0,
                     })} ฿
