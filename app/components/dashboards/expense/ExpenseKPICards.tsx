@@ -16,17 +16,19 @@ interface ExpenseKPICardsProps {
 }
 
 const COLORS = [
-  "#ef4444", // Red - Total
-  "#f59e0b", // Orange - Average
-  "#fb923c", // Light Orange - Max
-  "#fbbf24", // Amber - Count
+  "#9580ff",
+  "#ff613e",  
+  "#fff56d",  
+  "#ff66c4",  
+  "#b0ff4b",   
+  "#dd7ff0ff", 
 ];
 
 const KPI_METRICS = [
-  { key: "sum", label: "ค่าใช้จ่ายรวม", icon: "", valueKey: "sum" },
-  { key: "avg", label: "ค่าใช้จ่ายเฉลี่ย", icon: "", valueKey: "avg" },
-  { key: "max", label: "ค่าใช้จ่ายสูงสุด", icon: "", valueKey: "max" },
-  { key: "count", label: "จำนวนรายการ", icon: "", valueKey: "count" },
+  { key: "sum", label: "ค่าใช้จ่ายรวม (บาท)", icon: "", valueKey: "sum" },
+  { key: "avg", label: "ค่าใช้จ่ายเฉลี่ย (บาท)", icon: "", valueKey: "avg" },
+  { key: "max", label: "ค่าใช้จ่ายสูงสุด (บาท)", icon: "", valueKey: "max" },
+  { key: "count", label: "จำนวนรายการ ", icon: "", valueKey: "count" },
 ];
 
 export default function ExpenseKPICards({
@@ -75,14 +77,14 @@ export default function ExpenseKPICards({
             key={metric.key}
             className="bg-gradient-to-br rounded-xl lg:rounded-2xl p-3 sm:p-4 lg:p-6 border shadow-sm hover:shadow-lg hover:scale-105 transition-all active:scale-95 sm:active:scale-100 duration-300"
             style={{
-              background: `linear-gradient(135deg, ${COLORS[idx]}20, ${COLORS[idx]}10)`,
-              borderColor: `${COLORS[idx]}40`,
+              background: `linear-gradient(135deg, ${COLORS[idx % COLORS.length]}70, ${COLORS[idx % COLORS.length]}40)`,
+              borderColor: `${COLORS[idx % COLORS.length]}40`,
             }}
           >
             {/* Header: Icon + Label */}
             <div className="flex items-center gap-2 mb-2 sm:mb-3">
               <span className="text-lg sm:text-xl lg:text-2xl">{metric.icon}</span>
-              <p className="text-xs lg:text-sm text-slate-600 font-medium uppercase tracking-wide truncate">
+              <p className="text-xs lg:text-sm text-slate-600 font-bold uppercase tracking-wide truncate">
                 {metric.label}
               </p>
             </div>
@@ -96,7 +98,6 @@ export default function ExpenseKPICards({
                       maximumFractionDigits: 0,
                     })
                   : value}
-                {!isCount && " ฿"}
               </p>
 
               {/* Change Badge - Show only on Total (sum) */}

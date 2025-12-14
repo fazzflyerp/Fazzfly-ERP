@@ -74,13 +74,13 @@ export default function SalesRanking({
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right font-semibold text-slate-800">
-                  {row.total_sales.toLocaleString("th-TH", {
+                  ฿{row.total_sales.toLocaleString("th-TH", {
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 0,
                   })}
                 </td>
                 <td className="px-4 py-3 text-right font-semibold text-green-600">
-                  {row.profit.toLocaleString("th-TH", {
+                  ฿{row.profit.toLocaleString("th-TH", {
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 0,
                   })}
@@ -96,25 +96,23 @@ export default function SalesRanking({
         {rankingTableData.map((row, idx) => (
           <div
             key={idx}
-            className={`rounded-lg p-3 border-2 transition-all ${
-              idx < 3
-                ? "bg-yellow-50 border-yellow-200"
-                : "bg-white border-slate-200"
-            }`}
+            className={`rounded-lg p-3 border-2 transition-all ${idx < 3
+              ? "bg-yellow-50 border-yellow-200"
+              : "bg-white border-slate-200"
+              }`}
           >
             {/* Header: Rank + Name */}
             <div className="flex items-center justify-between gap-2 mb-3 pb-3 border-b border-slate-200">
               <div className="flex items-center gap-2">
                 <span
-                  className={`text-lg font-bold w-8 h-8 flex items-center justify-center rounded-full ${
-                    idx === 0
-                      ? "bg-yellow-400 text-white"
-                      : idx === 1
+                  className={`text-lg font-bold w-8 h-8 flex items-center justify-center rounded-full ${idx === 0
+                    ? "bg-yellow-400 text-white"
+                    : idx === 1
                       ? "bg-gray-300 text-white"
                       : idx === 2
-                      ? "bg-orange-400 text-white"
-                      : "bg-slate-100 text-slate-700"
-                  }`}
+                        ? "bg-orange-400 text-white"
+                        : "bg-slate-100 text-slate-700"
+                    }`}
                 >
                   {idx + 1 === 1 ? "🥇" : idx + 1 === 2 ? "🥈" : idx + 1 === 3 ? "🥉" : idx + 1}
                 </span>
@@ -126,24 +124,24 @@ export default function SalesRanking({
                 </div>
               </div>
             </div>
-
             {/* Stats Grid: 2 columns */}
             <div className="grid grid-cols-2 gap-3">
               {/* Sales */}
               <div className="text-center p-2 bg-slate-50 rounded-lg">
                 <p className="text-xs text-slate-600 mb-1">ยอดรวม</p>
-                <p className="font-bold text-slate-800 text-sm truncate">
+                <p className="font-bold text-slate-800 text-sm break-words">
+                  <span className="mr-0.5">฿</span>
                   {row.total_sales.toLocaleString("th-TH", {
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 0,
                   })}
                 </p>
               </div>
-
               {/* Profit */}
               <div className="text-center p-2 bg-green-50 rounded-lg">
                 <p className="text-xs text-slate-600 mb-1">กำไร</p>
-                <p className="font-bold text-green-600 text-sm truncate">
+                <p className="font-bold text-green-600 text-sm break-words">
+                  <span className="mr-0.5">฿</span>
                   {row.profit.toLocaleString("th-TH", {
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 0,

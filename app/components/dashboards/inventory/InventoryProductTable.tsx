@@ -137,6 +137,7 @@ export default function InventoryProductTable({
                 >
                   {/* Product Name */}
                   <td className="px-4 lg:px-6 py-4 text-sm font-semibold text-slate-800 border-b border-slate-100">
+                    
                     {product.product}
                   </td>
 
@@ -147,7 +148,7 @@ export default function InventoryProductTable({
 
                   {/* Stock Price */}
                   <td className="px-4 lg:px-6 py-4 text-sm text-right font-bold text-slate-800 border-b border-slate-100">
-                    {formatCurrency(product.stockprice)}
+                    ฿{formatCurrency(product.stockprice)}
                   </td>
 
                   {/* Status */}

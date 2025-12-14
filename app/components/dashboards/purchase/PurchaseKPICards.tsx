@@ -16,12 +16,12 @@ interface PurchaseKPICardsProps {
 }
 
 const COLORS = [
-  "#3b82f6",  // Blue
-  "#ef4444",  // Red
-  "#10b981",  // Green
-  "#f59e0b",  // Amber
-  "#8b5cf6",  // Purple
-  "#ec4899",  // Pink
+  "#9580ff",
+  "#ff613e",
+  "#fff56d",
+  "#ff66c4",
+  "#b0ff4b",
+  "#dd7ff0ff",
 ];
 
 export default function PurchaseKPICards({
@@ -54,7 +54,7 @@ export default function PurchaseKPICards({
   return (
     <>
       {/* KPI Cards Grid - Responsive (like Sales) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4 w-full">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-3 lg:gap-4 w-full">
         {numberFields.map((field, idx) => {
           const kpi = kpiData[field.fieldName];
           if (!kpi) return null;
@@ -74,37 +74,35 @@ export default function PurchaseKPICards({
               key={field.fieldName}
               className="bg-gradient-to-br rounded-xl lg:rounded-2xl p-3 sm:p-4 lg:p-6 border shadow-sm hover:shadow-lg hover:scale-105 transition-all active:scale-95 sm:active:scale-100 duration-300"
               style={{
-                background: `linear-gradient(135deg, ${COLORS[idx % COLORS.length]}20, ${COLORS[idx % COLORS.length]}10)`,
+                background: `linear-gradient(135deg, ${COLORS[idx % COLORS.length]}70, ${COLORS[idx % COLORS.length]}40)`,
                 borderColor: `${COLORS[idx % COLORS.length]}40`,
               }}
             >
               {/* Header: Label + Change Badge (like Sales) */}
               <div className="flex items-start sm:items-center justify-between gap-2 mb-2 sm:mb-3">
-                <p className="text-xs lg:text-sm text-slate-600 font-medium uppercase tracking-wide truncate">
-                  {field.label}
+                <p className="text-xs lg:text-sm text-slate-600 font-bold uppercase tracking-wide truncate">
+                  {field.label}{field.fieldName === "cost" && " (บาท)"}
                 </p>
                 {shouldShowChange && (
                   <span
-                    className={`text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${
-                      changePercent! > 0
+                    className={`text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${changePercent! > 0
                         ? "bg-green-100 text-green-700"
                         : changePercent! < 0
                           ? "bg-red-100 text-red-700"
                           : "bg-slate-100 text-slate-700"
-                    }`}
+                      }`}
                   >
                     {changeIcon} {changePercent!.toFixed(1)}%
                   </span>
                 )}
               </div>
-
               {/* Main Value */}
               <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800 mb-2 sm:mb-3 lg:mb-4 truncate">
                 {(kpi.sum as number).toLocaleString("th-TH", {
                   minimumFractionDigits: 0,
                   maximumFractionDigits: 0,
                 })}
-                {field.fieldName === "cost" && " ฿"}
+                {field.fieldName === "cost" && " "}
               </p>
 
               {/* Sub Stats (like Sales) */}
@@ -115,7 +113,7 @@ export default function PurchaseKPICards({
                     {(kpi.avg as number).toLocaleString("th-TH", {
                       maximumFractionDigits: 0,
                     })}
-                    {field.fieldName === "cost" && " ฿"}
+                    ฿ {field.fieldName === "cost" && " "}
                   </span>
                 </div>
                 <div className="flex justify-between text-slate-600">
@@ -152,9 +150,8 @@ export default function PurchaseKPICards({
             )}
           </span>
           <svg
-            className={`w-4 h-4 transition-transform ${
-              showPendingItems ? "rotate-180" : ""
-            }`}
+            className={`w-4 h-4 transition-transform ${showPendingItems ? "rotate-180" : ""
+              }`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -179,13 +176,19 @@ export default function PurchaseKPICards({
                       สินค้า
                     </th>
                     <th className="px-2 lg:px-4 py-2 lg:py-3 text-center font-bold text-slate-700 whitespace-nowrap">
+                      จำนวนรายการ
+                    </th>
+                    <th className="px-2 lg:px-4 py-2 lg:py-3 text-center font-bold text-slate-700 whitespace-nowrap">
                       จำนวน
                     </th>
                     <th className="px-2 lg:px-4 py-2 lg:py-3 text-left font-bold text-slate-700">
                       ผู้ขาย
                     </th>
                     <th className="px-2 lg:px-4 py-2 lg:py-3 text-left font-bold text-slate-700 whitespace-nowrap">
-                      วันที่ขอ
+                      วันที่สั่งซื้อ
+                    </th>
+                    <th className="px-2 lg:px-4 py-2 lg:py-3 text-left font-bold text-slate-700 whitespace-nowrap">
+                      วันที่รับสินค้า
                     </th>
                   </tr>
                 </thead>
@@ -203,18 +206,26 @@ export default function PurchaseKPICards({
                           {item.pending_count}
                         </span>
                       </td>
+                      <td className="px-2 lg:px-4 py-2 lg:py-3 text-center">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                          <span>{item.total_quantity.toLocaleString('th-TH')}</span>
+                          <span className="text-blue-600">{item.unit}</span>
+                        </span>
+                      </td>
                       <td className="px-2 lg:px-4 py-2 lg:py-3 text-slate-700 text-xs lg:text-sm max-w-xs truncate">
                         {item.suppliers}
                       </td>
                       <td className="px-2 lg:px-4 py-2 lg:py-3 text-slate-600 text-xs whitespace-nowrap">
                         {item.earliest_date}
                       </td>
+                      <td className="px-2 lg:px-4 py-2 lg:py-3 text-slate-600 text-xs whitespace-nowrap">
+                        {item.earliest_deliverdate}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-
             {/* Mobile Card View */}
             <div className="lg:hidden space-y-3 p-4">
               {pendingItems.map((item, idx) => (
@@ -227,18 +238,28 @@ export default function PurchaseKPICards({
                       {item.product_name}
                     </h4>
                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-red-500 text-white whitespace-nowrap flex-shrink-0">
-                      {item.pending_count}
+                      {item.pending_count} รายการ
                     </span>
                   </div>
-                  
+
                   <div className="space-y-1.5 text-xs">
+                    <div className="flex justify-between text-slate-600">
+                      <span className="font-medium">จำนวน:</span>
+                      <span className="text-slate-800 font-semibold">
+                        {item.total_quantity.toLocaleString('th-TH')} {item.unit}
+                      </span>
+                    </div>
                     <div className="text-slate-600">
                       <span className="font-medium">ผู้ขาย:</span>
                       <p className="text-slate-700 mt-0.5">{item.suppliers}</p>
                     </div>
                     <div className="flex justify-between text-slate-600">
-                      <span className="font-medium">วันที่ขอ:</span>
+                      <span className="font-medium">วันที่สั่งซื้อ:</span>
                       <span className="text-slate-700">{item.earliest_date}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span className="font-medium">วันที่รับสินค้า:</span>
+                      <span className="text-slate-700 font-semibold">{item.earliest_deliverdate}</span>
                     </div>
                   </div>
                 </div>

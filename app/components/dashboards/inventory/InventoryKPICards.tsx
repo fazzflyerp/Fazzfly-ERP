@@ -28,7 +28,7 @@ export default function InventoryKPICards({
         </div>
 
         {/* Label */}
-        <p className="text-sm font-medium text-slate-600 mb-2">มูลค่าสต๊อครวม</p>
+        <p className="text-sm font-bold text-slate-600 mb-2">มูลค่าสต๊อครวม (บาท)</p>
 
         {/* Main Value */}
         <p className="text-4xl font-bold text-slate-800 mb-4">
@@ -53,7 +53,7 @@ export default function InventoryKPICards({
         </div>
 
         {/* Label */}
-        <p className="text-sm font-medium text-slate-600 mb-2">จำนวนประเภทสินค้า</p>
+        <p className="text-sm font-bold text-slate-600 mb-2">จำนวนประเภทสินค้า</p>
 
         {/* Main Value */}
         <p className="text-4xl font-bold text-slate-800 mb-4">

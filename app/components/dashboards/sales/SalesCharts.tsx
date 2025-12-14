@@ -30,12 +30,15 @@ interface SalesChartsProps {
 }
 
 const COLORS = [
-  "#3b82f6",
-  "#ef4444",
-  "#10b981",
-  "#f59e0b",
-  "#8b5cf6",
-  "#ec4899",
+  "#7054fc",  
+  "#ff66c4",  
+  "#87cd2cff",  
+  "#fff56d",  
+  "#f15a6eff",  
+  "#7f88f0ff", 
+  "#ec6e74ff",
+  "#25c9dcff",
+  "#dc255cff",
 ];
 
 export default function SalesCharts({
@@ -78,14 +81,13 @@ export default function SalesCharts({
                   nameKey="name"
                   cx="50%"
                   cy="50%"
-                  outerRadius={isMobile ? 90 : 120}
+                  outerRadius={isMobile ? 90 : 130}
                 >
                   {pieChartData.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
                       fill={COLORS[index % COLORS.length]}
-                      stroke="#fff"
-                      strokeWidth={2}
+                      stroke="none"
                     />
                   ))}
                 </Pie>
@@ -155,7 +157,7 @@ export default function SalesCharts({
       {/* Line Chart: Sales Trend */}
       {/* ============================================================ */}
       {lineChartData.length > 0 && (
-        <div className="bg-white rounded-xl lg:rounded-2xl p-4 lg:p-6 border border-slate-200 shadow-sm">
+        <div className="bg-white text-black rounded-xl lg:rounded-2xl p-4 lg:p-6 border border-slate-200 shadow-sm">
           <h3 className="text-base lg:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
             <span className="text-lg lg:text-2xl"></span>
             <span>แนวโน้มยอดขาย</span>
@@ -304,7 +306,7 @@ export default function SalesCharts({
               </div>
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-3 lg:p-4 bg-green-50 rounded-lg">
                 <span className="text-xs lg:text-sm text-slate-600 font-medium mb-2 sm:mb-0">
-                  % กำไรรวม:
+                  % กำไร:
                 </span>
                 <span className="text-lg lg:text-2xl font-bold text-green-600">
                   {waterfallData[waterfallData.length - 1]?.profitMargin?.toFixed(
@@ -367,13 +369,13 @@ export default function SalesCharts({
                           {item.name}
                         </td>
                         <td className="px-2 lg:px-4 py-2 lg:py-3 text-right text-slate-700 whitespace-nowrap text-xs lg:text-sm">
-                          {item.sales?.toLocaleString("th-TH", {
+                          ฿{item.sales?.toLocaleString("th-TH", {
                             minimumFractionDigits: 0,
                             maximumFractionDigits: 0,
                           }) || "-"}
                         </td>
                         <td className="px-2 lg:px-4 py-2 lg:py-3 text-right font-semibold text-green-600 whitespace-nowrap text-xs lg:text-sm">
-                          {item.value.toLocaleString("th-TH", {
+                          ฿{item.value.toLocaleString("th-TH", {
                             minimumFractionDigits: 0,
                             maximumFractionDigits: 0,
                           })}

@@ -17,16 +17,18 @@ interface UsageKPICardsProps {
 }
 
 const COLORS = [
-  "#3b82f6",  // Blue - Total
-  "#10b981",  // Green - Average
-  "#f59e0b",  // Amber - Max
-  "#8b5cf6",  // Purple - Count
+  "#9580ff",
+  "#ff613e",  
+  "#fff56d",  
+  "#ff66c4",  
+  "#b0ff4b",   
+  "#dd7ff0ff",
 ];
 
 const KPI_METRICS = [
-  { key: "sum", label: "ต้นทุนรวม", icon: "", valueKey: "sum" },
-  { key: "avg", label: "ต้นทุนเฉลี่ย", icon: "", valueKey: "avg" },
-  { key: "max", label: "ต้นทุนสูงสุด", icon: "", valueKey: "max" },
+  { key: "sum", label: "ต้นทุนรวม (บาท)", icon: "", valueKey: "sum" },
+  { key: "avg", label: "ต้นทุนเฉลี่ย (บาท)", icon: "", valueKey: "avg" },
+  { key: "max", label: "ต้นทุนสูงสุด (บาท)", icon: "", valueKey: "max" },
   { key: "count", label: "จำนวนรายการ", icon: "", valueKey: "count" },
 ];
 
@@ -101,14 +103,14 @@ export default function UsageKPICards({
               key={metric.key}
               className="bg-gradient-to-br rounded-xl lg:rounded-2xl p-3 sm:p-4 lg:p-6 border shadow-sm hover:shadow-lg hover:scale-105 transition-all active:scale-95 sm:active:scale-100 duration-300"
               style={{
-                background: `linear-gradient(135deg, ${COLORS[idx]}20, ${COLORS[idx]}10)`,
+                background: `linear-gradient(135deg, ${COLORS[idx]}40, ${COLORS[idx]}40)`,
                 borderColor: `${COLORS[idx]}40`,
               }}
             >
               {/* Header: Icon + Label */}
               <div className="flex items-center gap-2 mb-2 sm:mb-3">
                 <span className="text-lg sm:text-xl lg:text-2xl">{metric.icon}</span>
-                <p className="text-xs lg:text-sm text-slate-600 font-medium uppercase tracking-wide truncate">
+                <p className="text-xs lg:text-sm text-slate-600 font-bold uppercase tracking-wide truncate">
                   {metric.label}
                 </p>
               </div>
@@ -122,7 +124,7 @@ export default function UsageKPICards({
                         maximumFractionDigits: isCount ? 0 : 0,
                       })
                     : value}
-                  {!isCount && " ฿"}
+                  {!isCount && " "}
                 </p>
 
                 {/* Change Badge - Show only on Total (sum) */}
@@ -198,7 +200,7 @@ export default function UsageKPICards({
                     className="px-2 lg:px-4 py-2 lg:py-3 text-right font-bold text-slate-700 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
                     onClick={() => setSortBy("cost")}
                   >
-                    ต้นทุน {sortBy === "cost" && "▼"}
+                    ต้นทุน  {sortBy === "cost" && "▼"}
                   </th>
                   <th className="px-2 lg:px-4 py-2 lg:py-3 text-left font-bold text-slate-700 whitespace-nowrap">
                     พนักงาน
@@ -226,7 +228,7 @@ export default function UsageKPICards({
                       </span>
                     </td>
                     <td className="px-2 lg:px-4 py-2 lg:py-3 text-right font-semibold text-slate-800 text-xs lg:text-sm whitespace-nowrap">
-                      {row.cost.toLocaleString('th-TH', {
+                      ฿{row.cost.toLocaleString('th-TH', {
                         minimumFractionDigits: 0,
                         maximumFractionDigits: 0,
                       })}

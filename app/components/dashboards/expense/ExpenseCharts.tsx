@@ -27,14 +27,15 @@ interface ExpenseChartsProps {
 }
 
 const COLORS = [
-  "#ef4444",
-  "#f59e0b",
-  "#10b981",
-  "#3b82f6",
-  "#8b5cf6",
-  "#ec4899",
-  "#14b8a6",
-  "#f43f5e",
+ "#7054fc",  
+  "#ff66c4",  
+  "#87cd2cff",  
+  "#fff56d",  
+  "#f15a6eff",  
+  "#7f88f0ff", 
+  "#ec6e74ff",
+  "#25c9dcff",
+  "#dc255cff",
 ];
 
 export default function ExpenseCharts({
@@ -80,8 +81,7 @@ export default function ExpenseCharts({
                     <Cell
                       key={`cell-${index}`}
                       fill={COLORS[index % COLORS.length]}
-                      stroke="#fff"
-                      strokeWidth={2}
+                      stroke="none"
                     />
                   ))}
                 </Pie>
@@ -155,7 +155,7 @@ export default function ExpenseCharts({
       {/* Line Chart: แนวโน้มค่าใช้จ่ายรายวัน */}
       {/* ============================================================ */}
       {lineChartData.length > 0 && (
-        <div className="bg-white rounded-xl lg:rounded-2xl p-4 lg:p-6 border border-slate-200 shadow-sm">
+        <div className="bg-white text-black rounded-xl lg:rounded-2xl p-4 lg:p-6 border border-slate-200 shadow-sm">
           <h3 className="text-base lg:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
             <span className="text-lg lg:text-2xl"></span>
             <span>แนวโน้มค่าใช้จ่ายรายวัน</span>

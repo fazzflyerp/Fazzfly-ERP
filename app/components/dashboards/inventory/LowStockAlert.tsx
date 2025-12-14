@@ -83,7 +83,7 @@ export default function LowStockAlert({
                     <div className="flex items-center gap-1">
                       <span className="font-medium">มูลค่าสต๊อค:</span>
                       <span className="font-bold text-slate-800">
-                        {formatCurrency(item.stockprice)}
+                        ฿{formatCurrency(item.stockprice)}
                       </span>
                     </div>
                   </div>

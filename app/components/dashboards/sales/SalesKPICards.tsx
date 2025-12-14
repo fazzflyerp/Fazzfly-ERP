@@ -17,18 +17,18 @@ interface SalesKPICardsProps {
 }
 
 const COLORS = [
-  "#3b82f6",
-  "#ef4444",
-  "#10b981",
-  "#f59e0b",
-  "#8b5cf6",
-  "#ec4899",
+  "#9580ff",
+  "#ff613e",  
+  "#fff56d",  
+  "#ff66c4",  
+  "#b0ff4b",   
+  "#dd7ff0ff", 
 ];
 
 const LABELS: Record<string, string> = {
-  total_sales: "ยอดขายรวม",
-  profit: "กำไร โดยประมาณ",
-  cost: "ต้นทุน โดยประมาณ ",
+  total_sales: "ยอดขายรวม (บาท)",
+  profit: "กำไร โดยประมาณ (บาท)",
+  cost: "ต้นทุน โดยประมาณ (บาท)",
   count: "จำนวนรายการ",
   cust_status: "จำนวนลูกค้าที่ใช้บริการ",
 };
@@ -118,13 +118,13 @@ export default function SalesKPICards({
               key={fieldName}
               className="bg-gradient-to-br rounded-xl lg:rounded-2xl p-3 sm:p-4 lg:p-6 border shadow-sm hover:shadow-lg hover:scale-105 transition-all active:scale-95 sm:active:scale-100 duration-300"
               style={{
-                background: `linear-gradient(135deg, ${COLORS[idx % COLORS.length]}20, ${COLORS[idx % COLORS.length]}10)`,
+                background: `linear-gradient(135deg, ${COLORS[idx % COLORS.length]}70, ${COLORS[idx % COLORS.length]}40)`,
                 borderColor: `${COLORS[idx % COLORS.length]}40`,
               }}
             >
               {/* Header: Label + Change Badge */}
               <div className="flex items-start sm:items-center justify-between gap-2 mb-2 sm:mb-3">
-                <p className="text-xs lg:text-sm text-slate-600 font-medium uppercase tracking-wide truncate">
+                <p className="text-xs lg:text-sm text-slate-600 font-bold uppercase tracking-wide truncate">
                   {LABELS[fieldName] || fieldName}
                 </p>
                 {shouldShowChange && (
@@ -184,7 +184,7 @@ export default function SalesKPICards({
                   <div className="flex justify-between text-slate-600">
                     <span>เฉลี่ย:</span>
                     <span className="font-semibold truncate ml-2">
-                      {(kpi.avg as number).toLocaleString("th-TH", {
+                      ฿{(kpi.avg as number).toLocaleString("th-TH", {
                         maximumFractionDigits: 0,
                       })}
                     </span>
@@ -192,7 +192,7 @@ export default function SalesKPICards({
                   <div className="flex justify-between text-slate-600">
                     <span>สูงสุด:</span>
                     <span className="font-semibold truncate ml-2">
-                      {(kpi.max as number).toLocaleString("th-TH", {
+                      ฿{(kpi.max as number).toLocaleString("th-TH", {
                         maximumFractionDigits: 0,
                       })}
                     </span>
@@ -286,19 +286,19 @@ export default function SalesKPICards({
                       </span>
                     </td>
                     <td className="px-2 lg:px-4 py-2 lg:py-3 text-right font-semibold text-slate-800 text-xs lg:text-sm whitespace-nowrap">
-                      {row.total_sales.toLocaleString('th-TH', {
+                      ฿ {row.total_sales.toLocaleString('th-TH', {
                         minimumFractionDigits: 0,
                         maximumFractionDigits: 0,
                       })}
                     </td>
                     <td className="px-2 lg:px-4 py-2 lg:py-3 text-right font-semibold text-slate-800 text-xs lg:text-sm whitespace-nowrap">
-                      {row.cost.toLocaleString('th-TH', {
+                      ฿ {row.cost.toLocaleString('th-TH', {
                         minimumFractionDigits: 0,
                         maximumFractionDigits: 0,
                       })}
                     </td>
                     <td className="px-2 lg:px-4 py-2 lg:py-3 text-right font-semibold text-green-600 text-xs lg:text-sm whitespace-nowrap">
-                      {row.profit.toLocaleString('th-TH', {
+                      ฿ {row.profit.toLocaleString('th-TH', {
                         minimumFractionDigits: 0,
                         maximumFractionDigits: 0,
                       })}

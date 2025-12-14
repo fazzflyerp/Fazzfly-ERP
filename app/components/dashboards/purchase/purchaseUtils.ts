@@ -486,7 +486,14 @@ export function generatePendingItems(rows: any[]): any[] {
   });
 
   // Group by product
-  const grouped: Record<string, {count: number; suppliers: string[]; dates: string[]}> = {};
+  const grouped: Record<string, {
+    count: number; 
+    suppliers: string[]; 
+    dates: string[];
+    deliverdates: string[];
+    total_quantity: number;  // ✅ เพิ่ม total quantity
+    unit: string;            // ✅ เพิ่ม unit
+  }> = {};
 
   pending.forEach((row) => {
     const product = String(row.product || "").trim();
@@ -494,16 +501,30 @@ export function generatePendingItems(rows: any[]): any[] {
 
     const supplier = String(row.suppliers || "").trim();
     const date = String(row.date || "").trim();
+    const deliverdate = String(row.deliverdate || "").trim();
+    const quantity = parseNumericValue(row.quantity) || 0;  // ✅ เพิ่ม
+    const unit = String(row.unit || "").trim();             // ✅ เพิ่ม (order 5)
 
     if (!grouped[product]) {
-      grouped[product] = { count: 0, suppliers: [], dates: [] };
+      grouped[product] = { 
+        count: 0, 
+        suppliers: [], 
+        dates: [],
+        deliverdates: [],
+        total_quantity: 0,  // ✅ เพิ่ม
+        unit: unit || "-"   // ✅ เพิ่ม
+      };
     }
     grouped[product].count += 1;
+    grouped[product].total_quantity += quantity;  // ✅ เพิ่ม
     if (supplier && !grouped[product].suppliers.includes(supplier)) {
       grouped[product].suppliers.push(supplier);
     }
     if (date) {
       grouped[product].dates.push(date);
+    }
+    if (deliverdate) {
+      grouped[product].deliverdates.push(deliverdate);
     }
   });
 
@@ -511,8 +532,11 @@ export function generatePendingItems(rows: any[]): any[] {
     .map(([name, data]) => ({
       product_name: name,
       pending_count: data.count,
+      total_quantity: data.total_quantity,        // ✅ เพิ่ม
+      unit: data.unit,                            // ✅ เพิ่ม
       suppliers: data.suppliers.join(", "),
       earliest_date: data.dates.length > 0 ? data.dates.sort()[0] : "-",
+      earliest_deliverdate: data.deliverdates.length > 0 ? data.deliverdates.sort()[0] : "-",
     }))
     .sort((a, b) => b.pending_count - a.pending_count);
 
