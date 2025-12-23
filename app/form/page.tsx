@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Loader2, CheckCircle, AlertCircle, Trash2, Plus, RefreshCw, X } from "lucide-react";
+import ImageUpload from "../components/ImageUpload";
 
 interface FormField {
     fieldName: string;
@@ -295,7 +296,6 @@ export default function FormPage() {
                 behavior: 'smooth'
             });
 
-            // ✅ ซ่อนข้อความสำเร็จหลัง 5 วินาที
             setTimeout(() => {
                 setSuccess(false);
             }, 5000);
@@ -306,7 +306,6 @@ export default function FormPage() {
         }
     };
 
-    // ===== LOADING STATE =====
     if (loading) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4" style={{ fontFamily: "'Noto Sans Thai', sans-serif" }}>
@@ -337,7 +336,6 @@ export default function FormPage() {
                 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap');
             `}</style>
             <div className="max-w-5xl mx-auto">
-                {/* Header with Back Button */}
                 <div className="mb-8 flex justify-between items-start animate-fadeInDown">
                     <div className="space-y-2">
                         <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
@@ -353,7 +351,6 @@ export default function FormPage() {
                     </button>
                 </div>
 
-                {/* Error Message */}
                 {error && (
                     <div className="mb-8 animate-slideInDown">
                         <div className="bg-red-50 border-l-4 border-red-500 rounded-2xl p-6 shadow-lg shadow-red-100/50 flex gap-4 items-start">
@@ -369,7 +366,6 @@ export default function FormPage() {
                     </div>
                 )}
 
-                {/* Success Message */}
                 {success && (
                     <div className="mb-8 animate-slideInDown">
                         <div className="bg-green-50 border-l-4 border-green-500 rounded-2xl p-6 shadow-lg shadow-green-100/50 flex gap-4 items-start">
@@ -382,7 +378,6 @@ export default function FormPage() {
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-8">
-                    {/* ===== CUSTOMER SECTION ===== */}
                     {hasSection && customerFields.length > 0 && (
                         <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden animate-fadeInUp" style={{ animationDelay: "0.1s" }}>
                             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-6">
@@ -398,13 +393,23 @@ export default function FormPage() {
                                     {customerFields.map((field, idx) => (
                                         <div
                                             key={field.fieldName}
-                                            className={`${field.type === "textarea" ? "md:col-span-2" : ""} animate-fadeInUp`}
+                                            className={`${field.type === "textarea" || field.type === "image" ? "md:col-span-2" : ""} animate-fadeInUp`}
                                             style={{ animationDelay: `${(idx + 1) * 50}ms` }}
                                         >
                                             <label className="block text-sm font-semibold text-slate-700 mb-3">
                                                 {field.label}
                                                 {field.required && <span className="text-red-500 ml-1">*</span>}
                                             </label>
+
+                                            {field.type === "image" && (
+                                                <ImageUpload
+                                                    fieldName={field.fieldName}
+                                                    label={field.label}
+                                                    required={field.required}
+                                                    value={customerData[field.fieldName] || ""}
+                                                    onChange={(url) => handleCustomerChange(field.fieldName, url)}
+                                                />
+                                            )}
 
                                             {field.type === "dropdown" && field.helper && (
                                                 <select
@@ -465,7 +470,6 @@ export default function FormPage() {
                         </div>
                     )}
 
-                    {/* ===== LINE ITEMS SECTION ===== */}
                     {(lineItemFields.length > 0 || (!hasSection && formFields.length > 0)) && (
                         <div className="space-y-6">
                             <div className="flex items-center justify-between">
@@ -473,7 +477,7 @@ export default function FormPage() {
                                     <svg className="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
                                         <path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-0.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l0.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-0.9-2-2-2z" />
                                     </svg>
-                                    {hasSection ? "รายการ" : "รายการ"}
+                                    รายการ
                                 </h2>
                                 <span className="px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold">
                                     {lineItems.length} รายการ
@@ -491,7 +495,7 @@ export default function FormPage() {
                                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                                                 <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
                                             </svg>
-                                            {hasSection ? "รายการที่" : "รายการที่"} {idx + 1}
+                                            รายการที่ {idx + 1}
                                         </h3>
                                         {lineItems.length > 1 && (
                                             <button
@@ -510,13 +514,29 @@ export default function FormPage() {
                                             {(lineItemFields.length > 0 ? lineItemFields : formFields).map((field, fieldIdx) => (
                                                 <div
                                                     key={field.fieldName}
-                                                    className={`${field.type === "textarea" ? "md:col-span-2" : ""} animate-fadeInUp`}
+                                                    className={`${field.type === "textarea" || field.type === "image" ? "md:col-span-2" : ""} animate-fadeInUp`}
                                                     style={{ animationDelay: `${(fieldIdx + 1) * 50}ms` }}
                                                 >
                                                     <label className="block text-sm font-semibold text-slate-700 mb-3">
                                                         {field.label}
                                                         {field.required && <span className="text-red-500 ml-1">*</span>}
                                                     </label>
+
+                                                    {field.type === "image" && (
+                                                        <ImageUpload
+                                                            fieldName={field.fieldName}
+                                                            label={field.label}
+                                                            required={field.required}
+                                                            value={row[field.fieldName] || ""}
+                                                            onChange={(url) =>
+                                                                handleLineItemChange(
+                                                                    field.fieldName,
+                                                                    url,
+                                                                    idx
+                                                                )
+                                                            }
+                                                        />
+                                                    )}
 
                                                     {field.type === "dropdown" && field.helper && (
                                                         <select
@@ -624,19 +644,17 @@ export default function FormPage() {
                                 </div>
                             ))}
 
-                            {/* Add Line Item Button */}
                             <button
                                 type="button"
                                 onClick={addLineItem}
                                 className="w-full px-6 py-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-2xl hover:shadow-lg font-semibold transition-all duration-300 flex items-center justify-center gap-2 text-lg animate-fadeInUp"
                             >
                                 <Plus className="w-6 h-6" />
-                                เพิ่ม{hasSection ? "รายการ" : "รายการ"}ใหม่
+                                เพิ่มรายการใหม่
                             </button>
                         </div>
                     )}
 
-                    {/* Action Buttons */}
                     <div className="grid md:grid-cols-3 gap-4 mt-10 animate-fadeInUp">
                         <button
                             type="button"

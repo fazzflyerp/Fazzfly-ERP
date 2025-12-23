@@ -1,8 +1,8 @@
 /**
- * NextAuth Route Handler - Updated
+ * NextAuth Route Handler - CORRECTED
  * Location: app/api/auth/[...nextauth]/route.ts
  *
- * เพิ่ม drive.readonly scope
+ * ✅ ใช้ drive.file สำหรับ upload ไฟล์
  */
 
 import NextAuth, { NextAuthOptions } from "next-auth";
@@ -13,7 +13,7 @@ const scopes = [
   "email",
   "profile",
   "https://www.googleapis.com/auth/spreadsheets",
-  "https://www.googleapis.com/auth/drive.readonly"  // ← เพิ่มนี่
+  "https://www.googleapis.com/auth/drive.file"  // ✅ แก้เป็น drive.file
 ].join(" ");
 
 const authOptions: NextAuthOptions = {
