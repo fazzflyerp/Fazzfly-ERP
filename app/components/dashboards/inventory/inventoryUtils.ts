@@ -65,6 +65,18 @@ function parseNumericValue(raw: any): number | null {
  * ✅ Returns: Total stock value (sum of stockprice) + Unique product count
  * ✅ stockprice is already calculated value, no need to multiply
  */
+export interface KPIData {
+  totalValue: number;           // มูลค่าสต๊อครวม
+  productCount: number;         // จำนวนประเภทสินค้า (unique products)
+  lowStockCount: number;        // ✅ สต๊อกต่ำ
+  criticalStockCount: number;   // ✅ ใกล้หมด
+  normalStockCount: number;     // ✅ ปกติ
+}
+
+/**
+ * Generate KPI data for Inventory Dashboard
+ * ✅ Returns: Total stock value + Product counts by status
+ */
 export function generateInventoryKPI(
   rows: any[],
   configFields: ConfigField[]
@@ -75,26 +87,9 @@ export function generateInventoryKPI(
   console.log("   Config fields:", configFields.length);
   console.log("═".repeat(60));
 
-  // Debug: Show all config fields
-  console.log("📋 Available config fields:");
-  configFields.forEach((f, i) => {
-    console.log(`   [${i}] fieldName: "${f.fieldName}", label: "${f.label}", type: "${f.type}", order: ${f.order}`);
-  });
-
-  // Debug: Show first row structure
-  if (rows.length > 0) {
-    console.log("\n📊 First row structure:");
-    const firstRow = rows[0];
-    console.log(`   Keys: ${Object.keys(firstRow).join(", ")}`);
-    console.log(`   Full row:`, firstRow);
-  }
-
-  console.log("\n🔍 Searching for required fields...");
-
-  // ✅ Find Product Field
+  // Find required fields with fallbacks
   let productField = configFields.find((f) => f.fieldName === "product");
   if (!productField) {
-    console.log("   ⚠️ 'product' not found, trying alternatives...");
     productField = configFields.find(
       (f) => 
         f.fieldName === "Product" ||
@@ -103,12 +98,9 @@ export function generateInventoryKPI(
         (f.type === "text" && f.order === 1)
     );
   }
-  console.log(`   Product field: ${productField ? `"${productField.fieldName}"` : "❌ NOT FOUND"}`);
   
-  // ✅ Find Stock Price Field - This is the TOTAL VALUE per product
   let stockPriceField = configFields.find((f) => f.fieldName === "stockprice");
   if (!stockPriceField) {
-    console.log("   ⚠️ 'stockprice' not found, trying alternatives...");
     stockPriceField = configFields.find(
       (f) => 
         f.fieldName === "value" ||
@@ -117,38 +109,46 @@ export function generateInventoryKPI(
         f.label?.toLowerCase().includes("value")
     );
   }
-  console.log(`   Stock Price field: ${stockPriceField ? `"${stockPriceField.fieldName}"` : "❌ NOT FOUND"}`);
+
+  // ✅ Find Status Field
+  let statusField = configFields.find((f) => f.fieldName === "status");
+  if (!statusField) {
+    statusField = configFields.find(
+      (f) => 
+        f.fieldName === "Status" ||
+        f.label?.toLowerCase().includes("สถานะ")
+    );
+  }
 
   if (!productField || !stockPriceField) {
     console.error("\n❌ Required fields not found!");
-    console.error("   Missing:");
-    if (!productField) console.error("   - Product field");
-    if (!stockPriceField) console.error("   - Stock Price field");
-    console.error("\n   Available field names:", configFields.map(f => f.fieldName).join(", "));
-    console.error("   Please check Config sheet field names match expectations");
-    console.log("═".repeat(60));
-    return { totalValue: 0, productCount: 0 };
+    return { 
+      totalValue: 0, 
+      productCount: 0, 
+      lowStockCount: 0, 
+      criticalStockCount: 0, 
+      normalStockCount: 0 
+    };
   }
 
   console.log("\n✅ All required fields found!");
   console.log(`   Using: product="${productField.fieldName}", stockprice="${stockPriceField.fieldName}"`);
-
-  // Debug: Sample values from first 3 rows
-  console.log("\n📊 Sample values (first 3 rows):");
-  rows.slice(0, 3).forEach((row, idx) => {
-    console.log(`   Row ${idx}:`);
-    console.log(`     ${productField.fieldName}: "${row[productField.fieldName]}"`);
-    console.log(`     ${stockPriceField.fieldName}: "${row[stockPriceField.fieldName]}"`);
-  });
+  if (statusField) {
+    console.log(`   Status field: "${statusField.fieldName}"`);
+  }
 
   let totalValue = 0;
   const uniqueProducts = new Set<string>();
+  let lowStockCount = 0;
+  let criticalStockCount = 0;
+  let normalStockCount = 0;
   let processedRows = 0;
   let skippedRows = 0;
 
   rows.forEach((row, index) => {
     const product = String(row[productField.fieldName] || "").trim();
     const stockPrice = parseNumericValue(row[stockPriceField.fieldName]);
+    const status = statusField ? String(row[statusField.fieldName] || "").trim() : "";
 
     if (!product) {
       skippedRows++;
@@ -159,18 +159,35 @@ export function generateInventoryKPI(
 
     uniqueProducts.add(product);
     totalValue += value;
+
+    // ✅ Count by status
+    const statusLower = status.toLowerCase();
+    if (statusLower.includes("ใกล้หมด")) {
+      criticalStockCount++;
+    } else if (statusLower.includes("สต๊อกต่ำ")) {
+      lowStockCount++;
+    } else if (statusLower.includes("ปกติ") || statusLower.includes("คงเหลือ")) {
+      normalStockCount++;
+    } else {
+      normalStockCount++; // Default to normal if unknown
+    }
+
     processedRows++;
 
     // Debug first 3 processed rows
     if (processedRows <= 3) {
       console.log(`\n   Processing row ${index}: ${product}`);
       console.log(`     Stock Price: ${row[stockPriceField.fieldName]} → ${value}`);
+      console.log(`     Status: "${status}"`);
     }
   });
 
   const result = {
     totalValue: Number(totalValue.toFixed(2)),
     productCount: uniqueProducts.size,
+    lowStockCount,
+    criticalStockCount,
+    normalStockCount,
   };
 
   console.log("\n" + "═".repeat(60));
@@ -179,6 +196,9 @@ export function generateInventoryKPI(
   console.log(`   Skipped: ${skippedRows} rows (empty product)`);
   console.log(`   Total Value: ฿${result.totalValue.toLocaleString("th-TH")}`);
   console.log(`   Unique Products: ${result.productCount}`);
+  console.log(`    Critical (ใกล้หมด): ${result.criticalStockCount}`);
+  console.log(`    Low Stock (สต๊อกต่ำ): ${result.lowStockCount}`);
+  console.log(`    Normal (ปกติ): ${result.normalStockCount}`);
   console.log("═".repeat(60));
 
   return result;

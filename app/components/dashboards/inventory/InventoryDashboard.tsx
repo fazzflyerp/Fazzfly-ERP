@@ -41,7 +41,13 @@ export default function InventoryDashboard({
   // State
   const [config, setConfig] = useState<ConfigField[]>([]);
   const [allData, setAllData] = useState<any[]>([]);
-  const [kpiData, setKpiData] = useState<KPIData>({ totalValue: 0, productCount: 0 });
+  const [kpiData, setKpiData] = useState<KPIData>({ 
+    totalValue: 0, 
+    productCount: 0,
+    lowStockCount: 0,
+    criticalStockCount: 0,
+    normalStockCount: 0
+  });
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
   const [productTableData, setProductTableData] = useState<ProductTableRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,17 +70,19 @@ export default function InventoryDashboard({
   /**
    * Fetch configuration and data from API
    */
-  async function fetchData() {
+  async function fetchData(retryCount = 0) {
+    const MAX_RETRIES = 2;
+    
     try {
       setLoading(true);
       setError(null);
 
-      console.log("━".repeat(60));
-      console.log("🔄 Fetching inventory data...");
+      console.log("═".repeat(60));
+      console.log(`📄 Fetching inventory data... (Attempt ${retryCount + 1}/${MAX_RETRIES + 1})`);
       console.log(`   Spreadsheet ID: ${spreadsheetId}`);
       console.log(`   Config Sheet: ${configSheetName}`);
       console.log(`   Data Sheet: ${dataSheetName}`);
-      console.log("━".repeat(60));
+      console.log("═".repeat(60));
 
       const params = new URLSearchParams({
         spreadsheetId,
@@ -85,19 +93,32 @@ export default function InventoryDashboard({
       const fullUrl = `/api/dashboard/data?${params}`;
       console.log("🌐 Full API URL:", fullUrl);
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+
       console.log("📤 Sending request...");
       const res = await fetch(fullUrl, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
+        signal: controller.signal,
       });
 
-      console.log("🔡 Response Status:", res.status);
+      clearTimeout(timeoutId);
+
+      console.log("📡 Response Status:", res.status);
 
       if (!res.ok) {
         const errorText = await res.text();
         console.error("❌ API Error:", errorText);
+        
+        if ((res.status === 500 || errorText.includes('timeout')) && retryCount < MAX_RETRIES) {
+          console.log(`🔄 Retrying in 3 seconds... (${retryCount + 1}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          return fetchData(retryCount + 1);
+        }
+        
         throw new Error(`HTTP ${res.status}: ${errorText}`);
       }
 
@@ -114,16 +135,26 @@ export default function InventoryDashboard({
       console.log("✅ Data loaded successfully:");
       console.log("   Config fields:", data.config.length);
       console.log("   Data records:", data.data.length);
-      console.log("━".repeat(60));
+      console.log("═".repeat(60));
 
       setConfig(data.config);
       setAllData(data.data);
 
-    } catch (err) {
-      console.error("━".repeat(60));
+    } catch (err: any) {
+      console.error("═".repeat(60));
       console.error("❌ Error fetching data:", err);
-      console.error("━".repeat(60));
-      setError(err instanceof Error ? err.message : "Unknown error");
+      console.error("═".repeat(60));
+      
+      if (err.name === 'AbortError') {
+        if (retryCount < MAX_RETRIES) {
+          console.log(`🔄 Timeout - Retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          return fetchData(retryCount + 1);
+        }
+        setError("Request timeout - Sheet อาจมีข้อมูลเยอะเกินไป กรุณาลองใหม่อีกครั้ง");
+      } else {
+        setError(err instanceof Error ? err.message : "Unknown error");
+      }
     } finally {
       setLoading(false);
     }
@@ -136,15 +167,12 @@ export default function InventoryDashboard({
     console.log("🔄 Processing inventory data...");
 
     try {
-      // Generate KPIs
       const kpi = generateInventoryKPI(allData, config);
       setKpiData(kpi);
 
-      // Get low stock items
       const lowStock = getLowStockItems(allData, config);
       setLowStockItems(lowStock);
 
-      // Generate product table
       const tableData = generateProductTableData(allData, config);
       setProductTableData(tableData);
 
@@ -155,57 +183,72 @@ export default function InventoryDashboard({
     }
   }
 
-   // ============================================================
-    // UI: Loading state
-    // ============================================================
-    if (loading && allData.length === 0) {
-      // ✅ Show loading only on initial load
-      return (
-        <div className="flex items-center justify-center p-12">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-slate-600">กำลังโหลดข้อมูล Inventory Dashboard...</p>
+  // ============================================================
+  // UI: Loading state
+  // ============================================================
+  if (loading && allData.length === 0) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-slate-600">กำลังโหลดข้อมูล Inventory Dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================
+  // UI: Error state
+  // ============================================================
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+        <p className="text-red-700 font-semibold">❌ {error}</p>
+      </div>
+    );
+  }
+
+  // ============================================================
+  // UI: Empty state
+  // ============================================================
+  if (config.length === 0 || allData.length === 0) {
+    return (
+      <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
+        <p className="text-yellow-700 font-semibold">
+          ⚠️ ไม่พบ config หรือข้อมูล
+        </p>
+      </div>
+    );
+  }
+
+  // ============================================================
+  // UI: Main Dashboard - FULL WIDTH (like Sales)
+  // ============================================================
+  return (
+    <div className="space-y-6">
+      {/* Debug Info - Development Only */}
+      {process.env.NODE_ENV === "development" && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs">
+          <p className="font-bold text-blue-900 mb-2">🐛 Debug Info:</p>
+          <div className="grid grid-cols-2 gap-2 text-blue-800">
+            <div>✅ Config: {config.length} fields</div>
+            <div>✅ Data: {allData.length} rows</div>
+            <div>🔴 Critical: {kpiData.criticalStockCount}</div>
+            <div>🟠 Low Stock: {kpiData.lowStockCount}</div>
+            <div>🟢 Normal: {kpiData.normalStockCount}</div>
+            <div>💰 Total Value: ฿{kpiData.totalValue.toLocaleString()}</div>
           </div>
         </div>
-      );
-    }
-  
-    // ============================================================
-    // UI: Error state
-    // ============================================================
-    if (error) {
-      return (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-6">
-          <p className="text-red-700 font-semibold">❌ {error}</p>
-        </div>
-      );
-    }
-  
-    // ============================================================
-    // UI: Empty state
-    // ============================================================
-    if (config.length === 0 || allData.length === 0) {
-      return (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
-          <p className="text-yellow-700 font-semibold">
-            ⚠️ ไม่พบ config หรือข้อมูล
-          </p>
-        </div>
-      );
-    }
+      )}
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4 lg:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* KPI Cards */}
-        <InventoryKPICards kpiData={kpiData} />
+      {/* KPI Cards */}
+      <InventoryKPICards kpiData={kpiData} />
 
-        {/* Low Stock Alert */}
-        <LowStockAlert lowStockItems={lowStockItems} />
+      {/* Low Stock Alert */}
+      <LowStockAlert lowStockItems={lowStockItems} />
 
-        {/* Product Table */}
-        <InventoryProductTable products={productTableData} />
-      </div>
+      {/* Product Table */}
+      <InventoryProductTable products={productTableData} />
     </div>
   );
 }

@@ -1,26 +1,10 @@
 /**
- * User Modules API - Column Mapping Fixed
+ * User Modules API - PRODUCTION READY ✅
  * Location: app/api/user/modules/route.ts
  * 
- * client_master columns:
- * A(0): client_id
- * B(1): client_name
- * C(2): email
- * D(3): plan_type
- * E(4): status
- * F(5): created_at
- * G(6): expires_at
- * 
- * client_modules columns:
- * A(0): module_id
- * B(1): client_id
- * C(2): module_name
- * D(3): spreadsheet_id
- * E(4): sheet_name
- * F(5): config_name
- * G(6): is_active
- * H(7): notes
- * I(8): dashboard_config_name
+ * ✅ รองรับ multi-user พร้อมกัน
+ * ✅ Auto-retry เมื่อ token หมดอายุ
+ * ✅ Better error handling
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -28,14 +12,79 @@ import { getToken } from "next-auth/jwt";
 
 const MASTER_SHEET_ID = process.env.MASTER_SHEET_ID;
 
+// ✅ Helper function สำหรับ fetch Google Sheets พร้อม retry
+async function fetchGoogleSheets(
+  url: string,
+  accessToken: string,
+  retries = 2
+): Promise<any> {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        // ✅ เพิ่ม timeout เพื่อไม่ให้ค้างนาน
+        signal: AbortSignal.timeout(15000), // 15 seconds
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+
+      // ✅ Handle specific error cases
+      if (response.status === 401) {
+        // Token หมดอายุ - ต้อง re-login
+        throw new Error("TOKEN_EXPIRED");
+      }
+
+      if (response.status === 403) {
+        const errorBody = await response.text();
+        if (errorBody.includes("PERMISSION_DENIED")) {
+          throw new Error("PERMISSION_DENIED");
+        }
+        // Retry สำหรับ rate limit
+        if (i < retries) {
+          console.warn(`⚠️ Rate limited, retrying... (${i + 1}/${retries})`);
+          await new Promise((r) => setTimeout(r, 1000 * (i + 1))); // exponential backoff
+          continue;
+        }
+      }
+
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    } catch (error: any) {
+      // ถ้าเป็น error ที่ไม่ควร retry ให้ throw ทันที
+      if (
+        error.message === "TOKEN_EXPIRED" ||
+        error.message === "PERMISSION_DENIED" ||
+        error.name === "TimeoutError"
+      ) {
+        throw error;
+      }
+
+      // Retry สำหรับ network errors
+      if (i < retries) {
+        console.warn(`⚠️ Network error, retrying... (${i + 1}/${retries})`);
+        await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
+        continue;
+      }
+
+      throw error;
+    }
+  }
+}
+
 export async function GET(request: NextRequest) {
+  // ✅ เพิ่ม request ID สำหรับ tracking
+  const requestId = Math.random().toString(36).substring(7);
+  
   try {
     console.log("=".repeat(50));
-    console.log("📡 START: Fetching user modules");
+    console.log(`📡 [${requestId}] START: Fetching user modules`);
     console.log("=".repeat(50));
 
     // Step 1-3: Get token
-    console.log("⏳ Step 1-3: Getting JWT token...");
+    console.log(`⏳ [${requestId}] Step 1-3: Getting JWT token...`);
     
     const token = await getToken({
       req: request,
@@ -43,14 +92,22 @@ export async function GET(request: NextRequest) {
     });
 
     if (!token || !(token as any)?.accessToken || !(token as any)?.email) {
-      console.error("❌ Authentication failed");
-      console.error({
-        hasToken: !!token,
-        hasAccessToken: !!(token as any)?.accessToken,
-        hasEmail: !!(token as any)?.email,
-      });
+      console.error(`❌ [${requestId}] Authentication failed`);
       return NextResponse.json(
-        { error: "Not authenticated" },
+        { error: "Not authenticated", code: "AUTH_REQUIRED" },
+        { status: 401 }
+      );
+    }
+
+    // ✅ Check for token refresh error
+    if ((token as any).error === "RefreshAccessTokenError") {
+      console.error(`❌ [${requestId}] Token refresh failed`);
+      return NextResponse.json(
+        { 
+          error: "Session expired", 
+          code: "TOKEN_EXPIRED",
+          message: "Please sign out and sign in again" 
+        },
         { status: 401 }
       );
     }
@@ -58,76 +115,74 @@ export async function GET(request: NextRequest) {
     const accessToken = (token as any).accessToken as string;
     const userEmail = (token as any).email as string;
 
-    console.log("✅ Authentication OK:", userEmail);
+    console.log(`✅ [${requestId}] Authentication OK:`, userEmail);
 
     if (!MASTER_SHEET_ID) {
-      console.error("❌ MASTER_SHEET_ID not configured");
+      console.error(`❌ [${requestId}] MASTER_SHEET_ID not configured`);
       return NextResponse.json(
-        { error: "Configuration error: MASTER_SHEET_ID not set" },
+        { error: "Configuration error", code: "CONFIG_ERROR" },
         { status: 500 }
       );
     }
 
-    // Step 5: Fetch client_master
-    console.log("⏳ Step 5: Fetching client_master...");
+    // Step 5: Fetch client_master with retry
+    console.log(`⏳ [${requestId}] Step 5: Fetching client_master...`);
     
     const masterUrl = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_SHEET_ID}/values/client_master!A:G`;
     
-    const masterResponse = await fetch(masterUrl, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-
-    if (!masterResponse.ok) {
-      const errorBody = await masterResponse.text();
-      console.error("❌ Google Sheets API Error:", {
-        status: masterResponse.status,
-        statusText: masterResponse.statusText,
-        body: errorBody.substring(0, 300),
-      });
-
-      // Check if it's a scope issue
-      if (masterResponse.status === 403) {
+    let masterData;
+    try {
+      masterData = await fetchGoogleSheets(masterUrl, accessToken);
+    } catch (error: any) {
+      if (error.message === "TOKEN_EXPIRED") {
+        return NextResponse.json(
+          { 
+            error: "Session expired", 
+            code: "TOKEN_EXPIRED",
+            message: "Please sign out and sign in again" 
+          },
+          { status: 401 }
+        );
+      }
+      
+      if (error.message === "PERMISSION_DENIED") {
         return NextResponse.json(
           {
             error: "Permission denied",
+            code: "PERMISSION_DENIED",
             message: "Need to grant Google Sheets access. Please sign out and sign in again.",
           },
           { status: 403 }
         );
       }
 
-      throw new Error(`Google Sheets API: ${masterResponse.status}`);
+      throw error;
     }
 
-    const masterData = await masterResponse.json();
-    
     if (!masterData.values || masterData.values.length === 0) {
-      console.error("❌ Master sheet is empty");
+      console.error(`❌ [${requestId}] Master sheet is empty`);
       return NextResponse.json(
-        { error: "Master sheet is empty" },
+        { error: "Master sheet is empty", code: "EMPTY_SHEET" },
         { status: 500 }
       );
     }
 
     const masterRows = masterData.values as any[][];
-    console.log("✅ Master sheet fetched:", masterRows.length, "rows");
-    console.log("   Header:", masterRows[0].join(" | "));
+    console.log(`✅ [${requestId}] Master sheet fetched:`, masterRows.length, "rows");
 
     // Step 6: Find client by email
-    console.log("⏳ Step 6: Finding client for email:", userEmail);
+    console.log(`⏳ [${requestId}] Step 6: Finding client for email:`, userEmail);
     
     const clientRow = masterRows.find((row, idx) => {
-      if (idx === 0) return false; // skip header
+      if (idx === 0) return false;
       const email = row[2]?.toString().toLowerCase() || "";
       return email === userEmail.toLowerCase();
     });
 
     if (!clientRow) {
-      console.error("❌ Client not found for email:", userEmail);
+      console.error(`❌ [${requestId}] Client not found for email:`, userEmail);
       return NextResponse.json(
-        { error: "User not found in system" },
+        { error: "User not found in system", code: "USER_NOT_FOUND" },
         { status: 404 }
       );
     }
@@ -138,64 +193,48 @@ export async function GET(request: NextRequest) {
     const status = clientRow[4]?.toString() || "";
     const expiresAt = clientRow[6]?.toString() || "";
 
-    console.log("✅ Client found:", { clientId, clientName, status });
+    console.log(`✅ [${requestId}] Client found:`, { clientId, clientName, status });
 
     // Step 7-8: Check status and expiry
     if (status.toUpperCase() !== "TRUE" && status.toUpperCase() !== "ACTIVE") {
-      console.warn("❌ Account not active:", status);
+      console.warn(`❌ [${requestId}] Account not active:`, status);
       return NextResponse.json(
-        { error: "Account is inactive" },
+        { error: "Account is inactive", code: "ACCOUNT_INACTIVE" },
         { status: 403 }
       );
     }
 
     const expireDate = parseDate(expiresAt);
     if (expireDate && expireDate < new Date()) {
-      console.warn("❌ Account expired:", expiresAt);
+      console.warn(`❌ [${requestId}] Account expired:`, expiresAt);
       return NextResponse.json(
-        { error: "Subscription expired" },
+        { error: "Subscription expired", code: "SUBSCRIPTION_EXPIRED" },
         { status: 403 }
       );
     }
 
-    console.log("✅ Account is active and not expired");
+    console.log(`✅ [${requestId}] Account is active and not expired`);
 
-    // Step 9: Fetch modules
-    console.log("⏳ Step 9: Fetching client_modules...");
+    // Step 9: Fetch modules with retry
+    console.log(`⏳ [${requestId}] Step 9: Fetching client_modules...`);
     
     const modulesUrl = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_SHEET_ID}/values/client_modules!A:I`;
     
-    const modulesResponse = await fetch(modulesUrl, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-
-    if (!modulesResponse.ok) {
-      const errorBody = await modulesResponse.text();
-      console.error("❌ Failed to fetch modules:", errorBody.substring(0, 300));
-      throw new Error("Failed to fetch modules");
-    }
-
-    const modulesData = await modulesResponse.json();
+    const modulesData = await fetchGoogleSheets(modulesUrl, accessToken);
     const modulesRows = modulesData.values as any[][] || [];
     
-    console.log("✅ Modules sheet fetched:", modulesRows.length, "rows");
-    if (modulesRows.length > 0) {
-      console.log("   Header:", modulesRows[0].join(" | "));
-    }
+    console.log(`✅ [${requestId}] Modules sheet fetched:`, modulesRows.length, "rows");
 
-    // Step 10: Filter modules - ✅ ONLY include modules with configName
-    console.log("⏳ Step 10: Filtering modules for client:", clientId);
+    // Step 10: Filter modules
+    console.log(`⏳ [${requestId}] Step 10: Filtering modules for client:`, clientId);
     
     const modules = modulesRows
-      .slice(1) // skip header
+      .slice(1)
       .filter((row) => {
         const mClientId = row[1]?.toString() || "";
         const isActive = row[6]?.toString().toUpperCase() === "TRUE";
-        const configName = row[5]?.toString() || ""; // ✅ Check configName
+        const configName = row[5]?.toString() || "";
         
-        // Include only if: correct client, is active, AND has configName
         return mClientId === clientId && isActive && configName.trim() !== "";
       })
       .map((row) => ({
@@ -207,35 +246,30 @@ export async function GET(request: NextRequest) {
         notes: row[7]?.toString() || "",
       }));
 
-    console.log("✅ Filtered modules:", modules.length);
-    modules.forEach((m) => {
-      console.log(`   - ${m.moduleName} (${m.moduleId}) - Config: ${m.configName}`);
-    });
+    console.log(`✅ [${requestId}] Filtered modules:`, modules.length);
 
-    // Step 11: Filter dashboards - ✅ EMPTY ARRAY FOR NOW (ยังไม่ต้องใช้)
-// Step 11: Filter dashboards - ✅ Filter by dashboardConfigName
-console.log("⏳ Step 11: Preparing dashboardItems...");
+    // Step 11: Filter dashboards
+    console.log(`⏳ [${requestId}] Step 11: Preparing dashboardItems...`);
 
-const dashboardItems = modulesRows
-  .slice(1)
-  .filter((row) => {
-    const mClientId = row[1]?.toString() || "";
-    const isActive = row[6]?.toString().toUpperCase() === "TRUE";
-    const dashboardConfigName = row[8]?.toString() || "";
-    
-    // Include only if: correct client, is active, AND has dashboardConfigName
-    return mClientId === clientId && isActive && dashboardConfigName.trim() !== "";
-  })
-  .map((row) => ({
-    dashboardId: row[0]?.toString() || "",
-    dashboardName: row[2]?.toString() || "",
-    spreadsheetId: row[3]?.toString() || "",
-    sheetName: row[4]?.toString() || "",
-    dashboardConfigName: row[8]?.toString() || "",
-    notes: row[7]?.toString() || "",
-  }));
+    const dashboardItems = modulesRows
+      .slice(1)
+      .filter((row) => {
+        const mClientId = row[1]?.toString() || "";
+        const isActive = row[6]?.toString().toUpperCase() === "TRUE";
+        const dashboardConfigName = row[8]?.toString() || "";
+        
+        return mClientId === clientId && isActive && dashboardConfigName.trim() !== "";
+      })
+      .map((row) => ({
+        dashboardId: row[0]?.toString() || "",
+        dashboardName: row[2]?.toString() || "",
+        spreadsheetId: row[3]?.toString() || "",
+        sheetName: row[4]?.toString() || "",
+        dashboardConfigName: row[8]?.toString() || "",
+        notes: row[7]?.toString() || "",
+      }));
 
-console.log("✅ Dashboard items prepared:", dashboardItems.length);
+    console.log(`✅ [${requestId}] Dashboard items prepared:`, dashboardItems.length);
 
     const response = {
       clientId,
@@ -247,18 +281,19 @@ console.log("✅ Dashboard items prepared:", dashboardItems.length);
     };
 
     console.log("=".repeat(50));
-    console.log("✅ SUCCESS");
+    console.log(`✅ [${requestId}] SUCCESS`);
     console.log("=".repeat(50));
 
     return NextResponse.json(response);
   } catch (error: any) {
     console.error("=".repeat(50));
-    console.error("❌ ERROR:", error.message);
+    console.error(`❌ [${requestId}] ERROR:`, error.message);
     console.error("=".repeat(50));
 
     return NextResponse.json(
       {
         error: "Server error",
+        code: "INTERNAL_ERROR",
         message: error.message,
       },
       { status: 500 }

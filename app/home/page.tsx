@@ -528,7 +528,7 @@ export default function HomePage() {
       </nav>
 
       {/* Main Content - Mobile Optimized */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 lg:px-6 py-6 lg:py-12">
+      <div className="relative z-10 max-w-10xl mx-auto px-4 lg:px-6 py-6 lg:py-12">
         {/* Welcome Section */}
         <div className="mb-6 lg:mb-10">
           <h1 className="text-3xl lg:text-5xl font-bold text-slate-800 mb-2 lg:mb-3 break-words">

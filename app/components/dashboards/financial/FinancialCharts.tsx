@@ -89,14 +89,14 @@ export default function FinancialCharts({
               <Bar 
                 dataKey="cost" 
                 name="ต้นทุน" 
-                fill="#ef4444" 
+                fill="#efa244ff" 
                 stackId="a"
                 radius={[4, 4, 0, 0]}
               />
               <Bar 
                 dataKey="expense" 
                 name="ค่าใช้จ่าย" 
-                fill="#f59e0b" 
+                fill="#f5420bff" 
                 stackId="a"
                 radius={[4, 4, 0, 0]}
               />

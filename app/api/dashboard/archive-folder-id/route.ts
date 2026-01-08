@@ -1,107 +1,226 @@
 /**
- * API Route: Get Archive Folder ID - PRODUCTION READY
+ * Archive Folder ID API - PRODUCTION READY ✅
  * Location: app/api/dashboard/archive-folder-id/route.ts
  * 
- * ✅ Column indices verified: Index 9 = archive_folder_id
- * ✅ Flexible is_active check
+ * GET /api/dashboard/archive-folder-id?clientId=xxx&moduleName=yyy
+ * 
+ * ✅ Cache mechanism (15 min - ไม่ค่อยเปลี่ยน)
+ * ✅ Retry with exponential backoff
+ * ✅ Better error handling
+ * ✅ Request tracking
+ * ✅ Token expiry check
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-const MASTER_CONFIG_ID = "1j7LguHaX8pIvvQ1PqqenuguOsPT1QthJqXJyMYW2xo8";
+const MASTER_CONFIG_ID = process.env.MASTER_SHEET_ID || "1j7LguHaX8pIvvQ1PqqenuguOsPT1QthJqXJyMYW2xo8";
 const SHEET_NAME = "client_modules";
 
+// ✅ Cache (15 minutes - archive folder IDs ไม่ค่อยเปลี่ยน)
+const folderCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
+
+// ✅ Retry helper
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = 2
+): Promise<Response> {
+  for (let i = 0; i <= maxRetries; i++) {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: AbortSignal.timeout(15000), // 15 sec timeout
+      });
+
+      if (response.ok || response.status === 404) {
+        return response;
+      }
+
+      if ((response.status >= 500 || response.status === 403) && i < maxRetries) {
+        const delay = 1000 * Math.pow(2, i);
+        console.warn(`⚠️ Retry ${i + 1}/${maxRetries} in ${delay}ms`);
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+
+      return response;
+    } catch (error: any) {
+      if (error.name === "TimeoutError" || i === maxRetries) {
+        throw error;
+      }
+      await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, i)));
+    }
+  }
+  throw new Error("Max retries exceeded");
+}
+
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const clientId = searchParams.get("clientId");
-  const moduleName = searchParams.get("moduleName");
-
-  console.log("🧪 [getArchiveFolderId] API Called");
-  console.log("━".repeat(60));
-  console.log("📋 Parameters:");
-  console.log("   clientId:", clientId || "❌ MISSING");
-  console.log("   moduleName:", moduleName || "❌ MISSING");
-
-  if (!clientId || !moduleName) {
-    return NextResponse.json(
-      {
-        error: "❌ Missing required parameters",
-        required: ["clientId", "moduleName"],
-        received: { clientId, moduleName },
-      },
-      { status: 400 }
-    );
-  }
-
-  const token = await getToken({
-    req: request,
-    secret: process.env.NEXTAUTH_SECRET,
-  });
-
-  if (!token?.accessToken) {
-    console.error("❌ Not authenticated");
-    return NextResponse.json(
-      { error: "❌ Not authenticated" },
-      { status: 401 }
-    );
-  }
-
-  const accessToken = token.accessToken as string;
+  const requestId = Math.random().toString(36).substring(7);
 
   try {
-    console.log("\n📊 Fetching from Google Sheets...");
-    console.log(`   Sheet: ${SHEET_NAME}`);
+    console.log("=".repeat(60));
+    console.log(`📁 [${requestId}] ARCHIVE FOLDER ID API`);
+    console.log("=".repeat(60));
+
+    // ✅ PARSE PARAMS
+    const { searchParams } = new URL(request.url);
+    const clientId = searchParams.get("clientId");
+    const moduleName = searchParams.get("moduleName");
+
+    console.log(`📋 [${requestId}] Params:`, { clientId, moduleName });
+
+    // ✅ VALIDATE PARAMS
+    if (!clientId || !moduleName) {
+      return NextResponse.json(
+        {
+          error: "Missing parameters",
+          code: "MISSING_PARAMS",
+          message: "clientId and moduleName are required",
+          required: ["clientId", "moduleName"],
+          received: { clientId, moduleName },
+        },
+        { status: 400 }
+      );
+    }
+
+    // ✅ AUTH
+    const token = await getToken({
+      req: request,
+      secret: process.env.NEXTAUTH_SECRET,
+    });
+
+    if (!token) {
+      return NextResponse.json(
+        { error: "Unauthorized", code: "AUTH_REQUIRED" },
+        { status: 401 }
+      );
+    }
+
+    // ✅ Check token refresh error
+    if ((token as any).error === "RefreshAccessTokenError") {
+      return NextResponse.json(
+        {
+          error: "Session expired",
+          code: "TOKEN_EXPIRED",
+          message: "Please sign out and sign in again",
+        },
+        { status: 401 }
+      );
+    }
+
+    const accessToken = token.accessToken as string;
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: "No access token", code: "NO_TOKEN" },
+        { status: 401 }
+      );
+    }
+
+    const userEmail = (token as any)?.email;
+    console.log(`👤 [${requestId}] User: ${userEmail}`);
+
+    // ✅ CHECK CACHE
+    const cacheKey = `${clientId}:${moduleName}`;
+    const cached = folderCache.get(cacheKey);
+
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      console.log(`✅ [${requestId}] Cache hit`);
+      return NextResponse.json({
+        ...cached.data,
+        cached: true,
+      });
+    }
+
+    // ✅ FETCH FROM GOOGLE SHEETS WITH RETRY
+    console.log(`⏳ [${requestId}] Fetching from Google Sheets...`);
 
     const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_CONFIG_ID}/values/${SHEET_NAME}`;
 
-    const response = await fetch(sheetsUrl, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-    });
+    let response;
+    try {
+      response = await fetchWithRetry(sheetsUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+    } catch (error: any) {
+      console.error(`❌ [${requestId}] Fetch failed:`, error.message);
+      return NextResponse.json(
+        {
+          error: "Failed to fetch configuration",
+          code: "FETCH_ERROR",
+          message: error.message,
+        },
+        { status: 500 }
+      );
+    }
 
-    console.log("📡 Response Status:", response.status);
-
+    // ✅ HANDLE ERRORS
     if (!response.ok) {
+      if (response.status === 401) {
+        return NextResponse.json(
+          {
+            error: "Session expired",
+            code: "TOKEN_EXPIRED",
+            message: "Please sign out and sign in again",
+          },
+          { status: 401 }
+        );
+      }
+
+      if (response.status === 403) {
+        return NextResponse.json(
+          {
+            error: "Permission denied",
+            code: "PERMISSION_DENIED",
+            message: "No access to master configuration sheet",
+          },
+          { status: 403 }
+        );
+      }
+
       const errorText = await response.text();
-      console.error("❌ Sheets API Error:", errorText);
+      console.error(`❌ [${requestId}] Sheets API Error:`, errorText);
       throw new Error(`HTTP ${response.status}: ${errorText}`);
     }
 
     const data = await response.json();
 
     if (!data.values || data.values.length === 0) {
-      console.warn("⚠️ No data found in sheet");
+      console.warn(`⚠️ [${requestId}] No data found in sheet`);
       return NextResponse.json(
-        { error: "⚠️ No data in sheet" },
+        {
+          error: "No data in configuration sheet",
+          code: "EMPTY_SHEET",
+        },
         { status: 404 }
       );
     }
 
     const [headers, ...rows] = data.values;
 
-    console.log("\n📊 Sheet Structure:");
-    console.log("   Headers:", headers);
-    console.log("   Total Rows:", rows.length);
+    console.log(`📊 [${requestId}] Sheet: ${rows.length} rows`);
 
-    // ✅ VERIFIED Column Indices (based on actual sheet dump)
+    // ✅ Column indices (verified)
     const COLS = {
-      moduleId: 0,             // Col A: module_id
-      clientId: 1,             // Col B: client_id
-      moduleName: 2,           // Col C: module_name
-      spreadsheetId: 3,        // Col D: spreadsheet_id
-      sheetName: 4,            // Col E: sheet_name
-      configName: 5,           // Col F: config_name
-      isActive: 6,             // Col G: is_active
-      notes: 7,                // Col H: notes
-      dashboardConfigName: 8,  // Col I: Dashboard_Config_name
-      archiveFolderId: 9,      // Col J: archive_folder_id ✅ VERIFIED!
+      moduleId: 0,
+      clientId: 1,
+      moduleName: 2,
+      spreadsheetId: 3,
+      sheetName: 4,
+      configName: 5,
+      isActive: 6,
+      notes: 7,
+      dashboardConfigName: 8,
+      archiveFolderId: 9, // ✅ Column J
     };
 
-    console.log(`\n🔎 Searching for: clientId="${clientId}" + moduleName="${moduleName}"`);
+    console.log(`🔎 [${requestId}] Searching: clientId="${clientId}", moduleName="${moduleName}"`);
 
+    // ✅ FIND MATCHING ROW
     const matchingRow = rows.find((row: any[]) => {
       const rowClientId = String(row[COLS.clientId] || "").trim();
       const rowModuleName = String(row[COLS.moduleName] || "").trim();
@@ -109,103 +228,122 @@ export async function GET(request: NextRequest) {
 
       const clientMatch = rowClientId === clientId;
       const nameMatch = rowModuleName.toLowerCase() === moduleName.toLowerCase();
-      
-      // ✅ Flexible is_active check
-      // Accept: TRUE, YES, or any value that is NOT FALSE/NO/empty
-      const activeMatch = 
-        rowIsActive === "TRUE" || 
-        rowIsActive === "YES" || 
-        (rowIsActive !== "FALSE" && rowIsActive !== "NO" && rowIsActive !== "");
 
-      console.log(
-        `   Checking: client=${clientMatch} name=${nameMatch} active=${activeMatch} | ` +
-        `client_id="${rowClientId}" module_name="${rowModuleName}" is_active="${rowIsActive}"`
-      );
+      // ✅ Flexible is_active check
+      const activeMatch =
+        rowIsActive === "TRUE" ||
+        rowIsActive === "YES" ||
+        rowIsActive === "1" ||
+        (rowIsActive !== "FALSE" && rowIsActive !== "NO" && rowIsActive !== "0" && rowIsActive !== "");
 
       return clientMatch && nameMatch && activeMatch;
     });
 
     if (!matchingRow) {
-      console.warn(`\n⚠️ No matching row found`);
-      
-      console.log("\n📋 First 5 available rows:");
-      rows.slice(0, 5).forEach((row: any[], idx: number) => {
-        console.log(
-          `   Row ${idx + 2}: ` +
-          `client_id="${row[COLS.clientId]}" | ` +
-          `module_name="${row[COLS.moduleName]}" | ` +
-          `is_active="${row[COLS.isActive]}" | ` +
-          `archive_folder_id="${row[COLS.archiveFolderId]}"`
-        );
-      });
+      console.warn(`⚠️ [${requestId}] No matching row found`);
+
+      // ✅ Show available options for debugging
+      const availableModules = rows
+        .filter((row: any[]) => row[COLS.clientId] === clientId)
+        .map((row: any[]) => ({
+          moduleName: row[COLS.moduleName],
+          isActive: row[COLS.isActive],
+        }));
 
       return NextResponse.json(
         {
-          error: "❌ No matching configuration found",
+          error: "Configuration not found",
+          code: "CONFIG_NOT_FOUND",
+          message: `No active configuration found for client "${clientId}" and module "${moduleName}"`,
           searchedFor: { clientId, moduleName },
-          hint: "Check console for available rows. Make sure is_active is not FALSE or NO.",
+          availableModules: availableModules.length > 0 ? availableModules : undefined,
+          hint: "Check if module is active (is_active = TRUE/YES)",
         },
         { status: 404 }
       );
     }
 
-    console.log("✅ Matching row found!");
+    console.log(`✅ [${requestId}] Matching row found`);
 
+    // ✅ EXTRACT ARCHIVE FOLDER ID
     let archiveFolderId = String(matchingRow[COLS.archiveFolderId] || "").trim();
 
     if (!archiveFolderId || archiveFolderId === "undefined") {
-      console.warn("⚠️ archive_folder_id is empty or undefined in matching row");
+      console.warn(`⚠️ [${requestId}] archive_folder_id is empty`);
 
       return NextResponse.json(
         {
-          error: "⚠️ archive_folder_id is empty or not set",
+          error: "Archive folder not configured",
+          code: "NO_ARCHIVE_FOLDER",
+          message: "Archive folder ID is not set in configuration",
           row: {
             client_id: matchingRow[COLS.clientId],
             module_name: matchingRow[COLS.moduleName],
             is_active: matchingRow[COLS.isActive],
           },
-          hint: "Add archive folder ID in Google Sheet Column J",
+          hint: "Please add archive folder ID in Google Sheet Column J",
         },
         { status: 404 }
       );
     }
 
-    // ✅ Extract folder ID if it's a URL
+    // ✅ Extract folder ID from URL (if it's a full URL)
     const urlMatch = archiveFolderId.match(/folders\/([a-zA-Z0-9_-]+)/);
     if (urlMatch && urlMatch[1]) {
-      console.log("🔗 Extracted Folder ID from URL:", urlMatch[1]);
+      console.log(`🔗 [${requestId}] Extracted folder ID from URL`);
       archiveFolderId = urlMatch[1];
     }
 
-    console.log("\n✅ Success!");
-    console.log("   archive_folder_id:", archiveFolderId);
-    console.log("━".repeat(60));
+    console.log(`📁 [${requestId}] Archive folder: ${archiveFolderId}`);
 
-    return NextResponse.json(
-      {
-        success: true,
-        archiveFolderId,
-        clientId,
-        moduleName,
-        metadata: {
-          source: "client_modules sheet",
-          spreadsheetId: MASTER_CONFIG_ID,
-          sheet: SHEET_NAME,
-        },
+    // ✅ PREPARE RESULT
+    const result = {
+      success: true,
+      archiveFolderId,
+      clientId,
+      moduleName,
+      metadata: {
+        source: SHEET_NAME,
+        spreadsheetId: MASTER_CONFIG_ID,
+        moduleId: matchingRow[COLS.moduleId],
       },
-      { status: 200 }
-    );
+    };
+
+    // ✅ CACHE RESULT
+    folderCache.set(cacheKey, { data: result, timestamp: Date.now() });
+
+    console.log(`✅ [${requestId}] Success!`);
+    console.log("=".repeat(60));
+
+    return NextResponse.json(result);
   } catch (error: any) {
-    console.error("━".repeat(60));
-    console.error("❌ [getArchiveFolderId] Error:", error.message);
-    console.error("━".repeat(60));
+    console.error(`❌ [${requestId}] ERROR:`, error.message);
+    console.error(error.stack);
 
     return NextResponse.json(
       {
-        error: error.message,
-        details: error.stack,
+        error: "Internal server error",
+        code: "INTERNAL_ERROR",
+        message: error.message,
       },
       { status: 500 }
     );
   }
 }
+
+// ✅ BACKGROUND TASK: Clear expired cache every 20 minutes
+setInterval(() => {
+  const now = Date.now();
+  let cleared = 0;
+
+  for (const [key, value] of folderCache.entries()) {
+    if (now - value.timestamp > CACHE_DURATION) {
+      folderCache.delete(key);
+      cleared++;
+    }
+  }
+
+  if (cleared > 0) {
+    console.log(`🧹 Cleared ${cleared} expired folder cache entries`);
+  }
+}, 20 * 60 * 1000);

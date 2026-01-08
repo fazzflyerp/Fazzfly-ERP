@@ -1,8 +1,6 @@
 /**
- * NextAuth Route Handler - CORRECTED
- * Location: app/api/auth/[...nextauth]/route.ts
- *
- * ✅ ใช้ drive.file สำหรับ upload ไฟล์
+ * NextAuth Route Handler - PRODUCTION READY ✅
+ * รองรับหลาย user พร้อมกัน + ป้องกัน token leak
  */
 
 import NextAuth, { NextAuthOptions } from "next-auth";
@@ -13,7 +11,7 @@ const scopes = [
   "email",
   "profile",
   "https://www.googleapis.com/auth/spreadsheets",
-  "https://www.googleapis.com/auth/drive.file"  // ✅ แก้เป็น drive.file
+  "https://www.googleapis.com/auth/drive.file"
 ].join(" ");
 
 const authOptions: NextAuthOptions = {
@@ -34,24 +32,28 @@ const authOptions: NextAuthOptions = {
   ],
   
   callbacks: {
-    async jwt({ token, account }: any) {
-      // เก็บ accessToken + refreshToken เมื่อ login ครั้งแรก
+    async jwt({ token, account, user }: any) {
+      // ✅ เพิ่ม userId เพื่อ isolate token
+      if (user) {
+        token.userId = user.id;
+      }
+
+      // ✅ เก็บ token เฉพาะของ user นี้
       if (account) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
         token.expiresAt = Date.now() + (account.expires_in || 3600) * 1000;
+        token.scope = account.scope; // ✅ เก็บ scope ด้วย
       }
 
-      // ถ้า token หมดอายุ ให้ refresh ใหม่
-      if (token.expiresAt && Date.now() > token.expiresAt) {
+      // ✅ Auto-refresh with error handling
+      if (token.expiresAt && Date.now() > (token.expiresAt - 300000)) { // refresh 5 นาทีก่อนหมดอายุ
         try {
-          console.log("🔄 Refreshing Google token...");
+          console.log(`🔄 Refreshing token for user: ${token.email}`);
           
           const response = await fetch("https://oauth2.googleapis.com/token", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/x-www-form-urlencoded",
-            },
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: new URLSearchParams({
               client_id: process.env.GOOGLE_CLIENT_ID!,
               client_secret: process.env.GOOGLE_CLIENT_SECRET!,
@@ -61,23 +63,29 @@ const authOptions: NextAuthOptions = {
           });
 
           if (!response.ok) {
-            throw new Error("Failed to refresh token");
+            const error = await response.text();
+            throw new Error(`Token refresh failed: ${error}`);
           }
 
           const refreshed = await response.json();
 
-          console.log("✅ Token refreshed successfully");
+          console.log(`✅ Token refreshed for: ${token.email}`);
           
           return {
             ...token,
             accessToken: refreshed.access_token,
             expiresAt: Date.now() + (refreshed.expires_in || 3600) * 1000,
+            // ✅ เก็บ refreshToken เดิมไว้ (Google ไม่ return ใหม่ทุกครั้ง)
+            refreshToken: refreshed.refresh_token || token.refreshToken,
           };
         } catch (error) {
-          console.error("❌ Token refresh failed:", error);
+          console.error(`❌ Token refresh failed for ${token.email}:`, error);
+          
+          // ✅ ส่ง error กลับไป frontend เพื่อบังคับ re-login
           return {
             ...token,
             error: "RefreshAccessTokenError",
+            accessToken: null, // ลบ token ที่หมดอายุ
           };
         }
       }
@@ -86,13 +94,15 @@ const authOptions: NextAuthOptions = {
     },
     
     async session({ session, token }: any) {
-      // ส่ง accessToken ไป frontend ผ่าน session
-      session.accessToken = token.accessToken;
-      session.refreshToken = token.refreshToken;
-      session.expiresAt = token.expiresAt;
-      
+      // ✅ ส่งเฉพาะ accessToken ของ user นี้
       if (token.error) {
         session.error = token.error;
+        // ไม่ส่ง token ถ้ามี error
+        delete session.accessToken;
+      } else {
+        session.accessToken = token.accessToken;
+        session.user.id = token.userId;
+        session.expiresAt = token.expiresAt;
       }
       
       return session;
@@ -106,12 +116,13 @@ const authOptions: NextAuthOptions = {
   
   pages: {
     signIn: "/login",
+    error: "/auth/error", // ✅ เพิ่ม error page
   },
 
   session: {
     strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60,
-    updateAge: 60 * 60,
+    maxAge: 30 * 24 * 60 * 60, // 30 วัน
+    updateAge: 60 * 60, // update ทุก 1 ชั่วโมง
   },
 
   jwt: {
