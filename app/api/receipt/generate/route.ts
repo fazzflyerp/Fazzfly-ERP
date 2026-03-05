@@ -208,17 +208,17 @@ export async function POST(request: NextRequest) {
     doc.font("Sarabun");
     (receiptData.items || []).forEach((item) => {
       doc.text(item.description, colDescription, yPosition, { width: 250 });
-      
+
       if (item.quantity) {
         doc.text(item.quantity.toString(), colQty, yPosition, { width: 50, align: "right" });
       }
-      
+
       if (item.price) {
         doc.text(item.price.toFixed(2), colPrice, yPosition, { width: 70, align: "right" });
       }
-      
+
       doc.text(item.amount.toFixed(2), colAmount, yPosition, { width: 80, align: "right" });
-      
+
       yPosition += 20;
     });
 
@@ -306,7 +306,8 @@ export async function POST(request: NextRequest) {
         "metadata",
         new Blob([JSON.stringify(metadata)], { type: "application/json" })
       );
-      form.append("file", new Blob([pdfBuffer], { type: "application/pdf" }));
+      // ✅ แก้เป็น
+      form.append("file", new Blob([new Uint8Array(pdfBuffer)], { type: "application/pdf" }));
 
       const driveResponse = await fetch(
         "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
@@ -322,7 +323,7 @@ export async function POST(request: NextRequest) {
       if (driveResponse.ok) {
         const driveData = await driveResponse.json();
         console.log(`✅ [${requestId}] Saved to Drive: ${driveData.id}`);
-        
+
         return NextResponse.json({
           success: true,
           message: "PDF generated and saved to Google Drive",
