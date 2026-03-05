@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    
+
     const {
       hasVAT = true, // ✅ รับ flag (default = true เพื่อ backward compatibility)
       companyInfo,
@@ -30,9 +30,9 @@ export async function POST(request: NextRequest) {
 
     // คำนวณขนาดตัวอักษรตามจำนวนรายการ (เยอะ = ย่อ)
     const itemCount = items.length;
-    const baseFontSize = itemCount > 12 ? 10 : 
-                         itemCount > 8 ? 11 : 
-                         itemCount > 5 ? 12 : 13;
+    const baseFontSize = itemCount > 12 ? 10 :
+      itemCount > 8 ? 11 :
+        itemCount > 5 ? 12 : 13;
 
     const html = `
 <!DOCTYPE html>
@@ -436,24 +436,25 @@ export async function POST(request: NextRequest) {
 
     // Generate PDF
     const puppeteer = await import('puppeteer');
-    const browser = await puppeteer.default.launch({ 
+    const browser = await puppeteer.default.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
-    
+
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'networkidle0' });
-    
+
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
       margin: { top: 0, right: 0, bottom: 0, left: 0 },
       preferCSSPageSize: true,
     });
-    
+
     await browser.close();
 
-    return new NextResponse(pdfBuffer, {
+    // ✅ แก้เป็น
+    return new NextResponse(Buffer.from(pdfBuffer), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="Receipt_${receiptNo}.pdf"`,
