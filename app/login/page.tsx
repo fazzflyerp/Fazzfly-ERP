@@ -1,3 +1,4 @@
+//path: app/login/page.tsx
 "use client";
 
 import { useState } from 'react';
@@ -11,7 +12,8 @@ export default function LoginPage() {
 
   const handleSignIn = async () => {
     setIsLoading(true);
-    await signIn("google", { callbackUrl: "/home" });
+    // ✅ เปลี่ยนจาก /home → /select-system
+    await signIn("google", { callbackUrl: "/select-system" });
   };
 
   return (
@@ -48,15 +50,15 @@ export default function LoginPage() {
               />
             </div>
             <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-500 bg-clip-text text-transparent mb-3">
-              Fazzfly ERP
+              Fazzfly Platform
             </h1>
-            <p className="text-slate-600 font-medium text-lg">Enterprise Resource Planning System</p>
+            <p className="text-slate-600 font-medium text-lg">Enterprise Business Solutions</p>
             <p className="text-slate-500 text-sm mt-2">จัดการทรัพยากรองค์กรอย่างมีประสิทธิภาพ</p>
           </div>
           {/* Main Card */}
           <div className="bg-white/95 backdrop-blur-2xl rounded-3xl shadow-2xl shadow-blue-200/50 p-10 border border-blue-100/50 animate-slideDown" style={{ animationDelay: '100ms' }}>
             <div className="mb-8">
-              <h2 className="text-3xl font-bold text-slate-800 mb-2">ยินดีต้อนรับกลับ</h2>
+              <h2 className="text-3xl font-bold text-slate-800 mb-2">ยินดีต้อนรับ</h2>
               <p className="text-slate-600 font-medium">เข้าสู่ระบบเพื่อจัดการธุรกิจของคุณ</p>
             </div>
 
@@ -151,7 +153,7 @@ export default function LoginPage() {
               ระบบจัดการทรัพยากรองค์กร สำหรับธุรกิจยุคใหม่
             </p>
             <p className="text-xs text-slate-500 mt-2">
-              © 2025 Fazzfly ERP. All rights reserved.
+              © 2025 Fazzfly Platform. All rights reserved.
             </p>
           </div>
         </div>

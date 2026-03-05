@@ -1,10 +1,11 @@
 /**
- * User Modules API - PRODUCTION READY ✅
+ * User Modules API - PRODUCTION READY ✅ + CRM Support
  * Location: app/api/user/modules/route.ts
  * 
  * ✅ รองรับ multi-user พร้อมกัน
  * ✅ Auto-retry เมื่อ token หมดอายุ
  * ✅ Better error handling
+ * ✅ CRM Access from modules column (NEW)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -125,10 +126,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Step 5: Fetch client_master with retry
+    // Step 5: Fetch client_master with retry (✅ เปลี่ยนเป็น A:H เพื่อรวม modules column)
     console.log(`⏳ [${requestId}] Step 5: Fetching client_master...`);
     
-    const masterUrl = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_SHEET_ID}/values/client_master!A:G`;
+    const masterUrl = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_SHEET_ID}/values/client_master!A:H`;
     
     let masterData;
     try {
@@ -193,7 +194,22 @@ export async function GET(request: NextRequest) {
     const status = clientRow[4]?.toString() || "";
     const expiresAt = clientRow[6]?.toString() || "";
 
-    console.log(`✅ [${requestId}] Client found:`, { clientId, clientName, status });
+    // ==============================
+    // ✅ NEW: Check CRM Access from column H
+    // ==============================
+    const modulesStr = clientRow[7]?.toString() || "ERP"; // column H: modules
+    const hasCRM = modulesStr.includes("CRM");
+    const hasHRM = modulesStr.includes("HRM"); // สำหรับอนาคต
+    const crmExpiresAt = hasCRM ? expiresAt : null;
+
+    console.log(`✅ [${requestId}] Client found:`, { 
+      clientId, 
+      clientName, 
+      status, 
+      modules: modulesStr,
+      hasCRM,
+      hasHRM 
+    });
 
     // Step 7-8: Check status and expiry
     if (status.toUpperCase() !== "TRUE" && status.toUpperCase() !== "ACTIVE") {
@@ -276,12 +292,16 @@ export async function GET(request: NextRequest) {
       clientName,
       planType,
       expiresAt,
+      hasCRM,           // ✅ NEW
+      crmExpiresAt,     // ✅ NEW
+      hasHRM,           // ✅ NEW (สำหรับอนาคต)
       modules,
       dashboardItems,
     };
 
     console.log("=".repeat(50));
     console.log(`✅ [${requestId}] SUCCESS`);
+    console.log(`   hasCRM: ${hasCRM}, hasHRM: ${hasHRM}`); // ✅ NEW
     console.log("=".repeat(50));
 
     return NextResponse.json(response);

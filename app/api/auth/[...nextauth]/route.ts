@@ -3,6 +3,8 @@
  * รองรับหลาย user พร้อมกัน + ป้องกัน token leak
  */
 
+//path: app/api/auth/[...nextauth]/route.ts
+
 import NextAuth, { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 
@@ -110,7 +112,7 @@ const authOptions: NextAuthOptions = {
     
     async redirect({ url, baseUrl }) {
       if (url.startsWith(baseUrl)) return url;
-      return `${baseUrl}/home`;
+      return `${baseUrl}/select-system`;
     },
   },
   

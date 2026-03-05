@@ -58,7 +58,7 @@ export default function Navbar() {
 
           {/* Right side - Launch App Button */}
           <div className="flex items-center gap-4">
-            <Link href="/home" className="hidden md:block px-8 py-3 border-2 border-white text-white rounded-full font-bold hover:bg-white/20 transition-all duration-300 hover:scale-105">
+            <Link href="/select-system" className="hidden md:block px-8 py-3 border-2 border-white text-white rounded-full font-bold hover:bg-white/20 transition-all duration-300 hover:scale-105">
               Launch App
             </Link>
 
@@ -95,7 +95,7 @@ export default function Navbar() {
             <Link href="/contact" className="block text-white font-semibold py-2 hover:text-blue-200 transition-colors">
               CONTACT
             </Link>
-            <Link href="/home" className="w-full px-6 py-3 border-2 border-white text-white rounded-full font-bold hover:bg-white/20 transition-all mt-4 block text-center">
+            <Link href="/select-system" className="w-full px-6 py-3 border-2 border-white text-white rounded-full font-bold hover:bg-white/20 transition-all mt-4 block text-center">
               Launch App
             </Link>
           </div>
