@@ -340,7 +340,7 @@ export async function POST(request: NextRequest) {
     console.log(`✅ [${requestId}] SUCCESS - Returning PDF`);
     console.log("=".repeat(60));
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
