@@ -14,59 +14,59 @@ import {
 } from "@/app/components/crm/crm.types";
 
 import { IC } from "@/app/components/crm/crm.ui";
-import CRMNavBar    from "@/app/components/crm/CRMNavBar";
-import CalendarTab  from "@/app/components/crm/CalendarTab";
+import CRMNavBar from "@/app/components/crm/CRMNavBar";
+import CalendarTab from "@/app/components/crm/CalendarTab";
 import CustomersTab from "@/app/components/crm/CustomersTab";
-import FollowsTab   from "@/app/components/crm/FollowsTab";
+import FollowsTab from "@/app/components/crm/FollowsTab";
 import { AptModal, CustModal, FlwModal, AptDetailPanel, CustDetailPanel } from "@/app/components/crm/CRMModals";
 
 export default function CRMPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  const [cfg, setCfg]         = useState<CRMConfig | null>(null);
+  const [cfg, setCfg] = useState<CRMConfig | null>(null);
   const [aptFields, setAptFields] = useState<FormField[]>([]);
   const [custFields, setCustFields] = useState<FormField[]>([]);
   const [followSid, setFollowSid] = useState("");
   const [custSid, setCustSid] = useState("");
   const [clientId, setClientId] = useState("");
-  const [apts,    setApts]    = useState<Appointment[]>([]);
-  const [custs,   setCusts]   = useState<Customer[]>([]);
+  const [apts, setApts] = useState<Appointment[]>([]);
+  const [custs, setCusts] = useState<Customer[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [follows, setFollows] = useState<FollowUp[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [tab, setTab]         = useState<TabId>("cal");
+  const [tab, setTab] = useState<TabId>("cal");
   const now = new Date();
-  const [calY, setCalY]       = useState(now.getFullYear());
-  const [calM, setCalM]       = useState(now.getMonth());
+  const [calY, setCalY] = useState(now.getFullYear());
+  const [calM, setCalM] = useState(now.getMonth());
   const [selDate, setSelDate] = useState(todayStr());
 
-  const [custQ,   setCustQ]   = useState("");
+  const [custQ, setCustQ] = useState("");
   const [courseQ, setCourseQ] = useState("");
   const [followQ, setFollowQ] = useState("");
-  const [followF, setFollowF] = useState<"all"|"pending"|"today">("pending");
+  const [followF, setFollowF] = useState<"all" | "pending" | "today">("pending");
 
-  const [dApt,  setDApt]  = useState<Appointment | null>(null);
+  const [dApt, setDApt] = useState<Appointment | null>(null);
   const [dCust, setDCust] = useState<Customer | null>(null);
-  const [mApt,    setMApt]    = useState(false);
-  const [mCust,   setMCust]   = useState(false);
+  const [mApt, setMApt] = useState(false);
+  const [mCust, setMCust] = useState(false);
   const [mFollow, setMFollow] = useState(false);
 
-  const [eApt,    setEApt]    = useState<Appointment | null>(null);
-  const [eCust,   setECust]   = useState<Customer | null>(null);
+  const [eApt, setEApt] = useState<Appointment | null>(null);
+  const [eCust, setECust] = useState<Customer | null>(null);
   const [eFollow, setEFollow] = useState<FollowUp | null>(null);
 
-  const [sApt,    setSApt]    = useState(false);
-  const [sCust,   setSCust]   = useState(false);
+  const [sApt, setSApt] = useState(false);
+  const [sCust, setSCust] = useState(false);
   const [sFollow, setSFollow] = useState(false);
 
-  const ea0 = (): Partial<Appointment> => ({ customer_id:"",customer_name:"",customer_phone:"",appointment_date:selDate,appointment_time:"10:00",end_time:"11:00",service:"",doctor:"",status:"pending",course_id:"",price:0,deposit:0,notes:"" });
-  const ec0 = (): Partial<Customer>    => ({ customer_id:"",full_name:"",nickname:"",phone_number:"",line_id:"",email:"",gender:"หญิง",birthdate:"",address:"",tax_id:"",allergy:"",medical_history:"",skin_type:"",source:"",member_level:"ทั่วไป",notes:"" });
-  const ef0 = (): Partial<FollowUp>    => ({ customer_id:"",customer_name:"",customer_phone:"",due_date:todayStr(),task_type:"",description:"",status:"pending",appointment_id:"",notes:"" });
+  const ea0 = (): Partial<Appointment> => ({ customer_id: "", customer_name: "", customer_phone: "", appointment_date: selDate, appointment_time: "10:00", end_time: "11:00", service: "", doctor: "", status: "pending", course_id: "", price: 0, deposit: 0, notes: "" });
+  const ec0 = (): Partial<Customer> => ({ customer_id: "", full_name: "", nickname: "", phone_number: "", line_id: "", email: "", gender: "หญิง", birthdate: "", address: "", tax_id: "", allergy: "", medical_history: "", skin_type: "", source: "", member_level: "ทั่วไป", notes: "" });
+  const ef0 = (): Partial<FollowUp> => ({ customer_id: "", customer_name: "", customer_phone: "", due_date: todayStr(), task_type: "", description: "", status: "pending", appointment_id: "", notes: "" });
 
-  const [fApt,    setFApt]    = useState<Partial<Appointment>>(ea0());
-  const [fCust,   setFCust]   = useState<Partial<Customer>>(ec0());
+  const [fApt, setFApt] = useState<Partial<Appointment>>(ea0());
+  const [fCust, setFCust] = useState<Partial<Customer>>(ec0());
   const [fFollow, setFFollow] = useState<Partial<FollowUp>>(ef0());
 
 
@@ -163,7 +163,7 @@ export default function CRMPage() {
                   const hJson = await hRes.json();
                   newHelpers[field.helper] = hJson.options || [];
                 }
-              } catch {}
+              } catch { }
             }
           }
           if (Object.keys(newHelpers).length > 0) {
@@ -180,7 +180,7 @@ export default function CRMPage() {
           const custCfgRes = await fetch(`/api/module/config?spreadsheetId=${modData.Master.spreadsheetId}&configName=${modData.Master.configName}`);
           const custCfgData = await custCfgRes.json();
           setCustFields(custCfgData.fields || []);
-        } catch {}
+        } catch { }
       }
 
       // 4) load ข้อมูล — แต่ละ module ใช้ spreadsheetId ของตัวเอง
@@ -198,7 +198,7 @@ export default function CRMPage() {
   };
 
   const sid = () => cfg?.spreadsheetId ?? "";
-  const fApts    = async (id?: string) => { if (!id) return; try { const r = await fetch(`${APT_API}?spreadsheetId=${id}`);    const d = await r.json(); setApts(d.appointments || []); } catch {} };
+  const fApts = async (id?: string) => { if (!id) return; try { const r = await fetch(`${APT_API}?spreadsheetId=${id}`); const d = await r.json(); setApts(d.appointments || []); } catch { } };
   const CUST_SHEET_ID = "13mWybZoA3t9EhEa3MCb_WVEbZrU_TiIbVZfd-CDerZ0";
   const fCusts = async (sid?: string, sname?: string) => {
     try {
@@ -207,10 +207,10 @@ export default function CRMPage() {
       const d = await r.json();
       setCusts(d.customers || []);
       setCustSid(sid);
-    } catch {}
+    } catch { }
   };
-  const fCourses = async (id?: string) => { if (!id) return; try { const r = await fetch(`${COURSE_API}?spreadsheetId=${id}`); const d = await r.json(); setCourses(d.courses || []); } catch {} };
-  const fFollows = async (id?: string) => { if (!id) return; try { const r = await fetch(`${FOLLOW_API}?spreadsheetId=${id}`); const d = await r.json(); setFollows(d.tasks || []); } catch {} };
+  const fCourses = async (id?: string) => { if (!id) return; try { const r = await fetch(`${COURSE_API}?spreadsheetId=${id}`); const d = await r.json(); setCourses(d.courses || []); } catch { } };
+  const fFollows = async (id?: string) => { if (!id) return; try { const r = await fetch(`${FOLLOW_API}?spreadsheetId=${id}`); const d = await r.json(); setFollows(d.tasks || []); } catch { } };
 
   const saveApt = async () => {
     if (!cfg) return;
@@ -277,40 +277,63 @@ export default function CRMPage() {
       .then(() => fFollows(followSid));
   };
 
-  const closeMApt    = () => { setMApt(false); setEApt(null); setFApt(ea0()); };
-  const closeMCust   = () => { setMCust(false); setECust(null); setFCust(ec0()); };
+  const closeMApt = () => { setMApt(false); setEApt(null); setFApt(ea0()); };
+  const closeMCust = () => { setMCust(false); setECust(null); setFCust(ec0()); };
   const closeMFollow = () => { setMFollow(false); setEFollow(null); setFFollow(ef0()); };
 
-  const openApt = (date?: string, pre?: Partial<Appointment>) => {
-    setEApt(null); setFApt({ ...ea0(), appointment_date: date || selDate, ...pre }); setMApt(true);
+  const openApt = async (date?: string, pre?: Partial<Appointment>) => {
+    setEApt(null);
+    setFApt({ ...ea0(), appointment_date: date || selDate, ...pre });
+    setMApt(true); // เปิด modal ทันที ไม่รอ fetch
+
+    // ✅ Re-fetch Helpers_C realtime
+    if (cfg) {
+      try {
+        const url = new URL(`${window.location.origin}/${HELPER_API}`);
+        url.searchParams.set("spreadsheetId", cfg.spreadsheetId);
+        url.searchParams.set("helperName", cfg.helperMap.customers);
+        url.searchParams.set("bust", Date.now().toString()); // bypass CDN cache
+        const res = await fetch(url.toString(), { cache: "no-store" });
+        if (res.ok) {
+          const json = await res.json();
+          const fresh: HelperOption[] = json.options || [];
+          if (fresh.length > 0) {
+            setCfg(c => c ? {
+              ...c,
+              helperOptions: { ...c.helperOptions, [cfg.helperMap.customers]: fresh }
+            } : c);
+          }
+        }
+      } catch { }
+    }
   };
-  const editApt    = (a: Appointment) => { setEApt(a); setFApt({...a}); setMApt(true); };
-  const openCust   = () => { setECust(null); setFCust(ec0()); setMCust(true); };
-  const editCust   = (c: Customer)    => { setECust(c); setFCust({...c}); setMCust(true); };
-  const openFollow = (c?: Customer)   => {
+  const editApt = (a: Appointment) => { setEApt(a); setFApt({ ...a }); setMApt(true); };
+  const openCust = () => { setECust(null); setFCust(ec0()); setMCust(true); };
+  const editCust = (c: Customer) => { setECust(c); setFCust({ ...c }); setMCust(true); };
+  const openFollow = (c?: Customer) => {
     setEFollow(null);
     setFFollow({ ...ef0(), ...(c ? { customer_id: c.customer_id, customer_name: c.full_name, customer_phone: c.phone_number } : {}) });
     setMFollow(true);
   };
 
-  const selApts  = apts.filter(a => a.appointment_date === selDate).sort((a,b) => a.appointment_time.localeCompare(b.appointment_time));
-  const cntDate  = (d: string) => apts.filter(a => a.appointment_date === d).length;
-  const calDays  = [...Array(getFirst(calY, calM)).fill(0), ...Array.from({ length: getDays(calY, calM) }, (_, i) => i+1)];
+  const selApts = apts.filter(a => a.appointment_date === selDate).sort((a, b) => a.appointment_time.localeCompare(b.appointment_time));
+  const cntDate = (d: string) => apts.filter(a => a.appointment_date === d).length;
+  const calDays = [...Array(getFirst(calY, calM)).fill(0), ...Array.from({ length: getDays(calY, calM) }, (_, i) => i + 1)];
   const isTodayC = (d: number) => now.getFullYear() === calY && now.getMonth() === calM && now.getDate() === d;
-  const isSelC   = (d: number) => makeDStr(calY, calM, d) === selDate;
-  const pending  = follows.filter(f => f.status === "pending");
+  const isSelC = (d: number) => makeDStr(calY, calM, d) === selDate;
+  const pending = follows.filter(f => f.status === "pending");
 
   const TABS = [
-    { id: "cal"     as TabId, icon: IC.cal,    label: "ปฏิทิน", badge: selApts.length },
-    { id: "custs"   as TabId, icon: IC.users,  label: "ลูกค้า",  badge: 0 },
-    { id: "follows" as TabId, icon: IC.follow, label: "ติดตาม",  badge: pending.length },
+    { id: "cal" as TabId, icon: IC.cal, label: "ปฏิทิน", badge: selApts.length },
+    { id: "custs" as TabId, icon: IC.users, label: "ลูกค้า", badge: 0 },
+    { id: "follows" as TabId, icon: IC.follow, label: "ติดตาม", badge: pending.length },
   ];
 
   if (status === "loading" || loading || !cfg) return (
     <div className="min-h-screen flex items-center justify-center"
       style={{ fontFamily: "var(--font-noto-sans-thai), sans-serif", background: "linear-gradient(135deg,#fdf2f8,#fce7f3,#fdf4ff)" }}>
       <div className="text-center">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-pink-500 mx-auto mb-4"/>
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-pink-500 mx-auto mb-4" />
         <p className="text-slate-600">กำลังโหลด...</p>
       </div>
     </div>
@@ -321,12 +344,12 @@ export default function CRMPage() {
       style={{ fontFamily: "var(--font-noto-sans-thai), sans-serif", background: "linear-gradient(135deg,#fdf2f8 0%,#fce7f3 40%,#fdf4ff 100%)" }}>
 
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 lg:w-96 h-80 lg:h-96 bg-pink-200 rounded-full mix-blend-multiply filter blur-3xl opacity-40 animate-blob"/>
-        <div className="absolute -bottom-40 -left-40 w-80 lg:w-96 h-80 lg:h-96 bg-rose-200 rounded-full mix-blend-multiply filter blur-3xl opacity-40 animate-blob animation-delay-2000"/>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 lg:w-96 h-80 lg:h-96 bg-fuchsia-100 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"/>
+        <div className="absolute -top-40 -right-40 w-80 lg:w-96 h-80 lg:h-96 bg-pink-200 rounded-full mix-blend-multiply filter blur-3xl opacity-40 animate-blob" />
+        <div className="absolute -bottom-40 -left-40 w-80 lg:w-96 h-80 lg:h-96 bg-rose-200 rounded-full mix-blend-multiply filter blur-3xl opacity-40 animate-blob animation-delay-2000" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 lg:w-96 h-80 lg:h-96 bg-fuchsia-100 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000" />
       </div>
 
-      <CRMNavBar userName={(session as any)?.user?.name} pendingCount={pending.length} follows={follows} onFollowClick={() => setTab("follows")}/>
+      <CRMNavBar userName={(session as any)?.user?.name} pendingCount={pending.length} follows={follows} onFollowClick={() => setTab("follows")} />
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 lg:px-6 py-6 lg:py-12">
         <div className="mb-6 lg:mb-10">
@@ -354,25 +377,25 @@ export default function CRMPage() {
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`px-4 lg:px-6 py-2.5 lg:py-3 font-semibold transition-all relative whitespace-nowrap text-sm lg:text-base ${tab === t.id ? "text-pink-600 font-bold" : "text-slate-600 hover:text-slate-800"}`}>
               <span className="flex items-center gap-1 lg:gap-2">
-                <svg className="w-4 lg:w-5 h-4 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d={t.icon}/></svg>
+                <svg className="w-4 lg:w-5 h-4 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d={t.icon} /></svg>
                 {t.label}
                 {t.badge > 0 && <span className={`ml-1 px-1.5 py-0.5 rounded-full text-xs font-bold ${tab === t.id ? "bg-pink-100 text-pink-600" : "bg-slate-100 text-slate-500"}`}>{t.badge}</span>}
               </span>
-              {tab === t.id && <div className="absolute bottom-0 left-0 right-0 h-1 bg-pink-500 rounded-full"/>}
+              {tab === t.id && <div className="absolute bottom-0 left-0 right-0 h-1 bg-pink-500 rounded-full" />}
             </button>
           ))}
         </div>
 
-        {tab === "cal"     && <CalendarTab apts={apts} calY={calY} calM={calM} calDays={calDays} selDate={selDate} selApts={selApts} setSelDate={setSelDate} setCalY={setCalY} setCalM={setCalM} cntDate={cntDate} isTodayC={isTodayC} isSelC={isSelC} openApt={openApt} setDApt={setDApt}/>}
-        {tab === "custs"   && <CustomersTab customers={custs} courses={courses} follows={follows} custQ={custQ} setCustQ={setCustQ} config={cfg} openCust={openCust} setDCust={setDCust}/>}
-        {tab === "follows" && <FollowsTab follows={follows} followQ={followQ} setFollowQ={setFollowQ} followF={followF} setFollowF={setFollowF} openFollow={() => openFollow()} updFollowStatus={updFollowStatus} onEditFollow={f => { setEFollow(f); setFFollow({...f}); setMFollow(true); }}/>}
+        {tab === "cal" && <CalendarTab apts={apts} calY={calY} calM={calM} calDays={calDays} selDate={selDate} selApts={selApts} setSelDate={setSelDate} setCalY={setCalY} setCalM={setCalM} cntDate={cntDate} isTodayC={isTodayC} isSelC={isSelC} openApt={openApt} setDApt={setDApt} />}
+        {tab === "custs" && <CustomersTab customers={custs} courses={courses} follows={follows} custQ={custQ} setCustQ={setCustQ} config={cfg} openCust={openCust} setDCust={setDCust} />}
+        {tab === "follows" && <FollowsTab follows={follows} followQ={followQ} setFollowQ={setFollowQ} followF={followF} setFollowF={setFollowF} openFollow={() => openFollow()} updFollowStatus={updFollowStatus} onEditFollow={f => { setEFollow(f); setFFollow({ ...f }); setMFollow(true); }} />}
       </div>
 
-      <AptModal    open={mApt}    onClose={closeMApt}    isEdit={!!eApt}    loading={sApt}    form={fApt}    setForm={setFApt}    customers={custs} config={cfg} fields={aptFields} onSave={saveApt}/>
-      <CustModal   open={mCust}   onClose={closeMCust}   isEdit={!!eCust}   loading={sCust}   form={fCust}   setForm={setFCust}   config={cfg} fields={custFields} onSave={saveCust}/>
-      <FlwModal    open={mFollow} onClose={closeMFollow} isEdit={!!eFollow} loading={sFollow} form={fFollow} setForm={setFFollow} customers={custs} config={cfg} onSave={saveFollow}/>
-      <AptDetailPanel  apt={dApt}   onClose={() => setDApt(null)}  onEdit={editApt}  onViewProfile={a => { const c = custs.find(x => x.customer_id === a.customer_id); setDApt(null); if (c) { setDCust(c); setTab("custs"); } }} updAptStatus={updAptStatus}/>
-      <CustDetailPanel cust={dCust} onClose={() => setDCust(null)} onEdit={editCust} onFollow={openFollow} courses={courses} apts={apts} onBookApt={c => { openApt(undefined, { customer_id: c.customer_id, customer_name: c.full_name, customer_phone: c.phone_number }); setTab("cal"); }}/>
+      <AptModal open={mApt} onClose={closeMApt} isEdit={!!eApt} loading={sApt} form={fApt} setForm={setFApt} customers={custs} config={cfg} fields={aptFields} onSave={saveApt} />
+      <CustModal open={mCust} onClose={closeMCust} isEdit={!!eCust} loading={sCust} form={fCust} setForm={setFCust} config={cfg} fields={custFields} onSave={saveCust} />
+      <FlwModal open={mFollow} onClose={closeMFollow} isEdit={!!eFollow} loading={sFollow} form={fFollow} setForm={setFFollow} customers={custs} config={cfg} onSave={saveFollow} />
+      <AptDetailPanel apt={dApt} onClose={() => setDApt(null)} onEdit={editApt} onViewProfile={a => { const c = custs.find(x => x.customer_id === a.customer_id); setDApt(null); if (c) { setDCust(c); setTab("custs"); } }} updAptStatus={updAptStatus} />
+      <CustDetailPanel cust={dCust} onClose={() => setDCust(null)} onEdit={editCust} onFollow={openFollow} courses={courses} apts={apts} onBookApt={c => { openApt(undefined, { customer_id: c.customer_id, customer_name: c.full_name, customer_phone: c.phone_number }); setTab("cal"); }} />
 
       <style jsx>{`
         @keyframes blob { 0%,100%{transform:translate(0,0) scale(1)} 33%{transform:translate(30px,-50px) scale(1.1)} 66%{transform:translate(-20px,20px) scale(0.9)} }

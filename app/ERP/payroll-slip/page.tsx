@@ -55,6 +55,9 @@ export default function PayrollSlipPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
 
+  // ✅ NEW: Refresh state
+  const [refreshing, setRefreshing] = useState(false);
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
     else if (status === "authenticated") initializeData();
@@ -93,7 +96,10 @@ export default function PayrollSlipPage() {
 
       const [configRes, transRes, companyRes] = await Promise.all([
         fetch(`/api/payroll/config?spreadsheetId=${document.spreadsheetId}&configName=${document.configName}`, { headers: { Authorization: `Bearer ${accessToken}` } }),
-        fetch(`/api/payroll/transactions?spreadsheetId=${document.spreadsheetId}&sheetName=${document.sheetName}`, { headers: { Authorization: `Bearer ${accessToken}` } }),
+        fetch(`/api/payroll/transactions?spreadsheetId=${document.spreadsheetId}&sheetName=${document.sheetName}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          cache: "no-store", // ✅ ไม่ cache
+        }),
         fetch(`/api/payroll/company-info?spreadsheetId=${document.spreadsheetId}&sheetName=${document.companyName || "company_info"}`, { headers: { Authorization: `Bearer ${accessToken}` } }),
       ]);
 
@@ -113,6 +119,30 @@ export default function PayrollSlipPage() {
     }
   };
 
+  // ✅ NEW: Refresh handler — re-fetch transactions only
+  const handleRefresh = async () => {
+    if (!moduleInfo || refreshing) return;
+    setRefreshing(true);
+    try {
+      const accessToken = (session as any)?.accessToken;
+      const res = await fetch(
+        `/api/payroll/transactions?spreadsheetId=${moduleInfo.spreadsheetId}&sheetName=${moduleInfo.sheetName}`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          cache: "no-store", // ✅ ไม่ cache — ได้ข้อมูลล่าสุดเสมอ
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        processPayrollData(config, data.transactions);
+      }
+    } catch (err) {
+      console.error("Refresh error:", err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const processPayrollData = (configFields: ConfigField[], rawTransactions: any[]) => {
     const mapTransaction = (transaction: any): any => {
       const mapped: any = {};
@@ -126,7 +156,6 @@ export default function PayrollSlipPage() {
 
     const mappedData = rawTransactions.map(mapTransaction);
 
-    // หา field สำหรับ total_income, total_deduction, net_salary จาก config
     const totalIncomeField   = configFields.find(f => f.fieldName === "total_income");
     const totalDeductField   = configFields.find(f => f.fieldName === "total_deduction");
     const netSalaryField     = configFields.find(f => f.fieldName === "net_salary");
@@ -153,7 +182,7 @@ export default function PayrollSlipPage() {
 
     setEmployees(employeeList);
     setAvailablePeriods(periods);
-    if (periods.length > 0) setSelectedPeriod(periods[0]);
+    if (periods.length > 0) setSelectedPeriod(prev => prev || periods[0]);
   };
 
   useEffect(() => {
@@ -174,7 +203,6 @@ export default function PayrollSlipPage() {
     setFilteredEmployees(filtered);
   }, [selectedPeriod, employees, searchTerm, sortOrder]);
 
-  // ── Build arrays จาก config type2 ─────────────────────────────────────────
   const SKIP_FIELDS = ["employee_id","employee_name","nickname","position","pay_period",
     "working_days","leave_days","late_minutes","bank_account",
     "total_income","total_deduction","net_salary"];
@@ -193,7 +221,6 @@ export default function PayrollSlipPage() {
       .map(f => ({ fieldName: f.fieldName, label: f.label, amount: parseNum(emp.rawData[f.fieldName]) }))
       .filter(item => item.amount > 0);
 
-  // ── PDF ────────────────────────────────────────────────────────────────────
   const handleGeneratePDF = async (employee: PayrollEmployee) => {
     if (!companyInfo) return;
     try {
@@ -235,7 +262,6 @@ export default function PayrollSlipPage() {
 
       const blob = await response.blob();
 
-      // Parse period for filename
       const periodParts = employee.payPeriod.trim().split(/\s+/);
       const year = periodParts[periodParts.length - 1];
       const thaiMonthsFull = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
@@ -254,7 +280,6 @@ export default function PayrollSlipPage() {
       document.body.appendChild(a); a.click();
       window.URL.revokeObjectURL(url); document.body.removeChild(a);
 
-      // Upload to Drive
       const rootFolderId = moduleInfo?.folderID;
       if (!rootFolderId) { alert("✅ ดาวน์โหลด PDF สำเร็จ! (ไม่พบ Folder ID)"); return; }
 
@@ -314,12 +339,16 @@ export default function PayrollSlipPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link href="/ERP/home" className="group flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 rounded-xl transition-all duration-300 border border-gray-200 shadow-sm">
-                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg>
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>
+                </svg>
                 <span className="text-sm font-semibold text-gray-700">กลับ</span>
               </Link>
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
                 </div>
                 <div>
                   <h1 className="text-2xl font-bold text-gray-800">ออกสลิปเงินเดือน</h1>
@@ -327,7 +356,25 @@ export default function PayrollSlipPage() {
                 </div>
               </div>
             </div>
-            <div className="hidden md:flex items-center gap-4">
+
+            {/* Right: Stats + Refresh */}
+            <div className="hidden md:flex items-center gap-3">
+              {/* ✅ NEW: Refresh Button */}
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-blue-200 rounded-xl text-sm font-semibold text-blue-700 hover:bg-blue-50 transition-all shadow-sm disabled:opacity-50"
+              >
+                <svg
+                  className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
+                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {refreshing ? "กำลังโหลด..." : "Refresh"}
+              </button>
+
               <div className="px-4 py-2 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
                 <div className="text-xs text-blue-600 font-medium mb-0.5">พนักงานทั้งหมด</div>
                 <div className="text-xl font-bold text-blue-700">{employees.length}</div>
@@ -349,7 +396,9 @@ export default function PayrollSlipPage() {
                     <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
                     รายชื่อพนักงาน
                   </h2>
-                  <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold border border-blue-200">{filteredEmployees.length} คน</span>
+                  <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold border border-blue-200">
+                    {filteredEmployees.length} คน
+                  </span>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <select value={selectedPeriod} onChange={(e) => { setSelectedPeriod(e.target.value); setShowPreview(false); }}
@@ -365,8 +414,21 @@ export default function PayrollSlipPage() {
                       </button>
                     ))}
                   </div>
-                  <input type="text" placeholder="🔍 ค้นหา..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} disabled={!selectedPeriod}
+                  <input type="text" placeholder="🔍 ค้นหา..." value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)} disabled={!selectedPeriod}
                     className="flex-1 min-w-[150px] px-3 py-1.5 text-xs rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+
+                  {/* ✅ Mobile Refresh Button */}
+                  <button
+                    onClick={handleRefresh}
+                    disabled={refreshing}
+                    className="md:hidden flex items-center gap-1.5 px-3 py-1.5 bg-white border border-blue-200 rounded-lg text-xs font-semibold text-blue-700 hover:bg-blue-50 transition-all disabled:opacity-50"
+                  >
+                    <svg className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    {refreshing ? "โหลด..." : "Refresh"}
+                  </button>
                 </div>
               </div>
 
@@ -442,7 +504,9 @@ export default function PayrollSlipPage() {
                         )}
                       </button>
                       <button onClick={() => setShowPreview(false)} className="p-2 hover:bg-white rounded-lg transition-colors">
-                        <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                        <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
                       </button>
                     </div>
                   </div>
@@ -481,7 +545,9 @@ export default function PayrollSlipPage() {
             ) : (
               <div className="bg-white rounded-2xl border border-gray-200 shadow-md p-12 text-center">
                 <div className="w-20 h-20 mx-auto mb-4 bg-blue-50 rounded-2xl flex items-center justify-center">
-                  <svg className="w-10 h-10 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                  <svg className="w-10 h-10 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                  </svg>
                 </div>
                 <p className="text-gray-600 font-medium">เลือกพนักงาน</p>
                 <p className="text-gray-500 text-sm mt-1">คลิกที่รายชื่อเพื่อดูสลิป</p>
