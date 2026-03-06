@@ -57,7 +57,15 @@ export default function PayrollSlipPreview({
   totalDeduction,
   netSalary,
 }: PayrollSlipPreviewProps) {
-  
+
+  // ── DEBUG ──────────────────────────────────────────────
+  console.log("🎯 PayrollSlipPreview received:");
+  console.log("   earnings:", earnings);
+  console.log("   deductions:", deductions);
+  console.log("   activeEarnings:", earnings.filter(e => e.amount > 0));
+  console.log("   activeDeductions:", deductions.filter(d => d.amount > 0));
+  // ───────────────────────────────────────────────────────
+
   const activeEarnings = earnings.filter(item => item.amount > 0);
   const activeDeductions = deductions.filter(item => item.amount > 0);
   
@@ -74,7 +82,6 @@ export default function PayrollSlipPreview({
         {/* Header */}
         <div className="border-b border-gray-300 bg-gray-50 px-8 py-6 flex-shrink-0">
           <div className="text-center">
-            {/* Logo */}
             {companyInfo.logo_url && (
               <div className="mb-3 flex justify-center">
                 <img 
@@ -84,7 +91,6 @@ export default function PayrollSlipPreview({
                 />
               </div>
             )}
-            
             <h1 className="text-2xl font-bold text-gray-900 mb-1">
               {companyInfo.company_name || "บริษัท ทดสอบ จำกัด"}
             </h1>
@@ -106,7 +112,7 @@ export default function PayrollSlipPreview({
           <h2 className="text-lg font-bold tracking-wide">สลิปเงินเดือน / PAY SLIP</h2>
         </div>
 
-        {/* Content - ใช้ flex-1 และ justify-between เพื่อกระจายเนื้อหา */}
+        {/* Content */}
         <div className="flex-1 px-8 py-6 flex flex-col justify-between">
           <div className="space-y-5">
             {/* Employee Info */}
@@ -140,10 +146,9 @@ export default function PayrollSlipPreview({
               </table>
             </div>
 
-            {/* Earnings & Deductions Tables */}
+            {/* Earnings & Deductions */}
             <div className="grid grid-cols-2 gap-6">
-              
-              {/* Earnings Table */}
+              {/* Earnings */}
               <div className="border border-blue-300 rounded overflow-hidden">
                 <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2">
                   <h3 className="font-bold text-sm">รายได้ / EARNINGS</h3>
@@ -158,7 +163,7 @@ export default function PayrollSlipPreview({
                   <tbody>
                     {activeEarnings.length > 0 ? (
                       activeEarnings.map((item, index) => (
-                        <tr key={index} className="border-b border-gray-200 hover:bg-blue-50/30 transition-colors">
+                        <tr key={index} className="border-b border-gray-200">
                           <td className="px-4 py-2 text-gray-800">{item.label}</td>
                           <td className="px-4 py-2 text-right font-semibold text-blue-700 tabular-nums">
                             {item.amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -167,7 +172,9 @@ export default function PayrollSlipPreview({
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={2} className="px-4 py-4 text-center text-gray-500">ไม่มีรายการ</td>
+                        <td colSpan={2} className="px-4 py-4 text-center text-gray-400 text-xs">
+                          ⚠️ ไม่มีรายการ (earnings: {earnings.length} รายการ)
+                        </td>
                       </tr>
                     )}
                     <tr className="bg-blue-100 border-t-2 border-blue-400">
@@ -180,7 +187,7 @@ export default function PayrollSlipPreview({
                 </table>
               </div>
 
-              {/* Deductions Table */}
+              {/* Deductions */}
               <div className="border border-slate-300 rounded overflow-hidden">
                 <div className="bg-gradient-to-r from-slate-600 to-slate-700 text-white px-4 py-2">
                   <h3 className="font-bold text-sm">รายการหัก / DEDUCTIONS</h3>
@@ -195,7 +202,7 @@ export default function PayrollSlipPreview({
                   <tbody>
                     {activeDeductions.length > 0 ? (
                       activeDeductions.map((item, index) => (
-                        <tr key={index} className="border-b border-gray-200 hover:bg-slate-50/50 transition-colors">
+                        <tr key={index} className="border-b border-gray-200">
                           <td className="px-4 py-2 text-gray-800">
                             {item.label}
                             {item.label.includes('วันลา') && leaveDays ? ` (${leaveDays} วัน)` : ''}
@@ -208,7 +215,9 @@ export default function PayrollSlipPreview({
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={2} className="px-4 py-4 text-center text-gray-500">ไม่มีรายการ</td>
+                        <td colSpan={2} className="px-4 py-4 text-center text-gray-400 text-xs">
+                          ⚠️ ไม่มีรายการ (deductions: {deductions.length} รายการ)
+                        </td>
                       </tr>
                     )}
                     <tr className="bg-slate-100 border-t-2 border-slate-400">
@@ -233,7 +242,7 @@ export default function PayrollSlipPreview({
             </div>
           </div>
 
-          {/* Signature Section - ด้านล่าง */}
+          {/* Signature */}
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-16 pt-6 border-t border-gray-300">
               <div>
@@ -251,8 +260,6 @@ export default function PayrollSlipPreview({
                 </div>
               </div>
             </div>
-
-            {/* Footer */}
             <div className="pt-3 border-t border-gray-300 text-center">
               <p className="text-xs text-gray-500">เอกสารนี้สร้างโดยระบบอัตโนมัติ</p>
             </div>
