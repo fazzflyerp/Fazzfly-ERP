@@ -1,14 +1,19 @@
 /**
- * Sales Form Submit API - OPTIMISTIC LOCKING VERSION
+ * Sales Form Submit API
+ * POST /api/module/submit-sales
+ *
+ * ✅ Port logic จาก Apps Script — อ่านครั้งเดียว วน loop insert ทีละแถว
+ * ✅ อัปเดต dateValues ใน memory หลัง insert แต่ละแถว (เหมือน splice ของ Apps Script)
+ * ✅ customer fields ลงเฉพาะแถวแรก (เหมือน Apps Script i === 0)
+ * ✅ ไม่มี checksum validation
  * ✅ Serverless-compatible
- * ✅ Auto-retry mechanism
- * ✅ Multi-client safe
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-// Helper functions (เหมือนเดิม)
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function getColumnLetter(colNum: number): string {
   let letter = "";
   while (colNum > 0) {
@@ -19,17 +24,20 @@ function getColumnLetter(colNum: number): string {
   return letter;
 }
 
-function parseDate(dateStr: string): Date | null {
+// ✅ Parse date — รองรับ DD/MM/YYYY, YYYY-MM-DD และ Excel serial number
+function parseDate(dateStr: any): Date | null {
   if (!dateStr) return null;
   const str = dateStr.toString().trim();
 
-  if (!isNaN(Number(str))) {
+  // Excel serial number
+  if (!isNaN(Number(str)) && Number(str) > 1000) {
     const base = new Date(Date.UTC(1899, 11, 30));
     base.setUTCDate(base.getUTCDate() + Number(str));
     base.setUTCHours(0, 0, 0, 0);
     return base;
   }
 
+  // DD/MM/YYYY
   if (str.includes("/")) {
     const [dd, mm, yyyy] = str.split("/").map(Number);
     if (!isNaN(dd) && !isNaN(mm) && !isNaN(yyyy)) {
@@ -37,31 +45,29 @@ function parseDate(dateStr: string): Date | null {
     }
   }
 
+  // YYYY-MM-DD
   if (str.includes("-")) {
-    const [yyyy, mm, dd] = str.split("-").map(Number);
-    if (!isNaN(dd) && !isNaN(mm) && !isNaN(yyyy)) {
-      return new Date(Date.UTC(yyyy, mm - 1, dd));
+    const parts = str.split("-").map(Number);
+    if (parts.length === 3) {
+      const [yyyy, mm, dd] = parts;
+      if (!isNaN(dd) && !isNaN(mm) && !isNaN(yyyy)) {
+        return new Date(Date.UTC(yyyy, mm - 1, dd));
+      }
     }
   }
 
   return null;
 }
 
-// ✅ สร้าง snapshot checksum (เช็คว่าข้อมูลเปลี่ยนไหม)
-function createSnapshot(rows: any[][]): { checksum: string; rowCount: number } {
-  // เอาแค่ 5 แถวล่างสุด + rowCount เพื่อเช็คว่ามีการเปลี่ยนแปลง
-  const lastRows = rows.slice(-5);
-  const data = JSON.stringify({ lastRows, total: rows.length });
-  const checksum = Buffer.from(data).toString('base64').substring(0, 30);
-  
-  return {
-    checksum,
-    rowCount: rows.length
-  };
+// ✅ Normalize วันที่เป็น timestamp (เหมือน normalize ของ Apps Script)
+function normalizeDate(d: Date | null): number | null {
+  if (!d) return null;
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
 
-// ✅ Main insert logic with retry
-async function attemptInsertWithRetry(params: {
+// ─── Core insert logic (port จาก Apps Script) ─────────────────────────────────
+
+async function insertRowsWithDateSort(params: {
   accessToken: string;
   spreadsheetId: string;
   sheetName: string;
@@ -69,10 +75,7 @@ async function attemptInsertWithRetry(params: {
   rowsToInsert: any[][];
   dateFieldIndex: number | null;
   headerRow: any[];
-  customerFields: any[];
-  lineItemFields: any[];
   requestId: string;
-  maxRetries?: number;
 }) {
   const {
     accessToken,
@@ -83,125 +86,90 @@ async function attemptInsertWithRetry(params: {
     dateFieldIndex,
     headerRow,
     requestId,
-    maxRetries = 3
   } = params;
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(`\n🔄 [${requestId}] Attempt ${attempt}/${maxRetries}`);
+  // ✅ 1. อ่านข้อมูลปัจจุบันครั้งเดียว
+  const getUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}`;
+  const getRes = await fetch(getUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!getRes.ok) throw new Error(`Failed to fetch sheet: ${getRes.status}`);
 
-      // 1️⃣ อ่านข้อมูลปัจจุบัน + สร้าง snapshot
-      const getUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}`;
-      const getRes = await fetch(getUrl, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+  const sheetData = await getRes.json();
+  const existingRows: any[][] = sheetData.values || [];
+  const headerRowIndex = 1;
 
-      if (!getRes.ok) {
-        throw new Error(`Failed to fetch sheet: ${getRes.status}`);
-      }
+  // ✅ 2. สร้าง dateValues array (เหมือน Apps Script)
+  let dateValues: (Date | null)[] = existingRows
+    .slice(1)
+    .map((row) =>
+      dateFieldIndex !== null ? parseDate(row[dateFieldIndex]) : null
+    );
 
-      const sheetData = await getRes.json();
-      const existingRows = sheetData.values || [];
-      const snapshot = createSnapshot(existingRows);
+  let lastRow = existingRows.length;
 
-      console.log(`📊 [${requestId}] Snapshot: ${snapshot.rowCount} rows, checksum: ${snapshot.checksum}`);
+  console.log(`📊 [${requestId}] Existing rows: ${lastRow}`);
 
-      // 2️⃣ คำนวณตำแหน่ง insert
-      let insertIndex = snapshot.rowCount;
+  const insertResults: { rowIndex: number }[] = [];
 
-      if (dateFieldIndex !== null && rowsToInsert.length > 0) {
-        const newDateStr = rowsToInsert[0][dateFieldIndex];
-        const newDate = parseDate(newDateStr);
+  // ✅ 3. วน loop insert ทีละแถว (เหมือน Apps Script)
+  for (let i = 0; i < rowsToInsert.length; i++) {
+    const row = rowsToInsert[i];
 
-        if (newDate) {
-          console.log(`📅 [${requestId}] New date: ${newDate.toISOString()}`);
-          
-          insertIndex = 1; // default: หลัง header
+    // ─── คำนวณ insertIndex ───────────────────────────────────────────────────
+    let insertIndex = lastRow + 1; // default: append
 
-          // หาตำแหน่งที่ถูกต้อง (ย้อนจากล่างขึ้นบน)
-          for (let i = snapshot.rowCount - 1; i >= 1; i--) {
-            const existingDateStr = existingRows[i]?.[dateFieldIndex];
-            const existingDate = parseDate(existingDateStr);
-            
-            if (existingDate && newDate >= existingDate) {
-              insertIndex = i + 1;
-              console.log(`📍 [${requestId}] Insert at row ${insertIndex}`);
-              break;
-            }
-          }
+    if (dateFieldIndex !== null) {
+      const newDate = parseDate(row[dateFieldIndex]);
+      const newDateNorm = normalizeDate(newDate);
 
-          if (insertIndex === 1) {
-            console.log(`📍 [${requestId}] Insert at row ${insertIndex} (oldest date)`);
+      if (newDateNorm !== null) {
+        insertIndex = headerRowIndex + 1; // default: หลัง header
+
+        // ✅ วนย้อนจากล่างขึ้นบน (เหมือน Apps Script)
+        for (let j = dateValues.length - 1; j >= 0; j--) {
+          const existingDateNorm = normalizeDate(dateValues[j]);
+          if (existingDateNorm !== null && newDateNorm >= existingDateNorm) {
+            insertIndex = j + headerRowIndex + 2;
+            break;
           }
         }
-      }
 
-      // 3️⃣ Expand sheet if needed
-      const metadataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`;
-      const metadataRes = await fetch(metadataUrl, {
-        headers: { Authorization: `Bearer ${accessToken}` },
+        console.log(`📍 [${requestId}] Row ${i + 1}: insertIndex = ${insertIndex}`);
+      }
+    }
+
+    // ─── Expand sheet ถ้าจำเป็น ─────────────────────────────────────────────
+    const metadataRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const metadata = await metadataRes.json();
+    const sheetMeta = metadata.sheets.find((s: any) => s.properties.title === sheetName);
+    const currentMaxRows = sheetMeta?.properties?.gridProperties?.rowCount ?? 1000;
+
+    if (insertIndex > currentMaxRows) {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          requests: [{
+            updateSheetProperties: {
+              properties: { sheetId, gridProperties: { rowCount: insertIndex + 100 } },
+              fields: "gridProperties.rowCount",
+            },
+          }],
+        }),
       });
-      
-      const metadata = await metadataRes.json();
-      const sheet = metadata.sheets.find((s: any) => s.properties.title === sheetName);
-      const currentMaxRows = sheet.properties.gridProperties.rowCount;
-      const requiredRows = insertIndex + rowsToInsert.length;
+    }
 
-      if (requiredRows > currentMaxRows) {
-        console.log(`🔧 [${requestId}] Expanding sheet...`);
-        const expandUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
-        await fetch(expandUrl, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            requests: [{
-              updateSheetProperties: {
-                properties: {
-                  sheetId,
-                  gridProperties: { rowCount: requiredRows + 100 },
-                },
-                fields: "gridProperties.rowCount",
-              },
-            }],
-          }),
-        });
-      }
-
-      // 4️⃣ ✅ VALIDATE: ตรวจสอบว่าข้อมูลยังคงเหมือนเดิม
-      const verifyRes = await fetch(getUrl, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      const verifyData = await verifyRes.json();
-      const currentSnapshot = createSnapshot(verifyData.values || []);
-
-      if (currentSnapshot.checksum !== snapshot.checksum) {
-        console.warn(`⚠️ [${requestId}] Sheet modified during preparation!`);
-        console.warn(`   Expected: ${snapshot.checksum}, Got: ${currentSnapshot.checksum}`);
-        
-        // Retry ด้วย exponential backoff + random jitter
-        if (attempt < maxRetries) {
-          const baseDelay = 500 * Math.pow(2, attempt - 1);
-          const jitter = Math.random() * 500;
-          const delay = baseDelay + jitter;
-          
-          console.log(`⏳ [${requestId}] Retrying in ${delay.toFixed(0)}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          continue; // Retry
-        } else {
-          throw new Error("DATA_MODIFIED");
-        }
-      }
-
-      console.log(`✅ [${requestId}] Validation passed`);
-
-      // 5️⃣ Insert blank rows
-      console.log(`⏳ [${requestId}] Inserting ${rowsToInsert.length} rows at ${insertIndex}...`);
-      
-      const insertUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
-      await fetch(insertUrl, {
+    // ─── Insert blank row ────────────────────────────────────────────────────
+    const insertRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+      {
         method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -214,145 +182,103 @@ async function attemptInsertWithRetry(params: {
                 sheetId,
                 dimension: "ROWS",
                 startIndex: insertIndex - 1,
-                endIndex: insertIndex - 1 + rowsToInsert.length,
+                endIndex: insertIndex,
               },
+              inheritFromBefore: false,
             },
           }],
         }),
-      });
+      }
+    );
+    if (!insertRes.ok) throw new Error(`insertDimension failed: ${insertRes.status}`);
 
-      // 6️⃣ Write data
-      const endCol = getColumnLetter(headerRow.length);
-      const writeRange = `${sheetName}!A${insertIndex}:${endCol}${insertIndex + rowsToInsert.length - 1}`;
-      const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(writeRange)}?valueInputOption=USER_ENTERED`;
-      
-      const updateRes = await fetch(updateUrl, {
+    // ─── Write data ──────────────────────────────────────────────────────────
+    const endCol = getColumnLetter(headerRow.length);
+    const writeRange = `${sheetName}!A${insertIndex}:${endCol}${insertIndex}`;
+    const updateRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(writeRange)}?valueInputOption=USER_ENTERED`,
+      {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ values: rowsToInsert }),
-      });
-
-      if (!updateRes.ok) {
-        throw new Error(`Update failed: ${updateRes.status}`);
+        body: JSON.stringify({ values: [row] }),
       }
+    );
+    if (!updateRes.ok) throw new Error(`Write failed: ${updateRes.status}`);
 
-      const result = await updateRes.json();
+    console.log(`✅ [${requestId}] Row ${i + 1} inserted at ${insertIndex}`);
 
-      console.log(`✅ [${requestId}] SUCCESS! Inserted at row ${insertIndex}`);
+    // ✅ อัปเดต dateValues ใน memory (เหมือน splice ของ Apps Script)
+    const insertedDate = dateFieldIndex !== null ? parseDate(row[dateFieldIndex]) : null;
+    dateValues.splice(insertIndex - headerRowIndex - 1, 0, insertedDate);
+    lastRow++;
 
-      return {
-        success: true,
-        insertIndex,
-        result,
-        attempts: attempt,
-      };
-
-    } catch (error: any) {
-      // ถ้าเป็น DATA_MODIFIED และยังมี retry เหลือ → ลอง retry
-      if (error.message === "DATA_MODIFIED" && attempt < maxRetries) {
-        continue;
-      }
-      
-      // Error อื่นๆ หรือ retry หมดแล้ว → throw
-      console.error(`❌ [${requestId}] Attempt ${attempt} failed:`, error.message);
-      
-      if (attempt === maxRetries) {
-        throw new Error(
-          error.message === "DATA_MODIFIED"
-            ? "ข้อมูลถูกแก้ไขโดยผู้ใช้อื่น กรุณาลองใหม่อีกครั้ง"
-            : error.message
-        );
-      }
-    }
+    insertResults.push({ rowIndex: insertIndex });
   }
 
-  throw new Error("Max retries exceeded");
+  return insertResults;
 }
+
+// ─── Route Handler ─────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
   const requestId = `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 
   try {
     console.log("=".repeat(80));
-    console.log(`🛒 [${requestId}] SALES FORM SUBMIT API`);
+    console.log(`🛒 [${requestId}] SALES FORM SUBMIT (Apps Script Logic)`);
     console.log("=".repeat(80));
 
-    // AUTH
+    // ✅ AUTH
     const token = await getToken({
       req: request,
       secret: process.env.NEXTAUTH_SECRET,
     });
 
     if (!token) {
-      return NextResponse.json(
-        { error: "Unauthorized", code: "AUTH_REQUIRED" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized", code: "AUTH_REQUIRED" }, { status: 401 });
     }
 
     if ((token as any).error === "RefreshAccessTokenError") {
       return NextResponse.json(
-        {
-          error: "Session expired",
-          code: "TOKEN_EXPIRED",
-          message: "Please sign out and sign in again",
-        },
+        { error: "Session expired", code: "TOKEN_EXPIRED", message: "Please sign out and sign in again" },
         { status: 401 }
       );
     }
 
     const accessToken = (token as any)?.accessToken;
     if (!accessToken) {
-      return NextResponse.json(
-        { error: "No access token", code: "NO_TOKEN" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "No access token", code: "NO_TOKEN" }, { status: 401 });
     }
 
-    const userEmail = (token as any)?.email;
-    console.log(`👤 [${requestId}] User: ${userEmail}`);
-
-    // PARSE BODY
+    // ✅ PARSE BODY
     const body = await request.json();
     const { spreadsheetId, sheetName, formData, fields } = body;
 
-    console.log(`📦 [${requestId}] Sheet: ${sheetName}`);
-
     if (!spreadsheetId || !sheetName || !formData || !fields) {
-      return NextResponse.json(
-        { error: "Missing required fields", code: "MISSING_PARAMS" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Missing required fields", code: "MISSING_PARAMS" }, { status: 400 });
     }
 
     const { lineItems, ...customerData } = formData;
 
     if (!Array.isArray(lineItems) || lineItems.length === 0) {
-      return NextResponse.json(
-        { error: "No line items provided", code: "NO_ITEMS" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "No line items provided", code: "NO_ITEMS" }, { status: 400 });
     }
 
-    console.log(`   Line items: ${lineItems.length}`);
+    console.log(`📦 [${requestId}] Sheet: ${sheetName}, Items: ${lineItems.length}`);
 
-    // GET METADATA
-    const metadataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`;
-    const metadataRes = await fetch(metadataUrl, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    // ✅ GET METADATA + SHEET ID
+    const metadataRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
 
     if (!metadataRes.ok) {
       if (metadataRes.status === 401) {
         return NextResponse.json(
-          {
-            error: "Session expired",
-            code: "TOKEN_EXPIRED",
-            message: "Please sign out and sign in again",
-          },
+          { error: "Session expired", code: "TOKEN_EXPIRED", message: "Please sign out and sign in again" },
           { status: 401 }
         );
       }
@@ -371,27 +297,23 @@ export async function POST(request: NextRequest) {
 
     const sheetId = sheet.properties.sheetId;
 
-    // GET INITIAL DATA (for header)
+    // ✅ GET HEADER ROW
     const getUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}`;
-    const getRes = await fetch(getUrl, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
+    const getRes = await fetch(getUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!getRes.ok) throw new Error(`Failed to fetch sheet: ${getRes.status}`);
     const sheetData = await getRes.json();
     const headerRow = (sheetData.values || [])[0] || [];
 
-    // MAP FIELDS
-    console.log(`\n🔗 [${requestId}] Mapping fields...`);
-
-    const columnIndices: Record<string, number> = {};
-    let dateFieldIndex: number | null = null;
-
+    // ✅ MAP FIELDS
     interface FieldConfig {
       fieldName: string;
       order: number;
       type: string;
-      section: string;
+      section: string; // "customer" | "lineitem"
     }
+
+    const columnIndices: Record<string, number> = {};
+    let dateFieldIndex: number | null = null;
 
     for (const field of fields as FieldConfig[]) {
       const colIndex = Number(field.order) - 1;
@@ -399,45 +321,50 @@ export async function POST(request: NextRequest) {
         columnIndices[field.fieldName] = colIndex;
         if (field.type === "date" && dateFieldIndex === null) {
           dateFieldIndex = colIndex;
+          console.log(`📅 [${requestId}] Date field: "${field.fieldName}" at col ${colIndex + 1}`);
         }
       }
     }
 
-    // BUILD ROWS
-    console.log(`\n📝 [${requestId}] Building rows...`);
-
-    const rowsToInsert: any[][] = [];
     const customerFields = (fields as FieldConfig[]).filter((f) => f.section === "customer");
     const lineItemFields = (fields as FieldConfig[]).filter((f) => f.section === "lineitem");
 
-    lineItems.forEach((item: any, idx: number) => {
+    // ✅ BUILD ROWS
+    // ✅ Customer fields ลงเฉพาะแถวแรก (เหมือน i === 0 ของ Apps Script)
+    const rowsToInsert: any[][] = lineItems.map((item: any, idx: number) => {
       const row = new Array(headerRow.length).fill("");
 
+      // Customer fields — ลงแถวแรกเท่านั้น
       customerFields.forEach((f: FieldConfig) => {
         const col = columnIndices[f.fieldName];
         if (col !== undefined) {
           if (idx === 0) {
-            row[col] = customerData[f.fieldName] || "";
-          } else if (["date", "cust_id", "วันที่", "รหัสลูกค้า"].includes(f.fieldName.toLowerCase())) {
-            row[col] = customerData[f.fieldName] || "";
+            // แถวแรก: ลง customer data ทั้งหมด
+            row[col] = customerData[f.fieldName] ?? "";
+          } else {
+            // แถวถัดไป: ลงเฉพาะ date และ id (เหมือน Apps Script)
+            const name = f.fieldName.toLowerCase();
+            if (f.type === "date" || name.includes("date") || name.includes("วันที่") ||
+                name.includes("id") || name === "cust_id" || name === "receipt_no") {
+              row[col] = customerData[f.fieldName] ?? "";
+            }
           }
         }
       });
 
+      // Line item fields — ลงทุกแถว
       lineItemFields.forEach((f: FieldConfig) => {
         const col = columnIndices[f.fieldName];
         if (col !== undefined) {
-          row[col] = item[f.fieldName] || "";
+          row[col] = item[f.fieldName] ?? "";
         }
       });
 
-      rowsToInsert.push(row);
+      return row;
     });
 
-    console.log(`✅ [${requestId}] Built ${rowsToInsert.length} rows`);
-
-    // ✅ ATTEMPT INSERT WITH AUTO-RETRY
-    const result = await attemptInsertWithRetry({
+    // ✅ INSERT (Apps Script logic)
+    const results = await insertRowsWithDateSort({
       accessToken,
       spreadsheetId,
       sheetName,
@@ -445,32 +372,22 @@ export async function POST(request: NextRequest) {
       rowsToInsert,
       dateFieldIndex,
       headerRow,
-      customerFields,
-      lineItemFields,
       requestId,
-      maxRetries: 3,
     });
 
     console.log("=".repeat(80));
 
     return NextResponse.json({
       success: true,
-      message: `บันทึก ${rowsToInsert.length} แถวสำเร็จ ที่ตำแหน่ง ${result.insertIndex}`,
-      rowsInserted: rowsToInsert.length,
-      insertIndex: result.insertIndex,
-      cellsUpdated: result.result.updatedCells,
-      attempts: result.attempts,
+      message: `บันทึก ${results.length} แถวสำเร็จ`,
+      rowsInserted: results.length,
+      insertedAt: results.map((r) => r.rowIndex),
     });
 
   } catch (error: any) {
-    console.error(`\n❌ [${requestId}] ERROR:`, error.message);
-
+    console.error(`❌ [${requestId}] ERROR:`, error.message);
     return NextResponse.json(
-      {
-        error: "Failed to save data",
-        code: "SAVE_ERROR",
-        message: error.message,
-      },
+      { error: "Failed to save data", code: "SAVE_ERROR", message: error.message },
       { status: 500 }
     );
   }
