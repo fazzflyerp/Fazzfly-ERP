@@ -15,6 +15,7 @@ import {
 
 import { IC } from "@/app/components/crm/crm.ui";
 import CRMNavBar from "@/app/components/crm/CRMNavBar";
+import QuickNav from "@/app/components/QuickNav";
 import CalendarTab from "@/app/components/crm/CalendarTab";
 import CustomersTab from "@/app/components/crm/CustomersTab";
 import FollowsTab from "@/app/components/crm/FollowsTab";
@@ -58,6 +59,7 @@ export default function CRMPage() {
   const [eFollow, setEFollow] = useState<FollowUp | null>(null);
 
   const [sApt, setSApt] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const [sCust, setSCust] = useState(false);
   const [sFollow, setSFollow] = useState(false);
 
@@ -349,7 +351,8 @@ export default function CRMPage() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 lg:w-96 h-80 lg:h-96 bg-fuchsia-100 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000" />
       </div>
 
-      <CRMNavBar userName={(session as any)?.user?.name} pendingCount={pending.length} follows={follows} onFollowClick={() => setTab("follows")} />
+      <QuickNav isOpen={navOpen} onClose={() => setNavOpen(false)} />
+      <CRMNavBar userName={(session as any)?.user?.name} pendingCount={pending.length} follows={follows} onFollowClick={() => setTab("follows")} onOpenQuickNav={() => setNavOpen(true)} />
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 lg:px-6 py-6 lg:py-12">
         <div className="mb-6 lg:mb-10">

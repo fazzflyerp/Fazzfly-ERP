@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import QuickNav, { QuickNavTrigger } from "@/app/components/QuickNav";
 import PayrollSlipPreview from "@/app/components/PayrollSlipPreview";
 
 interface ConfigField {
@@ -57,6 +58,7 @@ export default function PayrollSlipPage() {
 
   // ✅ NEW: Refresh state
   const [refreshing, setRefreshing] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
@@ -334,10 +336,12 @@ export default function PayrollSlipPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+      <QuickNav isOpen={navOpen} onClose={() => setNavOpen(false)} />
       <div className="bg-white/90 backdrop-blur-lg border-b border-blue-200 sticky top-0 z-20 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
+              <QuickNavTrigger onClick={() => setNavOpen(true)} />
               <Link href="/ERP/home" className="group flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 rounded-xl transition-all duration-300 border border-gray-200 shadow-sm">
                 <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import QuickNav, { QuickNavTrigger } from "@/app/components/QuickNav";
 
 interface FormField {
   fieldName: string;
@@ -25,6 +26,11 @@ interface HelperOption {
   label: string;
 }
 
+interface DuplicateMatch {
+  rowNumber: number;
+  matchedFields: { label: string; value: string }[];
+}
+
 export default function MasterDataFormPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -40,6 +46,10 @@ export default function MasterDataFormPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  const [duplicateWarning, setDuplicateWarning] = useState<DuplicateMatch[] | null>(null);
+  const [pendingSubmit, setPendingSubmit] = useState<{ id: string; data: string[] } | null>(null);
+  const [navOpen, setNavOpen] = useState(false);
 
   const spreadsheetId = searchParams.get("spreadsheetId");
   const configName = searchParams.get("configName");
@@ -203,6 +213,99 @@ export default function MasterDataFormPage() {
     }));
   };
 
+  const buildRowData = (cleanSpreadsheetId: string) => {
+    const sortedForSubmit = [...formFields].sort((a, b) => a.order - b.order);
+    const maxOrder = Math.max(...sortedForSubmit.map(f => f.order));
+    const rowData: string[] = new Array(maxOrder).fill("");
+    sortedForSubmit.forEach((field) => {
+      const value = formData[field.fieldName];
+      const arrayIndex = field.order - 1;
+      if (field.type === "checkbox") {
+        rowData[arrayIndex] = value ? "TRUE" : "FALSE";
+      } else {
+        rowData[arrayIndex] = value?.toString() || "";
+      }
+    });
+    return rowData;
+  };
+
+  const checkDuplicates = async (
+    cleanSpreadsheetId: string,
+    rowData: string[]
+  ): Promise<DuplicateMatch[]> => {
+    const accessToken = (session as any)?.accessToken;
+    const dataUrl = new URL(`${window.location.origin}/api/master/data`);
+    dataUrl.searchParams.set("spreadsheetId", cleanSpreadsheetId);
+    dataUrl.searchParams.set("sheetName", sheetName!);
+
+    const res = await fetch(dataUrl.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return [];
+
+    const { rows } = await res.json();
+    const matches: DuplicateMatch[] = [];
+
+    (rows as string[][]).forEach((existingRow, idx) => {
+      const matchedFields: { label: string; value: string }[] = [];
+
+      formFields.forEach((field) => {
+        const arrayIndex = field.order - 1;
+        const newVal = rowData[arrayIndex]?.trim().toLowerCase();
+        const existVal = existingRow[arrayIndex]?.trim().toLowerCase();
+
+        if (
+          newVal &&
+          existVal &&
+          newVal === existVal &&
+          field.type !== "checkbox"
+        ) {
+          matchedFields.push({ label: field.label, value: rowData[arrayIndex] });
+        }
+      });
+
+      // ถือว่าซ้ำเมื่อ required fields ทุกตัวตรงกัน
+      const requiredFields = formFields.filter((f) => f.required);
+      const requiredMatched = requiredFields.every((f) =>
+        matchedFields.some((m) => m.label === f.label)
+      );
+
+      if (requiredMatched && matchedFields.length > 0) {
+        matches.push({ rowNumber: idx + 2, matchedFields }); // +2 เพราะ row 1 = header
+      }
+    });
+
+    return matches;
+  };
+
+  const doSubmit = async (cleanSpreadsheetId: string, rowData: string[]) => {
+    const accessToken = (session as any)?.accessToken;
+    if (!accessToken) throw new Error("No access token available");
+
+    const response = await fetch("/api/master/submit", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ spreadsheetId: cleanSpreadsheetId, sheetName, rowData }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to save data");
+    }
+  };
+
+  const resetForm = () => {
+    const resetData: { [key: string]: any } = {};
+    formFields.forEach((field) => {
+      resetData[field.fieldName] = field.type === "checkbox" ? false : "";
+    });
+    setFormData(resetData);
+    setSuccess(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -227,82 +330,40 @@ export default function MasterDataFormPage() {
         cleanSpreadsheetId = cleanSpreadsheetId.split("?")[0];
       }
 
-      const sortedForSubmit = [...formFields].sort((a, b) => a.order - b.order);
-      
-      const minOrder = Math.min(...sortedForSubmit.map(f => f.order));
-      const maxOrder = Math.max(...sortedForSubmit.map(f => f.order));
-      
-      console.log(`📌 Order range: ${minOrder} - ${maxOrder}`);
-      
-      // ✅ สร้าง array ตาม maxOrder (เว้นช่องว่างถ้า order ข้าด)
-      const rowData: string[] = new Array(maxOrder).fill("");
-      
-      // ✅ ลงข้อมูลตาม order number แท้จริง
-      sortedForSubmit.forEach((field) => {
-        const value = formData[field.fieldName];
-        const arrayIndex = field.order - 1; // order 2 → index 1, order 5 → index 4
-        
-        if (field.type === "checkbox") {
-          rowData[arrayIndex] = value ? "TRUE" : "FALSE";
-        } else {
-          rowData[arrayIndex] = value?.toString() || "";
-        }
-      });
+      const rowData = buildRowData(cleanSpreadsheetId);
 
-      console.log("🔥 Final rowData array:");
-      console.log(rowData);
-      console.log("📊 Detailed structure:");
-      rowData.forEach((val, idx) => {
-        const order = idx + 1;
-        const field = sortedForSubmit.find(f => f.order === order);
-        const colLetter = String.fromCharCode(65 + idx);
-        
-        if (field) {
-          console.log(`  [${idx}] = "${val}" (${field.label}) - Col ${colLetter} (order ${order})`);
-        } else {
-          console.log(`  [${idx}] = "" (no field) - Col ${colLetter} (order ${order}) ← EMPTY`);
-        }
-      });
-
-      const accessToken = (session as any)?.accessToken;
-      if (!accessToken) {
-        throw new Error("No access token available");
+      // ✅ ตรวจสอบข้อมูลซ้ำก่อนบันทึก
+      const duplicates = await checkDuplicates(cleanSpreadsheetId, rowData);
+      if (duplicates.length > 0) {
+        setPendingSubmit({ id: cleanSpreadsheetId, data: rowData });
+        setDuplicateWarning(duplicates);
+        setSubmitting(false);
+        return;
       }
 
-      const response = await fetch("/api/master/submit", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          spreadsheetId: cleanSpreadsheetId,
-          sheetName,
-          rowData,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to save data");
-      }
-
+      await doSubmit(cleanSpreadsheetId, rowData);
       setSuccess(true);
-
-      setTimeout(() => {
-        const resetData: { [key: string]: any } = {};
-        formFields.forEach((field) => {
-          if (field.type === "checkbox") {
-            resetData[field.fieldName] = false;
-          } else {
-            resetData[field.fieldName] = "";
-          }
-        });
-        setFormData(resetData);
-        setSuccess(false);
-      }, 2000);
+      setTimeout(resetForm, 2000);
     } catch (err: any) {
       console.error("Submit error:", err);
+      setError(err.message || "เกิดข้อผิดพลาดในการบันทึก");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleForceSubmit = async () => {
+    if (!pendingSubmit) return;
+    const { id, data } = pendingSubmit;
+    setDuplicateWarning(null);
+    setPendingSubmit(null);
+    try {
+      setSubmitting(true);
+      setError(null);
+      await doSubmit(id, data);
+      setSuccess(true);
+      setTimeout(resetForm, 2000);
+    } catch (err: any) {
       setError(err.message || "เกิดข้อผิดพลาดในการบันทึก");
     } finally {
       setSubmitting(false);
@@ -504,11 +565,77 @@ export default function MasterDataFormPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+
+      {/* ─── Duplicate Warning Modal ─── */}
+      {duplicateWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => { setDuplicateWarning(null); setPendingSubmit(null); }}
+          />
+          {/* Modal */}
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-slideIn">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 flex items-center gap-3">
+              <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-white font-bold text-base">พบข้อมูลซ้ำ!</p>
+                <p className="text-amber-100 text-xs">ข้อมูลนี้อาจถูกบันทึกไปแล้ว</p>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-4 max-h-72 overflow-y-auto space-y-3">
+              {duplicateWarning.map((dup, i) => (
+                <div key={i} className="border border-amber-200 bg-amber-50 rounded-lg p-3">
+                  <p className="text-xs font-bold text-amber-800 mb-2">
+                    แถวที่ {dup.rowNumber} ในชีต
+                  </p>
+                  <div className="space-y-1">
+                    {dup.matchedFields.map((f, j) => (
+                      <div key={j} className="flex items-center gap-2 text-xs text-amber-700">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
+                        <span className="font-medium">{f.label}:</span>
+                        <span className="text-amber-900 font-semibold">{f.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-3">
+              <button
+                onClick={() => { setDuplicateWarning(null); setPendingSubmit(null); }}
+                className="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-all"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleForceSubmit}
+                disabled={submitting}
+                className="px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-amber-500 to-orange-500 rounded-lg hover:from-amber-600 hover:to-orange-600 shadow-lg shadow-amber-500/30 disabled:opacity-50 transition-all"
+              >
+                บันทึกต่อไป (ซ้ำได้)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <QuickNav isOpen={navOpen} onClose={() => setNavOpen(false)} />
       {/* Top Bar - Modern Glass Effect */}
       <div className="bg-white/80 backdrop-blur-xl border-b border-slate-200 sticky top-0 z-10 shadow-sm">
         <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
+              <QuickNavTrigger onClick={() => setNavOpen(true)} />
               <Link
                 href="/ERP/home?tab=masterdata"
                 className="p-2 hover:bg-slate-100 rounded-lg transition-colors"

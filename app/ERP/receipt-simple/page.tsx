@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import QuickNav, { QuickNavTrigger } from "@/app/components/QuickNav";
 import ReceiptPreview from "@/app/components/ReceiptPreview";
 
 interface ConfigField {
@@ -66,6 +67,7 @@ export default function ReceiptSimplePage() {
 
   // Module info (from documents API)
   const [moduleInfo, setModuleInfo] = useState<any>(null);
+  const [navOpen, setNavOpen] = useState(false);
 
   // ✅ Company info & Preview modal
   const [companyInfo, setCompanyInfo] = useState<any>(null);
@@ -474,11 +476,13 @@ export default function ReceiptSimplePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50">
+      <QuickNav isOpen={navOpen} onClose={() => setNavOpen(false)} />
       {/* Header */}
       <div className="bg-white/90 backdrop-blur-lg border-b border-emerald-200 sticky top-0 z-20 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
+              <QuickNavTrigger onClick={() => setNavOpen(true)} />
               <Link href="/ERP/home" className="group flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 rounded-xl transition-all duration-300 border border-gray-200 shadow-sm">
                 <svg className="w-5 h-5 text-gray-600 group-hover:text-gray-800 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />

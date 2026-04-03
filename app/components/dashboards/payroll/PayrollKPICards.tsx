@@ -1,7 +1,6 @@
 /**
- * Payroll KPI Cards Component - Fully Mobile/Tablet Friendly
+ * Payroll KPI Cards Component - Modern Stripe Style
  * Location: app/components/dashboards/payroll/PayrollKPICards.tsx
- * ✅ Displays: 6 KPI cards responsive (1 column mobile, 2 tablet, 3 desktop)
  */
 
 "use client";
@@ -17,37 +16,53 @@ interface PayrollKPICardsProps {
   selectedPeriods: string[];
 }
 
-const COLORS = {
-  salary: "from-green-500 to-emerald-600",
-  commission: "from-blue-500 to-cyan-600",
-  staffFees: "from-purple-500 to-violet-600",
-  leave: "from-orange-500 to-amber-600",
-  late: "from-red-500 to-rose-600",
-  ot: "from-indigo-500 to-blue-600",
+const LABELS: Record<string, { label: string; icon: React.ReactNode; barColor: string; unit: string }> = {
+  salary: { 
+    label: "เงินเดือนรวม", 
+    unit: "บาท",
+    barColor: "bg-emerald-500",
+    icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  },
+  commission: { 
+    label: "คอมมิชชั่นรวม", 
+    unit: "บาท",
+    barColor: "bg-blue-500",
+    icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+  },
+  staff_fees: { 
+    label: "ค่าพนักงานรวม", 
+    unit: "บาท",
+    barColor: "bg-violet-500",
+    icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+  },
+  off: { 
+    label: "ลารวม", 
+    unit: "วัน",
+    barColor: "bg-orange-500",
+    icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  },
+  late: { 
+    label: "สายรวม", 
+    unit: "นาที",
+    barColor: "bg-rose-500",
+    icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+  },
+  ot: { 
+    label: "OT รวม", 
+    unit: "นาที",
+    barColor: "bg-sky-500",
+    icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+  },
 };
 
-const LABELS: Record<string, { label: string; icon: string; color: string; unit: string }> = {
-  salary: { label: "เงินเดือนรวม", icon: "💰", color: COLORS.salary, unit: "บาท" },
-  commission: { label: "คอมมิชชั่นรวม", icon: "💵", color: COLORS.commission, unit: "บาท" },
-  staff_fees: { label: "ค่าพนักงานรวม", icon: "💳", color: COLORS.staffFees, unit: "บาท" },
-  off: { label: "ลารวม", icon: "🏖️", color: COLORS.leave, unit: "วัน" },
-  late: { label: "สายรวม", icon: "⏰", color: COLORS.late, unit: "นาที" },
-  ot: { label: "OT รวม", icon: "⏱️", color: COLORS.ot, unit: "นาที" },
-};
-
-const renderKPICard = (
-  fieldName: string,
-  kpiData: { [key: string]: KPIData },
-  allData: any[],
-  config: ConfigField[],
-  selectedPeriods: string[],
-  formatNumber: (num: number, unit: string) => string
-) => {
+const KPICard = ({ 
+  fieldName, kpiData, allData, config, selectedPeriods, formatNumber 
+}: { 
+  fieldName: string; kpiData: { [key: string]: KPIData }; allData: any[]; config: ConfigField[]; selectedPeriods: string[]; formatNumber: (num: number, unit: string) => string 
+}) => {
   const data = kpiData[fieldName];
-  if (!data) return null;
-
   const info = LABELS[fieldName];
-  if (!info) return null;
+  if (!data || !info) return null;
 
   const currentPeriod = selectedPeriods.length === 1 ? selectedPeriods[0] : "";
   const { change, icon } = getMetricChange(fieldName, currentPeriod, allData, config);
@@ -55,144 +70,99 @@ const renderKPICard = (
   const isNegativeGood = fieldName === "late" || fieldName === "off";
   const changeColor = change !== null && typeof change === 'number'
     ? isNegativeGood
-      ? (change > 0 ? "text-red-600" : change < 0 ? "text-green-600" : "text-slate-600")
-      : (change > 0 ? "text-green-600" : change < 0 ? "text-red-600" : "text-slate-600")
-    : "text-slate-600";
+      ? (change > 0 ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-600")
+      : (change > 0 ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600")
+    : "bg-slate-50 text-slate-500";
 
   return (
-    <div
-      key={fieldName}
-      className="bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-xl lg:rounded-2xl p-3 sm:p-4 lg:p-6 border-2 border-slate-100 hover:shadow-lg sm:hover:shadow-xl sm:hover:scale-105 transition-all duration-300 active:scale-95 sm:active:scale-100"
-    >
-      {/* Header - More Compact on Mobile */}
-      <div className="flex items-start sm:items-center justify-between gap-2 mb-2 sm:mb-3 lg:mb-4">
-        <div className={`p-2 sm:p-2.5 lg:p-3 rounded-lg lg:rounded-xl bg-gradient-to-br ${info.color} text-white text-base sm:text-lg lg:text-2xl shadow-lg flex-shrink-0`}>
-          {info.icon}
-        </div>
-        
-        {/* Label and Change - Vertical Stack on Mobile */}
-        <div className="flex-1 min-w-0">
-          <p className="text-xs sm:text-xs lg:text-sm font-medium text-slate-600 truncate">{info.label}</p>
+    <div className="relative bg-white rounded-2xl p-4 lg:p-5 border border-slate-100 shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col justify-between min-h-[160px]">
+      {/* ✅ Accent Bar */}
+      <div className={`absolute bottom-0 left-0 right-0 h-1.5 ${info.barColor}`} />
+
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <div className={`w-9 h-9 rounded-xl ${info.barColor} text-white flex items-center justify-center shadow-md`}>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {info.icon}
+            </svg>
+          </div>
           {change !== null && typeof change === 'number' && (
-            <div className="flex items-center gap-0.5 mt-0.5">
-              <span className="text-sm">{icon}</span>
-              <span className={`${changeColor} font-semibold text-xs`}>
-                {change > 0 ? "+" : ""}{change.toFixed(1)}%
-              </span>
-            </div>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-0.5 ${changeColor}`}>
+              {icon} {Math.abs(change).toFixed(1)}%
+            </span>
           )}
         </div>
-      </div>
 
-      {/* Main Value - Largest on Mobile */}
-      <p className="text-2xl sm:text-2xl lg:text-3xl font-bold text-slate-800 mb-2 sm:mb-3 lg:mb-4 truncate leading-tight">
-        {formatNumber(data.sum, info.unit)}
-      </p>
-
-      {/* Stats Grid - 2 columns always */}
-      <div className="grid grid-cols-2 gap-2 pt-2 sm:pt-3 lg:pt-4 border-t border-slate-200">
-        <div className="min-w-0">
-          <p className="text-xs text-slate-500 mb-0.5 font-medium">เฉลี่ย</p>
-          <p className="text-xs sm:text-sm lg:text-base font-semibold text-slate-700 truncate">
-            {formatNumber(data.avg, info.unit)}
-          </p>
-        </div>
-        <div className="min-w-0">
-          <p className="text-xs text-slate-500 mb-0.5 font-medium">สูงสุด</p>
-          <p className="text-xs sm:text-sm lg:text-base font-semibold text-slate-700 truncate">
-            {formatNumber(data.max, info.unit)}
-          </p>
-        </div>
-      </div>
-
-      {/* Count */}
-      <div className="mt-2 pt-2 border-t border-slate-200">
-        <p className="text-xs text-slate-500">
-          จำนวน: <span className="font-semibold text-slate-700 text-xs sm:text-sm">{data.count}</span>
+        <p className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-1">
+          {info.label}
+        </p>
+        <p className="text-xl lg:text-2xl font-bold text-slate-800 truncate">
+          {formatNumber(data.sum, info.unit)}
         </p>
       </div>
 
-      {/* Performance Hint - Hidden on small mobile */}
-      {(fieldName === "late" || fieldName === "off" || fieldName === "ot") && (
-        <div className="hidden sm:block mt-2 pt-2 border-t border-slate-200">
-          <p className="text-xs text-slate-500">
-            {fieldName === "late" && "💡 0 นาที = 30 คะแนน"}
-            {fieldName === "off" && "💡 0 วัน = 30 คะแนน"}
-            {fieldName === "ot" && `💡 ${'>'}40 ชม. = 40 คะแนน`}
-          </p>
+      {/* Original Details */}
+      <div className="mt-3 pt-3 border-t border-slate-50 grid grid-cols-2 gap-2 text-[10px] lg:text-xs">
+        <div>
+          <span className="text-slate-400 block">เฉลี่ย</span>
+          <span className="font-semibold text-slate-700">{formatNumber(data.avg, info.unit)}</span>
         </div>
-      )}
+        <div className="text-right">
+          <span className="text-slate-400 block">สูงสุด</span>
+          <span className="font-semibold text-slate-700">{formatNumber(data.max, info.unit)}</span>
+        </div>
+      </div>
     </div>
   );
 };
 
 export default function PayrollKPICards({
-  kpiData,
-  allData,
-  filteredData,
-  config,
-  selectedPeriods,
+  kpiData, allData, config, selectedPeriods,
 }: PayrollKPICardsProps) {
-  const CARD_ORDER = [
-    "salary",
-    "commission",
-    "staff_fees",
-    "off",
-    "late",
-    "ot",
-  ];
-
+  
   const formatNumber = (num: number, unit: string): string => {
     if (unit === "บาท") {
-      return new Intl.NumberFormat("th-TH", {
-        style: "currency",
-        currency: "THB",
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-      }).format(num);
+      return new Intl.NumberFormat("th-TH", { minimumFractionDigits: 0 }).format(num) + " ฿";
     }
-    
     if (unit === "นาที") {
       const hours = Math.floor(num / 60);
       const minutes = Math.round(num % 60);
-      if (hours > 0) {
-        return `${hours}h ${minutes}m`;
-      }
-      return `${minutes}m`;
+      return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
     }
-
     return `${num.toFixed(1)} ${unit}`;
   };
 
   return (
-    <div className="space-y-2 sm:space-y-3 lg:space-y-4">
-      {/* Row 1: Salary, Commission, Staff Fees - Full Width Mobile, 2 Col Tablet, 3 Col Desktop */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 lg:gap-6">
-        {CARD_ORDER.slice(0, 3).map((fieldName) =>
-          renderKPICard(fieldName, kpiData, allData, config, selectedPeriods, formatNumber)
-        )}
+    <div className="space-y-6">
+      {/* 6 KPI Cards Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-6">
+        {Object.keys(LABELS).map((fieldName) => (
+          <KPICard 
+            key={fieldName} 
+            fieldName={fieldName} 
+            kpiData={kpiData} 
+            allData={allData} 
+            config={config} 
+            selectedPeriods={selectedPeriods} 
+            formatNumber={formatNumber} 
+          />
+        ))}
       </div>
 
-      {/* Row 2: Leave, Late, OT - Full Width Mobile, 2 Col Tablet, 3 Col Desktop */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 lg:gap-6">
-        {CARD_ORDER.slice(3, 6).map((fieldName) =>
-          renderKPICard(fieldName, kpiData, allData, config, selectedPeriods, formatNumber)
-        )}
-      </div>
-
-      {/* Performance Scoring Summary - Fully Responsive */}
-      <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl sm:rounded-xl lg:rounded-2xl p-3 sm:p-4 lg:p-6 border border-purple-200">
-        <h4 className="text-sm sm:text-base lg:text-lg font-bold text-slate-800 mb-2 sm:mb-3 lg:mb-4 flex items-center gap-2">
-          <span className="text-base sm:text-lg lg:text-xl">🎯</span>
+      {/* Scoring Summary Style เหมือนเดิมแต่ปรับขอบให้เข้าชุด */}
+      <div className="bg-white rounded-2xl p-5 lg:p-6 border border-slate-200 shadow-sm">
+        <h4 className="text-base lg:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+          <span className="p-1.5 bg-indigo-50 rounded-lg text-indigo-600">🎯</span>
           <span>เกณฑ์การประเมิน Performance (100 คะแนน)</span>
         </h4>
         
-        {/* Scoring Boxes - 1 Col Mobile, 2 Col Tablet, 3 Col Desktop */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 lg:gap-4 mb-3 sm:mb-4 lg:mb-4">
-          {/* Late Scoring */}
-          <div className="bg-white rounded-lg p-2.5 sm:p-3 lg:p-4 border border-slate-200">
-            <p className="font-bold text-red-600 text-xs sm:text-sm mb-2">⏰ สาย (30)</p>
-            <ul className="space-y-1 text-slate-600 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+            <p className="font-bold text-rose-600 text-xs mb-2 flex items-center gap-1.5">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              สาย (30)
+            </p>
+            <ul className="space-y-1 text-slate-500 text-[11px]">
               <li>✅ 0 นาที = 30</li>
               <li>✅ 1-30 = 27</li>
               <li>⚠️ 31-60 = 22</li>
@@ -201,10 +171,12 @@ export default function PayrollKPICards({
             </ul>
           </div>
 
-          {/* Leave Scoring */}
-          <div className="bg-white rounded-lg p-2.5 sm:p-3 lg:p-4 border border-slate-200">
-            <p className="font-bold text-orange-600 text-xs sm:text-sm mb-2">🏖️ ลา (30)</p>
-            <ul className="space-y-1 text-slate-600 text-xs">
+          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+            <p className="font-bold text-orange-600 text-xs mb-2 flex items-center gap-1.5">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+              ลา (30)
+            </p>
+            <ul className="space-y-1 text-slate-500 text-[11px]">
               <li>✅ 0 วัน = 30</li>
               <li>✅ 1-2 วัน = 27</li>
               <li>⚠️ 3-4 วัน = 22</li>
@@ -213,10 +185,12 @@ export default function PayrollKPICards({
             </ul>
           </div>
 
-          {/* OT Scoring */}
-          <div className="bg-white rounded-lg p-2.5 sm:p-3 lg:p-4 border border-slate-200">
-            <p className="font-bold text-indigo-600 text-xs sm:text-sm mb-2">⏱️ OT (40)</p>
-            <ul className="space-y-1 text-slate-600 text-xs">
+          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+            <p className="font-bold text-sky-600 text-xs mb-2 flex items-center gap-1.5">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              OT (40)
+            </p>
+            <ul className="space-y-1 text-slate-500 text-[11px]">
               <li>✅ {'>'}2,400 = 40</li>
               <li>⭐ 1,200-2,400 = 35</li>
               <li>✓ 600-1,200 = 30</li>
@@ -226,26 +200,12 @@ export default function PayrollKPICards({
           </div>
         </div>
 
-        {/* Grade Scale - Wrap on Mobile */}
-        <div className="pt-2 sm:pt-3 lg:pt-4 border-t border-purple-200">
-          <p className="text-xs font-semibold text-slate-700 mb-2">เกรด:</p>
-          <div className="flex flex-wrap gap-1 sm:gap-2">
-            <span className="px-2 sm:px-2.5 lg:px-3 py-0.5 sm:py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-              A: 90-100
-            </span>
-            <span className="px-2 sm:px-2.5 lg:px-3 py-0.5 sm:py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-              B: 80-89
-            </span>
-            <span className="px-2 sm:px-2.5 lg:px-3 py-0.5 sm:py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-medium">
-              C: 70-79
-            </span>
-            <span className="px-2 sm:px-2.5 lg:px-3 py-0.5 sm:py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
-              D: 60-69
-            </span>
-            <span className="px-2 sm:px-2.5 lg:px-3 py-0.5 sm:py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">
-              F: มากกว่า 60
-            </span>
-          </div>
+        <div className="pt-4 border-t border-slate-100 flex flex-wrap gap-2">
+            {["A: 90-100", "B: 80-89", "C: 70-79", "D: 60-69", "F: < 60"].map((grade, i) => (
+              <span key={i} className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold border border-slate-200">
+                {grade}
+              </span>
+            ))}
         </div>
       </div>
     </div>

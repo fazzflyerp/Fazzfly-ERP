@@ -1,8 +1,6 @@
 /**
- * Sales KPI Cards Component - With Transaction Details Table
+ * Sales KPI Cards Component - Accent Bar Style with Original Details
  * Location: app/components/dashboards/sales/SalesKPICards.tsx
- * ✅ Desktop: Full transaction table with all details
- * ✅ Data from generateTransactionTableData (salesUtils.ts)
  */
 
 import React, { useState, useMemo } from "react";
@@ -15,15 +13,6 @@ interface SalesKPICardsProps {
   config: ConfigField[];
   selectedPeriods: string[];
 }
-
-const COLORS = [
-  "#9580ff",
-  "#ff613e",  
-  "#fff56d",  
-  "#ff66c4",  
-  "#b0ff4b",   
-  "#dd7ff0ff", 
-];
 
 const LABELS: Record<string, string> = {
   total_sales: "ยอดขายรวม (บาท)",
@@ -49,12 +38,10 @@ export default function SalesKPICards({
 
   const safeFilteredData = filteredData && filteredData.length > 0 ? filteredData : allData;
 
-  // Prepare transaction data using utility function
   const transactionData = useMemo(() => {
     return generateTransactionTableData(safeFilteredData);
   }, [safeFilteredData]);
 
-  // Sort transaction data
   const sortedTransactionData = useMemo(() => {
     const sorted = [...transactionData];
     sorted.sort((a, b) => {
@@ -69,11 +56,9 @@ export default function SalesKPICards({
     return sorted;
   }, [transactionData, sortBy]);
 
-
-
   return (
     <>
-      {/* KPI Cards */}
+      {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4 w-full">
         {[
           "total_sales",
@@ -83,7 +68,6 @@ export default function SalesKPICards({
           "cust_status",
         ].map((fieldName, idx) => {
           let kpi = kpiData[fieldName];
-
           let customerNewCount = 0;
           let customerOldCount = 0;
 
@@ -91,13 +75,7 @@ export default function SalesKPICards({
             const status = getCustomerStatusCounts(safeFilteredData);
             customerNewCount = status.newCount;
             customerOldCount = status.oldCount;
-
-            kpi = {
-              sum: status.total,
-              avg: 0,
-              max: 0,
-              count: status.total,
-            };
+            kpi = { sum: status.total, avg: 0, max: 0, count: status.total };
           }
 
           if (!kpi) return null;
@@ -113,124 +91,118 @@ export default function SalesKPICards({
             ["total_sales", "cost", "profit", "cust_status"].includes(fieldName) &&
             changePercent !== null;
 
+          const STYLES = [
+            { bar: "bg-violet-500", iconBg: "bg-violet-500", accent: "text-violet-400", icon: <path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /> },
+            { bar: "bg-rose-500", iconBg: "bg-rose-500", accent: "text-rose-400", icon: <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /> },
+            { bar: "bg-emerald-500", iconBg: "bg-emerald-500", accent: "text-emerald-400", icon: <path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /> },
+            { bar: "bg-amber-500", iconBg: "bg-amber-500", accent: "text-amber-400", icon: <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /> },
+            { bar: "bg-sky-500", iconBg: "bg-sky-500", accent: "text-sky-400", icon: <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /> },
+          ];
+          const s = STYLES[idx % STYLES.length];
+
           return (
             <div
               key={fieldName}
-              className="bg-gradient-to-br rounded-xl lg:rounded-2xl p-3 sm:p-4 lg:p-6 border shadow-sm hover:shadow-lg hover:scale-105 transition-all active:scale-95 sm:active:scale-100 duration-300"
-              style={{
-                background: `linear-gradient(135deg, ${COLORS[idx % COLORS.length]}70, ${COLORS[idx % COLORS.length]}40)`,
-                borderColor: `${COLORS[idx % COLORS.length]}40`,
-              }}
+              className="relative bg-white rounded-2xl p-4 lg:p-5 border border-slate-100 hover:border-slate-200 shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden"
             >
-              {/* Header: Label + Change Badge */}
-              <div className="flex items-start sm:items-center justify-between gap-2 mb-2 sm:mb-3">
-                <p className="text-xs lg:text-sm text-slate-600 font-bold uppercase tracking-wide truncate">
-                  {LABELS[fieldName] || fieldName}
-                </p>
+              {/* ✅ แถบสีด้านล่าง (Accent Bar) */}
+              <div className={`absolute bottom-0 left-0 right-0 h-1.5 ${s.bar}`} />
+
+              {/* Header row */}
+              <div className="flex items-center justify-between mb-4">
+                <div className={`w-10 h-10 rounded-xl ${s.iconBg} flex items-center justify-center shadow-md`}>
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {s.icon}
+                  </svg>
+                </div>
                 {shouldShowChange && (
                   <span
-                    className={`text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${
-                      changePercent! > 0
-                        ? "bg-green-100 text-green-700"
+                    className={`text-xs font-bold px-2.5 py-1 rounded-full ${changePercent! > 0
+                        ? "bg-emerald-100 text-emerald-600"
                         : changePercent! < 0
-                          ? "bg-red-100 text-red-700"
-                          : "bg-slate-100 text-slate-700"
-                    }`}
+                          ? "bg-red-100 text-red-600"
+                          : "bg-slate-100 text-slate-500"
+                      }`}
                   >
                     {changeIcon} {changePercent!.toFixed(1)}%
                   </span>
                 )}
               </div>
 
-              {/* Main Value */}
-              <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800 mb-2 sm:mb-3 lg:mb-4 truncate">
+              {/* Label (Original Font) */}
+              <p className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-1 truncate">
+                {LABELS[fieldName] || fieldName}
+              </p>
+
+              {/* Main value (Original Font) */}
+              <p className="text-2xl lg:text-3xl font-bold text-slate-800 mb-4 truncate">
                 {(kpi.sum as number).toLocaleString("th-TH", {
                   minimumFractionDigits: 0,
                   maximumFractionDigits: 0,
                 })}
               </p>
 
-              {/* Sub KPIs - Responsive */}
-              {fieldName === "cust_status" ? (
-                <div className="space-y-1 sm:space-y-1.5 text-xs sm:text-sm">
-                  <div className="flex justify-between text-slate-600">
-                    <span>ใหม่:</span>
-                    <span className="font-semibold text-green-600">
-                      {customerNewCount}
-                    </span>
+              {/* Divider & Details (Original Details) */}
+              <div className="border-t border-slate-100 pt-3">
+                {fieldName === "cust_status" ? (
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">ใหม่</span>
+                      <span className="font-semibold text-emerald-500">{customerNewCount}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">เก่า</span>
+                      <span className="font-semibold text-sky-500">{customerOldCount}</span>
+                    </div>
+                    {customerNewCount + customerOldCount > 0 && (
+                      <div className="flex justify-between pt-1 border-t border-slate-100">
+                        <span className="text-slate-400">อัตรา</span>
+                        <span className="font-semibold text-slate-600">
+                          {((customerNewCount / (customerNewCount + customerOldCount)) * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>เก่า:</span>
-                    <span className="font-semibold text-blue-600">
-                      {customerOldCount}
-                    </span>
-                  </div>
-                  {customerNewCount + customerOldCount > 0 && (
-                    <div className="flex justify-between text-slate-600 pt-1 sm:pt-1.5 border-t border-slate-300">
-                      <span>อัตรา:</span>
-                      <span className="font-semibold text-slate-700">
-                        {(
-                          (customerNewCount /
-                            (customerNewCount + customerOldCount)) *
-                          100
-                        ).toFixed(1)}
-                        %
+                ) : (
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">เฉลี่ย</span>
+                      <span className={`font-semibold ${s.accent}`}>
+                        ฿{(kpi.avg as number).toLocaleString("th-TH", { maximumFractionDigits: 0 })}
                       </span>
                     </div>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-1 sm:space-y-1.5 text-xs sm:text-sm">
-                  <div className="flex justify-between text-slate-600">
-                    <span>เฉลี่ย:</span>
-                    <span className="font-semibold truncate ml-2">
-                      ฿{(kpi.avg as number).toLocaleString("th-TH", {
-                        maximumFractionDigits: 0,
-                      })}
-                    </span>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">สูงสุด</span>
+                      <span className="font-semibold text-slate-600">
+                        ฿{(kpi.max as number).toLocaleString("th-TH", { maximumFractionDigits: 0 })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">จำนวน</span>
+                      <span className="font-semibold text-slate-600">{kpi.count}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>สูงสุด:</span>
-                    <span className="font-semibold truncate ml-2">
-                      ฿{(kpi.max as number).toLocaleString("th-TH", {
-                        maximumFractionDigits: 0,
-                      })}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>จำนวน:</span>
-                    <span className="font-semibold">{kpi.count}</span>
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           );
         })}
       </div>
 
-      {/* Transaction Details - Collapsible */}
-      <div className="hidden md:block mt-6 md:mt-8">
+{/* Transaction Table Section (Desktop Only) */}
+      <div className="hidden md:block mt-8 animate-fadeIn">
         <button
           onClick={() => setShowProgramDetails(!showProgramDetails)}
-          className="w-full flex items-center justify-between px-3 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors active:scale-95 lg:active:scale-100"
+          className="w-full flex items-center justify-between px-5 py-3 text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm"
         >
-          <span className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+            </svg>
             <span>รายละเอียดรายการขาย</span>
-          </span>
-          <svg
-            className={`w-4 h-4 transition-transform ${
-              showProgramDetails ? "rotate-180" : ""
-            }`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 9l-7 7-7-7"
-            />
+          </div>
+          <svg className={`w-5 h-5 transition-transform duration-300 ${showProgramDetails ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
 
@@ -239,70 +211,27 @@ export default function SalesKPICards({
             <table className="w-full text-xs lg:text-sm">
               <thead>
                 <tr className="border-b-2 border-slate-300 bg-slate-50">
-                  <th className="px-2 lg:px-4 py-2 lg:py-3 text-left font-bold text-slate-700 whitespace-nowrap">
-                    วันที่
-                  </th>
-                  <th 
-                    className="px-2 lg:px-4 py-2 lg:py-3 text-left font-bold text-slate-700 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
-                    onClick={() => setSortBy("cust_name")}
-                  >
-                    ชื่อลูกค้า {sortBy === "cust_name" && "▼"}
-                  </th>
-                  <th className="px-2 lg:px-4 py-2 lg:py-3 text-left font-bold text-slate-700">
-                    โปรแกรม
-                  </th>
-                  <th className="px-2 lg:px-4 py-2 lg:py-3 text-center font-bold text-slate-700 whitespace-nowrap">
-                    จำนวน
-                  </th>
-                  <th className="px-2 lg:px-4 py-2 lg:py-3 text-right font-bold text-slate-700 whitespace-nowrap">
-                    ยอดขาย
-                  </th>
-                  <th className="px-2 lg:px-4 py-2 lg:py-3 text-right font-bold text-slate-700 whitespace-nowrap">
-                    ต้นทุน
-                  </th>
-                  <th className="px-2 lg:px-4 py-2 lg:py-3 text-right font-bold text-slate-700 whitespace-nowrap">
-                    กำไร
-                  </th>
+                  <th className="px-2 lg:px-4 py-2 lg:py-3 text-left font-bold text-slate-700 whitespace-nowrap">วันที่</th>
+                  <th className="px-2 lg:px-4 py-2 lg:py-3 text-left font-bold text-slate-700 cursor-pointer hover:bg-slate-100 whitespace-nowrap" onClick={() => setSortBy("cust_name")}>ชื่อลูกค้า {sortBy === "cust_name" && "▼"}</th>
+                  <th className="px-2 lg:px-4 py-2 lg:py-3 text-left font-bold text-slate-700">โปรแกรม</th>
+                  <th className="px-2 lg:px-4 py-2 lg:py-3 text-center font-bold text-slate-700 whitespace-nowrap">จำนวน</th>
+                  <th className="px-2 lg:px-4 py-2 lg:py-3 text-right font-bold text-slate-700 whitespace-nowrap">ยอดขาย</th>
+                  <th className="px-2 lg:px-4 py-2 lg:py-3 text-right font-bold text-slate-700 whitespace-nowrap">ต้นทุน</th>
+                  <th className="px-2 lg:px-4 py-2 lg:py-3 text-right font-bold text-slate-700 whitespace-nowrap">กำไร</th>
                 </tr>
               </thead>
               <tbody>
                 {sortedTransactionData.map((row, idx) => (
-                  <tr
-                    key={idx}
-                    className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
-                  >
-                    <td className="px-2 lg:px-4 py-2 lg:py-3 text-slate-700 text-xs whitespace-nowrap">
-                      {row.date}
-                    </td>
-                    <td className="px-2 lg:px-4 py-2 lg:py-3 font-semibold text-slate-800 max-w-xs truncate">
-                      {row.cust_name}
-                    </td>
-                    <td className="px-2 lg:px-4 py-2 lg:py-3 text-slate-700 truncate">
-                      {row.program}
-                    </td>
+                  <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                    <td className="px-2 lg:px-4 py-2 lg:py-3 text-slate-700 text-xs whitespace-nowrap">{row.date}</td>
+                    <td className="px-2 lg:px-4 py-2 lg:py-3 font-semibold text-slate-800 max-w-xs truncate">{row.cust_name}</td>
+                    <td className="px-2 lg:px-4 py-2 lg:py-3 text-slate-700 truncate">{row.program}</td>
                     <td className="px-2 lg:px-4 py-2 lg:py-3 text-center text-slate-700">
-                      <span className="inline-flex items-center px-1.5 lg:px-2 py-0.5 lg:py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 whitespace-nowrap">
-                        {row.quantity}
-                      </span>
+                      <span className="inline-flex items-center px-1.5 lg:px-2 py-0.5 lg:py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 whitespace-nowrap">{row.quantity}</span>
                     </td>
-                    <td className="px-2 lg:px-4 py-2 lg:py-3 text-right font-semibold text-slate-800 text-xs lg:text-sm whitespace-nowrap">
-                      ฿ {row.total_sales.toLocaleString('th-TH', {
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0,
-                      })}
-                    </td>
-                    <td className="px-2 lg:px-4 py-2 lg:py-3 text-right font-semibold text-slate-800 text-xs lg:text-sm whitespace-nowrap">
-                      ฿ {row.cost.toLocaleString('th-TH', {
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0,
-                      })}
-                    </td>
-                    <td className="px-2 lg:px-4 py-2 lg:py-3 text-right font-semibold text-green-600 text-xs lg:text-sm whitespace-nowrap">
-                      ฿ {row.profit.toLocaleString('th-TH', {
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0,
-                      })}
-                    </td>
+                    <td className="px-2 lg:px-4 py-2 lg:py-3 text-right font-semibold text-slate-800 text-xs lg:text-sm whitespace-nowrap">฿{row.total_sales.toLocaleString()}</td>
+                    <td className="px-2 lg:px-4 py-2 lg:py-3 text-right font-semibold text-slate-800 text-xs lg:text-sm whitespace-nowrap">฿{row.cost.toLocaleString()}</td>
+                    <td className="px-2 lg:px-4 py-2 lg:py-3 text-right font-semibold text-green-600 text-xs lg:text-sm whitespace-nowrap">฿{row.profit.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>

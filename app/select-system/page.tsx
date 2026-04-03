@@ -8,10 +8,10 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useSession } from "next-auth/react";
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useSession, signOut } from "next-auth/react";
 
 const ROUTES = {
   ERP_HOME: '/ERP/home',
@@ -55,25 +55,25 @@ export default function SystemSelectorPage() {
         const response = await fetch("/api/user/modules");
         if (response.ok) {
           const data = await response.json();
-          
+
           const hasERP = data.modules.some(
             (m: any) => ["Sales", "Usage", "Financial", "Inventory"].includes(m.moduleName)
           );
           // ✅ ใช้ hasCRM จาก API แทน
           const hasCRM = data.hasCRM || false;
 
-          console.log("📊 User Data:", { 
-            clientId: data.clientId, 
+          console.log("📊 User Data:", {
+            clientId: data.clientId,
             clientName: data.clientName,
             hasCRM: data.hasCRM,
-            hasERP 
+            hasERP
           });
 
           // ✅ เช็คว่ามี Inventory Dashboard หรือไม่
           const invDashboard = data.dashboardItems?.find(
             (d: any) => d.dashboardConfigName === "Inventory_Dashboard_Config"
           );
-          
+
           if (invDashboard) {
             setHasInventoryDashboard(true);
             setInventoryDashboardUrl(
@@ -85,7 +85,7 @@ export default function SystemSelectorPage() {
             clientName: data.clientName || "Guest User",
             clientId: data.clientId || "N/A",
             package: data.planType || "Basic",
-            daysRemaining: data.expiresAt 
+            daysRemaining: data.expiresAt
               ? Math.ceil((new Date(data.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
               : 0,
             hasERP,
@@ -113,7 +113,7 @@ export default function SystemSelectorPage() {
       try {
         setLoadingLowStock(true);
         const response = await fetch("/api/inventory/low-stock");
-        
+
         if (response.ok) {
           const data = await response.json();
           setLowStockCount(data.count || 0);
@@ -164,14 +164,10 @@ export default function SystemSelectorPage() {
       {/* Header */}
       <div className="relative z-10 px-6 py-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
+
+          {/* Logo */}
           <div className="flex items-center gap-3">
-            <Image
-              src="/logo2.png"
-              alt="Fazzfly Logo"
-              width={48}
-              height={48}
-              className="object-contain"
-            />
+            <Image src="/logo2.png" alt="Fazzfly Logo" width={48} height={48} className="object-contain" />
             <div>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">
                 Fazzfly Platform
@@ -180,25 +176,55 @@ export default function SystemSelectorPage() {
             </div>
           </div>
 
-          {/* User Profile */}
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm font-semibold text-slate-800">{session?.user?.name}</p>
-              <p className="text-xs text-slate-500">{session?.user?.email}</p>
-            </div>
-            {session?.user?.image && (
-              <img
-                src={session.user.image}
-                alt="Profile"
-                width={40}
-                height={40}
-                className="rounded-full border-2 border-blue-200"
-              />
-            )}
+          {/* User Profile + Logout */}
+          <div className="flex items-center gap-3">
+
+            {/* Desktop: Avatar + Name + Logout combo */}
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className="hidden md:flex items-center gap-2 pl-1.5 pr-4 py-1.5 rounded-full border border-slate-200 hover:border-red-200 hover:bg-red-50 transition-all duration-200 group"
+            >
+              {session?.user?.image ? (
+                <img
+                  src={session.user.image}
+                  alt="Profile"
+                  width={28}
+                  height={28}
+                  className="rounded-full"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-cyan-400 flex items-center justify-center text-white text-xs font-semibold">
+                  {session?.user?.name?.charAt(0) || "U"}
+                </div>
+              )}
+              <div className="text-left">
+                <p className="text-xs font-semibold text-slate-700 group-hover:text-red-700 leading-none">
+                  {session?.user?.name}
+                </p>
+                <p className="text-[10px] text-slate-400 group-hover:text-red-400 leading-none mt-0.5">
+                  ออกจากระบบ
+                </p>
+              </div>
+              <svg className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </button>
+
+            {/* Mobile: Icon Only */}
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              title="ออกจากระบบ"
+              className="flex md:hidden items-center justify-center w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-all duration-200"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </button>
+
           </div>
+
         </div>
       </div>
-
       {/* Main Content */}
       <div className="relative z-10 px-6 py-8">
         <div className="max-w-7xl mx-auto">
@@ -259,6 +285,7 @@ export default function SystemSelectorPage() {
               </div>
             </div>
           </div>
+
 
           {/* System Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto animate-slideDown" style={{ animationDelay: '200ms' }}>

@@ -13,6 +13,7 @@ import ExpenseDashboard from "@/app/components/dashboards/expense/ExpenseDashboa
 import InventoryDashboard from "@/app/components/dashboards/inventory/InventoryDashboard";
 import PayrollDashboard from "@/app/components/dashboards/payroll/PayrollDashboard";
 import FinancialDashboard from "@/app/components/dashboards/financial/FinancialDashboard";
+import QuickNav, { QuickNavTrigger, QuickNavBell, type LowStockBellItem } from "@/app/components/QuickNav";
 
 interface Module {
   moduleId: string;
@@ -93,10 +94,18 @@ export default function HomePage() {
   useEffect(() => {
     const tabParam = searchParams.get("tab");
     if (tabParam) {
-      console.log("🔍 Opening tab from URL:", tabParam);
       setActiveTab(tabParam as any);
     }
   }, [searchParams]);
+
+  // ✅ Auto-select dashboard จาก URL param dashboardId
+  useEffect(() => {
+    const dashboardId = searchParams.get("dashboardId");
+    if (!dashboardId || !userData?.dashboardItems) return;
+    const found = userData.dashboardItems.find(d => d.dashboardId === dashboardId);
+    if (found) setSelectedDashboard(found);
+  }, [searchParams, userData]);
+  const [navOpen, setNavOpen] = useState(false);
   const [selectedDashboard, setSelectedDashboard] = useState<DashboardItem | null>(null);
   const [masterDatabases, setMasterDatabases] = useState<any[]>([]);
   const [loadingMasterData, setLoadingMasterData] = useState(false);
@@ -108,6 +117,7 @@ export default function HomePage() {
 
   // ✅ NEW: Low Stock Alert states
   const [lowStockCount, setLowStockCount] = useState<number | null>(null);
+  const [lowStockItems, setLowStockItems] = useState<LowStockBellItem[]>([]);
   const [loadingLowStock, setLoadingLowStock] = useState(false);
   const [hasInventoryDashboard, setHasInventoryDashboard] = useState(false);
 
@@ -365,15 +375,29 @@ export default function HomePage() {
         return;
       }
 
-      // Count items with "สต๊อกต่ำ" or "ใกล้หมด"
-      const lowStockStatuses = ["สต๊อกต่ำ", "ใกล้หมด"];
-      const count = data.data.filter((row: any) => {
+      // Find name field
+      const nameField = data.config.find((f: any) =>
+        ["productName", "name", "itemName", "product", "สินค้า", "ชื่อ"].some(k =>
+          (f.fieldName || "").toLowerCase().includes(k.toLowerCase()) ||
+          (f.label || "").toLowerCase().includes(k.toLowerCase())
+        )
+      ) ?? data.config[0];
+
+      // Filter low stock items
+      const lowStockStatuses = ["สต๊อกต่ำ", "ใกล้หมด", "หมดแล้ว"];
+      const filtered = data.data.filter((row: any) => {
         const status = String(row[statusField.fieldName] || "").trim();
         return lowStockStatuses.includes(status);
-      }).length;
+      });
 
-      console.log(`✅ Low stock count: ${count}`);
-      setLowStockCount(count);
+      const items: LowStockBellItem[] = filtered.map((row: any) => ({
+        name: String(row[nameField?.fieldName] || "สินค้า").trim(),
+        status: String(row[statusField.fieldName] || "").trim(),
+      }));
+
+      console.log(`✅ Low stock count: ${items.length}`);
+      setLowStockItems(items);
+      setLowStockCount(items.length);
 
     } catch (error) {
       console.error("❌ Error fetching low stock:", error);
@@ -660,6 +684,7 @@ export default function HomePage() {
       className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 pb-20 lg:pb-0"
       style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
     >
+      <QuickNav isOpen={navOpen} onClose={() => setNavOpen(false)} />
       {/* Animated Background */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 lg:w-96 h-80 lg:h-96 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-40 animate-blob"></div>
@@ -671,6 +696,9 @@ export default function HomePage() {
       <nav className="relative z-20 bg-white/80 backdrop-blur-xl border-b border-blue-100 sticky top-0">
         <div className="max-w-7xl mx-auto px-4 lg:px-6 py-3 lg:py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 lg:gap-4 min-w-0">
+            {/* Hamburger */}
+            <QuickNavTrigger onClick={() => setNavOpen(true)} />
+
             {/* ✅ ENHANCED Back to System Selector Button - มองเห็นชัดเจน */}
             <Link
               href="/select-system"
@@ -728,6 +756,9 @@ export default function HomePage() {
               {(session as any)?.user?.name?.charAt(0) || "U"}
             </div>
 
+            {/* Bell */}
+            <QuickNavBell items={lowStockItems} loading={loadingLowStock} onBellClick={goToInventoryDashboard} />
+
             {/* Sign Out Button */}
             <button
               onClick={() => signOut({ callbackUrl: "/" })}
@@ -761,7 +792,7 @@ export default function HomePage() {
             ? 'bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-300 shadow-lg shadow-yellow-100'
             : 'bg-gradient-to-r from-blue-50 via-sky-50 to-cyan-50 border-blue-200 shadow-lg shadow-blue-100/50'
             }`}>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-6">
               {/* 1. แพ็คเจจ */}
               <div className="p-3 lg:p-4 rounded-xl lg:rounded-2xl bg-white/60 backdrop-blur-sm border border-blue-100">
                 <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1 lg:mb-2">แพ็คเจจ</p>
@@ -774,60 +805,7 @@ export default function HomePage() {
                 <p className="text-xl lg:text-2xl font-bold text-blue-600 truncate">{userData.clientId}</p>
               </div>
 
-              {/* 3. แจ้งเตือนสินค้าใกล้หมด - CLICKABLE */}
-              <div
-                onClick={hasInventoryDashboard && lowStockCount && lowStockCount > 0 ? goToInventoryDashboard : undefined}
-                className={`p-3 lg:p-4 rounded-xl lg:rounded-2xl backdrop-blur-sm border transition-all ${loadingLowStock
-                  ? 'bg-slate-100/50 border-slate-300 cursor-wait'
-                  : lowStockCount && lowStockCount > 0
-                    ? 'bg-orange-100/50 border-orange-300 cursor-pointer hover:bg-orange-200/50 hover:shadow-lg hover:-translate-y-1 active:scale-95'
-                    : 'bg-green-100/50 border-green-300 cursor-default'
-                  }`}
-              >
-                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1 lg:mb-2">
-                  แจ้งเตือนสินค้า
-                </p>
-
-                {loadingLowStock ? (
-                  <div className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-600"></div>
-                    <p className="text-sm text-slate-600">กำลังโหลด...</p>
-                  </div>
-                ) : (
-                  <>
-                    {!hasInventoryDashboard ? (
-                      <div>
-                        <p className="text-base lg:text-lg font-bold text-slate-600">
-                          ไม่มี Inventory Dashboard
-                        </p>
-                      </div>
-                    ) : lowStockCount === null || lowStockCount === 0 ? (
-                      <div>
-                        <p className="text-base lg:text-lg font-bold text-green-700">
-                          ไม่มีสินค้าใกล้หมด
-                        </p>
-                        <p className="text-xs text-green-600 mt-1">
-                          สต๊อกปกติ ✓
-                        </p>
-                      </div>
-                    ) : (
-                      <div>
-                        <p className="text-xl lg:text-2xl font-bold text-orange-700">
-                          {lowStockCount} รายการ
-                        </p>
-                        <p className="text-xs text-orange-600 mt-1 flex items-center gap-1">
-                          คลิกเพื่อดู
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </p>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-
-              {/* 4. คงเหลือ */}
+              {/* 3. คงเหลือ */}
               <div className={`p-3 lg:p-4 rounded-xl lg:rounded-2xl backdrop-blur-sm border ${isExpiringSoon
                 ? 'bg-yellow-100/50 border-yellow-300'
                 : 'bg-green-100/50 border-green-300'
@@ -1027,18 +1005,19 @@ export default function HomePage() {
 
                 {/* Dashboard Content */}
                 {selectedDashboard && (
-                  <div className="bg-white/90 backdrop-blur-xl rounded-2xl lg:rounded-3xl shadow-lg p-4 lg:p-8 border border-purple-100/50 animate-fadeIn">
-                    <div className="flex items-center justify-between mb-6 lg:mb-8">
+                  // 🟢 เปลี่ยนจาก bg-white/90 เป็น bg-slate-50/90 (เทาอ่อน)
+                  <div className="bg-slate-50/90 backdrop-blur-xl rounded-2xl lg:rounded-3xl shadow-lg p-4 lg:p-8 border border-slate-200 animate-fadeIn">
+                    <div className="flex items-center justify-between mb-6 lg:mb-8 ">
                       <h3 className="text-xl lg:text-2xl font-bold text-slate-800">
                         {selectedDashboard.dashboardName}
                       </h3>
                     </div>
 
-                    {/* Loading state */}
+                    {/* Loading state - ปรับสีพื้นหลังให้เข้ากัน */}
                     {(loadingModuleConfigs || loadingArchiveFolderId) && (
-                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 lg:p-6 flex items-center gap-3">
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600 flex-shrink-0"></div>
-                        <p className="text-purple-700 font-medium text-sm lg:text-base">
+                      <div className="bg-slate-200/50 border border-slate-300 rounded-lg p-4 lg:p-6 flex items-center gap-3">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-600 flex-shrink-0"></div>
+                        <p className="text-slate-700 font-medium text-sm lg:text-base">
                           {loadingModuleConfigs ? "กำลังโหลด Config..." : "กำลังดึง Archive Folder ID..."}
                         </p>
                       </div>

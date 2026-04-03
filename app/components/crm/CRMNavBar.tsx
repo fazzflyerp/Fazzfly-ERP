@@ -7,15 +7,17 @@ import { signOut } from "next-auth/react";
 import { Ic, IC } from "@/app/components/crm/crm.ui";
 import { fmtDate, todayStr } from "@/app/components/crm/crm.types";
 import type { FollowUp } from "@/app/components/crm/crm.types";
+import { QuickNavTrigger } from "@/app/components/QuickNav";
 
 interface Props {
   userName?: string;
   pendingCount: number;
   follows: FollowUp[];
   onFollowClick: () => void;
+  onOpenQuickNav?: () => void;
 }
 
-export default function CRMNavBar({ userName, pendingCount, follows, onFollowClick }: Props) {
+export default function CRMNavBar({ userName, pendingCount, follows, onFollowClick, onOpenQuickNav }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const today = todayStr();
@@ -38,6 +40,7 @@ export default function CRMNavBar({ userName, pendingCount, follows, onFollowCli
       <div className="max-w-7xl mx-auto px-4 lg:px-6 py-3 lg:py-4 flex items-center justify-between">
 
         <div className="flex items-center gap-2 lg:gap-4 min-w-0">
+          {onOpenQuickNav && <QuickNavTrigger onClick={onOpenQuickNav} />}
           <Link href="/select-system"
             className="flex items-center gap-2 px-3 py-2 bg-pink-50 hover:bg-pink-100 border border-pink-200 hover:border-pink-300 rounded-xl transition-all duration-300 group shadow-sm hover:shadow-md flex-shrink-0">
             <svg className="w-5 h-5 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
