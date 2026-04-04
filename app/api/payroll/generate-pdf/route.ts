@@ -536,7 +536,7 @@ export async function POST(request: NextRequest) {
     const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     const filename = `PaySlip_${safeEmployeeId}_${timestamp}.pdf`;
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${filename}"`,
