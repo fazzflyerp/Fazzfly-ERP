@@ -21,8 +21,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { withLogger } from "@/lib/with-logger";
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   try {
     console.log("📊 [API] GET /api/transaction/data");
 
@@ -99,3 +100,4 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+export const GET = withLogger("/api/module/data", _GET);

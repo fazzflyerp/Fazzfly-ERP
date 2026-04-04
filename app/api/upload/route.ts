@@ -1,7 +1,7 @@
 /**
  * Upload Image to Google Drive API - PRODUCTION READY ✅
  * POST /api/upload
- * 
+ *
  * ✅ Multi-user safe
  * ✅ Rate limiting
  * ✅ Better error handling
@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { withLogger } from "@/lib/with-logger";
 
 // ✅ Rate limiting map (ในการใช้งานจริงควรใช้ Redis)
 const uploadLimits = new Map<string, { count: number; resetAt: number }>();
@@ -52,7 +53,7 @@ async function uploadWithRetry(
   for (let i = 0; i < maxRetries; i++) {
     try {
       const response = await fetch(url, options);
-      
+
       // ถ้าสำเร็จหรือเป็น client error (4xx) ไม่ต้อง retry
       if (response.ok || (response.status >= 400 && response.status < 500)) {
         return response;
@@ -88,9 +89,68 @@ function sanitizeFilename(filename: string): string {
     .substring(0, 100); // จำกัดความยาว
 }
 
-export async function POST(request: NextRequest) {
+// ✅ Helper: Find or create a Drive folder under a parent
+async function getOrCreateFolder(
+  name: string,
+  parentId: string,
+  accessToken: string
+): Promise<string> {
+  // Search for existing folder
+  const query = `name='${name}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
+  const searchRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)&pageSize=1`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+
+  if (searchRes.ok) {
+    const searchData = await searchRes.json();
+    if (searchData.files?.length > 0) {
+      return searchData.files[0].id as string;
+    }
+  }
+
+  // Create folder if not found
+  const createRes = await fetch("https://www.googleapis.com/drive/v3/files?fields=id", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name,
+      mimeType: "application/vnd.google-apps.folder",
+      parents: [parentId],
+    }),
+  });
+
+  if (!createRes.ok) {
+    throw new Error(`Failed to create folder "${name}": ${createRes.status}`);
+  }
+
+  const createData = await createRes.json();
+  return createData.id as string;
+}
+
+// ✅ Helper: Get or create year/month/day folder structure, return leaf folder ID
+async function getDateFolder(
+  rootFolderId: string,
+  accessToken: string
+): Promise<string> {
+  const now = new Date();
+  const year = now.getFullYear().toString();
+  const month = (now.getMonth() + 1).toString().padStart(2, "0");
+  const day = now.getDate().toString().padStart(2, "0");
+
+  const yearId = await getOrCreateFolder(year, rootFolderId, accessToken);
+  const monthId = await getOrCreateFolder(month, yearId, accessToken);
+  const dayId = await getOrCreateFolder(day, monthId, accessToken);
+
+  return dayId;
+}
+
+async function _POST(request: NextRequest) {
   const requestId = Math.random().toString(36).substring(7);
-  
+
   try {
     console.log(`📤 [${requestId}] IMAGE UPLOAD API`);
 
@@ -110,10 +170,10 @@ export async function POST(request: NextRequest) {
     // ✅ Check token refresh error
     if ((token as any).error === "RefreshAccessTokenError") {
       return NextResponse.json(
-        { 
-          error: "Session expired", 
+        {
+          error: "Session expired",
           code: "TOKEN_EXPIRED",
-          message: "Please sign out and sign in again" 
+          message: "Please sign out and sign in again"
         },
         { status: 401 }
       );
@@ -133,10 +193,10 @@ export async function POST(request: NextRequest) {
     if (!checkRateLimit(userEmail)) {
       console.warn(`⚠️ [${requestId}] Rate limit exceeded for: ${userEmail}`);
       return NextResponse.json(
-        { 
-          error: "Too many uploads", 
+        {
+          error: "Too many uploads",
           code: "RATE_LIMIT_EXCEEDED",
-          message: `Maximum ${MAX_UPLOADS_PER_HOUR} uploads per hour` 
+          message: `Maximum ${MAX_UPLOADS_PER_HOUR} uploads per hour`
         },
         { status: 429 }
       );
@@ -158,10 +218,10 @@ export async function POST(request: NextRequest) {
     // ✅ Validate file type
     if (!ALLOWED_TYPES.includes(file.type)) {
       return NextResponse.json(
-        { 
-          error: "Invalid file type", 
+        {
+          error: "Invalid file type",
           code: "INVALID_TYPE",
-          message: `Allowed types: ${ALLOWED_TYPES.join(", ")}` 
+          message: `Allowed types: ${ALLOWED_TYPES.join(", ")}`
         },
         { status: 400 }
       );
@@ -170,10 +230,10 @@ export async function POST(request: NextRequest) {
     // ✅ Validate file size
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
-        { 
-          error: "File too large", 
+        {
+          error: "File too large",
           code: "FILE_TOO_LARGE",
-          message: `Maximum size: ${MAX_FILE_SIZE / 1024 / 1024}MB` 
+          message: `Maximum size: ${MAX_FILE_SIZE / 1024 / 1024}MB`
         },
         { status: 400 }
       );
@@ -196,12 +256,33 @@ export async function POST(request: NextRequest) {
     const timestamp = Date.now();
     const finalName = `${timestamp}_${safeName}`;
 
-    // ✅ Step 5: Upload to Google Drive with retry
-    const metadata = {
+    // ✅ Step 5: Resolve upload folder (root → year → month → day)
+    const rootFolderId =
+      (formData.get("folderId") as string | null) ||
+      process.env.UPLOAD_ROOT_FOLDER_ID ||
+      null;
+
+    let parentFolderId: string | null = null;
+    if (rootFolderId) {
+      try {
+        console.log(`📁 [${requestId}] Resolving date folder under: ${rootFolderId}`);
+        parentFolderId = await getDateFolder(rootFolderId, accessToken);
+        console.log(`📁 [${requestId}] Target folder ID: ${parentFolderId}`);
+      } catch (err: any) {
+        console.warn(`⚠️ [${requestId}] Could not resolve date folder, uploading to root: ${err.message}`);
+      }
+    }
+
+    // ✅ Step 6: Upload to Google Drive with retry
+    const metadata: Record<string, any> = {
       name: finalName,
       mimeType: file.type,
       description: `Uploaded by ${userEmail} at ${new Date().toISOString()}`,
     };
+
+    if (parentFolderId) {
+      metadata.parents = [parentFolderId];
+    }
 
     const form = new FormData();
     form.append(
@@ -230,10 +311,10 @@ export async function POST(request: NextRequest) {
       // ✅ Handle specific errors
       if (uploadResponse.status === 401) {
         return NextResponse.json(
-          { 
-            error: "Session expired", 
+          {
+            error: "Session expired",
             code: "TOKEN_EXPIRED",
-            message: "Please sign out and sign in again" 
+            message: "Please sign out and sign in again"
           },
           { status: 401 }
         );
@@ -241,10 +322,10 @@ export async function POST(request: NextRequest) {
 
       if (uploadResponse.status === 403) {
         return NextResponse.json(
-          { 
-            error: "Permission denied", 
+          {
+            error: "Permission denied",
             code: "PERMISSION_DENIED",
-            message: "Need Google Drive access. Please sign out and sign in again." 
+            message: "Need Google Drive access. Please sign out and sign in again."
           },
           { status: 403 }
         );
@@ -308,14 +389,15 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error(`❌ [${requestId}] Upload Error:`, error);
-    
+
     return NextResponse.json(
-      { 
-        error: "Upload failed", 
+      {
+        error: "Upload failed",
         code: "UPLOAD_ERROR",
-        message: error.message 
+        message: error.message
       },
       { status: 500 }
     );
   }
 }
+export const POST = withLogger("/api/upload", _POST);

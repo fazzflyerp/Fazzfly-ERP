@@ -2,15 +2,15 @@
  * =============================================================================
  * FILE PATH: app/api/master/data/route.ts
  * =============================================================================
- * 
+ *
  * API: GET /api/master/data
- * 
+ *
  * Purpose: ดึงข้อมูลทั้งหมดจาก Google Sheets
- * 
+ *
  * Query Parameters:
  * - spreadsheetId: Google Sheets ID
  * - sheetName: ชื่อ sheet
- * 
+ *
  * Returns:
  * {
  *   success: true,
@@ -21,8 +21,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { withLogger } from "@/lib/with-logger";
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   try {
     console.log("📊 [API] GET /api/master/data");
 
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
 
     // ✅ Fetch data from Google Sheets
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}`;
-    
+
     const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -99,3 +100,4 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+export const GET = withLogger("/api/master/data", _GET);

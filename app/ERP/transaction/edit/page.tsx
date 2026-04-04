@@ -2,11 +2,6 @@
  * =============================================================================
  * FILE PATH: app/ERP/transaction/edit/page.tsx
  * =============================================================================
- * 
- * Transaction Edit Page - Table View
- * ✅ ปุ่มย้อนกลับไปหน้า Home
- * ✅ UI อ่านง่ายเหมือน Master Data
- * ✅ Dropdown พร้อม Helper Options
  */
 
 "use client";
@@ -15,6 +10,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import QuickNav, { QuickNavTrigger } from "@/app/components/QuickNav";
 
 interface ConfigField {
   fieldName: string;
@@ -31,9 +27,10 @@ interface HelperOption {
 }
 
 interface DataRow {
-  rowIndex: number;
+  rowIndex: number | string;
   data: { [key: string]: any };
   _isEditing?: boolean;
+  _isNew?: boolean;
 }
 
 export default function TransactionEditPage() {
@@ -41,7 +38,6 @@ export default function TransactionEditPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const moduleId = searchParams.get("moduleId");
   const spreadsheetId = searchParams.get("spreadsheetId");
   const sheetName = searchParams.get("sheetName");
   const configName = searchParams.get("configName");
@@ -55,6 +51,7 @@ export default function TransactionEditPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -200,7 +197,7 @@ export default function TransactionEditPage() {
     return dateStr;
   };
 
-  const handleStartEdit = (rowIndex: number) => {
+  const handleStartEdit = (rowIndex: number | string) => {
     setDataRows((prev) =>
       prev.map((row) =>
         row.rowIndex === rowIndex ? { ...row, _isEditing: true } : row
@@ -208,7 +205,7 @@ export default function TransactionEditPage() {
     );
   };
 
-  const handleCancelEdit = (rowIndex: number) => {
+  const handleCancelEdit = (rowIndex: number | string) => {
     setDataRows((prev) =>
       prev.map((row) =>
         row.rowIndex === rowIndex ? { ...row, _isEditing: false } : row
@@ -216,7 +213,7 @@ export default function TransactionEditPage() {
     );
   };
 
-  const handleCellChange = (rowIndex: number, fieldName: string, value: any) => {
+  const handleCellChange = (rowIndex: number | string, fieldName: string, value: any) => {
     setDataRows((prev) =>
       prev.map((row) =>
         row.rowIndex === rowIndex
@@ -226,7 +223,18 @@ export default function TransactionEditPage() {
     );
   };
 
-  const handleDeleteRow = async (rowIndex: number) => {
+  const handleAddRow = () => {
+    const newRow: DataRow = {
+      rowIndex: `new-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      data: {},
+      _isNew: true,
+      _isEditing: true,
+    };
+    config.forEach((field) => { newRow.data[field.fieldName] = ""; });
+    setDataRows((prev) => [...prev, newRow]);
+  };
+
+  const handleDeleteRow = async (rowIndex: number | string) => {
     if (!confirm("ต้องการลบแถวนี้?")) return;
 
     try {
@@ -242,8 +250,8 @@ export default function TransactionEditPage() {
               range: {
                 sheetId: 0,
                 dimension: "ROWS",
-                startIndex: rowIndex - 1,
-                endIndex: rowIndex,
+                startIndex: (rowIndex as number) - 1,
+                endIndex: rowIndex as number,
               },
             },
           },
@@ -277,22 +285,18 @@ export default function TransactionEditPage() {
       const accessToken = (session as any)?.accessToken;
 
       // Prepare data for API
-      const updates = dataRows
-        .filter((row) => row._isEditing)
-        .map((row) => {
-          const rowData: any[] = [];
-          
-          config.forEach((field) => {
-            const colIndex = field.order - 1;
-            rowData[colIndex] = row.data[field.fieldName] || "";
-          });
-
-          return {
-            rowIndex: row.rowIndex,
-            data: rowData,
-            isNew: false,
-          };
+      const updates = dataRows.map((row) => {
+        const rowData: any[] = [];
+        config.forEach((field) => {
+          const colIndex = field.order - 1;
+          rowData[colIndex] = row.data[field.fieldName] || "";
         });
+        return {
+          rowIndex: typeof row.rowIndex === "string" && row.rowIndex.startsWith("new-") ? -1 : row.rowIndex,
+          data: rowData,
+          isNew: row._isNew || false,
+        };
+      });
 
       if (updates.length === 0) {
         setError("ไม่มีข้อมูลที่ต้องบันทึก");
@@ -340,259 +344,91 @@ export default function TransactionEditPage() {
     );
   });
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-slate-600 font-medium">กำลังโหลดข้อมูล...</p>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      {/* ✅ Header - ปุ่มย้อนกลับไปหน้า Home */}
-      <div className="bg-white/80 backdrop-blur-xl border-b border-slate-200 sticky top-0 z-20 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <Link
-                href="/ERP/home"
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </Link>
-              
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                </div>
-                <div>
-                  <h1 className="text-lg font-bold text-slate-900">{moduleName}</h1>
-                  <p className="text-xs text-slate-500">จัดการข้อมูล</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-5 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 font-semibold shadow-lg disabled:opacity-50 flex items-center gap-2"
-              >
-                {saving ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    กำลังบันทึก...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    บันทึกทั้งหมด
-                  </>
-                )}
-              </button>
-            </div>
+    <div className="min-h-screen bg-slate-50 pb-20">
+      <QuickNav isOpen={navOpen} onClose={() => setNavOpen(false)} />
+      <div className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div className="max-w-full mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <QuickNavTrigger onClick={() => setNavOpen(true)} />
+            <Link href="/ERP/home?tab=transaction" className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+              <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+            </Link>
+            <h1 className="text-lg font-bold text-slate-900">{moduleName}</h1>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={handleAddRow} className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-sm shadow-md flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+              เพิ่มแถว
+            </button>
+            <button onClick={handleSave} disabled={saving} className="px-5 py-2 bg-indigo-600 text-white rounded-xl font-bold text-sm shadow-lg disabled:opacity-50 hover:bg-indigo-700 transition-all whitespace-nowrap">
+              {saving ? "กำลังบันทึก..." : "บันทึกทั้งหมด"}
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Alerts */}
-        {success && (
-          <div className="mb-4 bg-green-50 border-l-4 border-green-500 rounded-lg p-4 animate-slideIn">
-            <div className="flex items-center gap-3">
-              <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span className="text-green-800 font-semibold">บันทึกสำเร็จ!</span>
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <div className="mb-4 bg-red-50 border-l-4 border-red-500 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <span className="text-red-800 font-semibold">{error}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Toolbar */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex-1 max-w-md">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="🔍 ค้นหา..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full px-4 py-2.5 pl-10 text-sm font-bold text-slate-900 border-2 border-slate-900 rounded-lg focus:ring-2 focus:ring-slate-700 focus:border-slate-900 placeholder:text-slate-500 placeholder:font-semibold bg-white"
-                />
-                <svg className="absolute left-3 top-3 w-5 h-5 text-slate-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-600 font-medium">
-                📊 {filteredRows.length} รายการ
-              </span>
-            </div>
-          </div>
+      <div className="max-w-full mx-auto px-4 py-6">
+        <div className="relative mb-6">
+          <input type="text" placeholder="ค้นหาข้อมูล..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-white border border-slate-300 rounded-2xl shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-slate-900 placeholder:text-slate-400" />
+          <svg className="absolute left-3.5 top-3.5 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
         </div>
 
-        {/* ✅ Table - UI อ่านง่ายเหมือน Master Data */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gradient-to-r from-slate-50 to-slate-100">
+            <table className="w-full table-auto">
+              <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 w-12">
-                    #
-                  </th>
+                  <th className="px-3 py-4 text-center font-bold text-slate-500 w-12 text-[10px] uppercase">#</th>
                   {config.map((field) => (
-                    <th
-                      key={field.fieldName}
-                      className="px-3 py-2 text-left text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200"
-                    >
-                      {field.label}
-                      {field.required && <span className="text-red-500 ml-1">*</span>}
+                    <th key={field.fieldName} className="px-3 py-4 text-left font-bold text-slate-500 uppercase tracking-tight text-[10px] min-w-[80px]">
+                      {field.label} {field.required && <span className="text-red-500">*</span>}
                     </th>
                   ))}
-                  <th className="px-3 py-2 text-center text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 w-32">
-                    จัดการ
-                  </th>
+                  <th className="px-3 py-4 text-center font-bold text-slate-500 w-24 text-[10px] uppercase">Action</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-slate-200">
-                {filteredRows.map((row) => (
-                  <tr
-                    key={row.rowIndex}
-                    className={`hover:bg-slate-50 transition-colors ${
-                      row._isEditing ? "bg-slate-100 shadow-inner" : ""
-                    }`}
-                  >
-                    <td className="px-3 py-1.5 text-xs text-slate-600 font-medium">
-                      {row.rowIndex}
+              <tbody className="divide-y divide-slate-100">
+                {filteredRows.map((row, idx) => (
+                  <tr key={row.rowIndex} className={`hover:bg-slate-50/50 transition-colors ${row._isNew ? "bg-emerald-50/30" : row._isEditing ? "bg-indigo-50/30" : ""}`}>
+                    <td className="px-2 py-4 text-center font-bold text-slate-400 text-[10px]">
+                      {row._isNew ? <span className="text-[8px] bg-emerald-500 text-white px-1.5 py-0.5 rounded-full font-bold">NEW</span> : idx + 1}
                     </td>
                     {config.map((field) => (
-                      <td key={field.fieldName} className={`px-3 ${row._isEditing ? 'py-3' : 'py-1.5'} align-top`}>
+                      <td key={field.fieldName} className="px-2 py-2">
                         {row._isEditing ? (
-                          // ✅ Edit Mode - รองรับ Dropdown
                           field.type === "dropdown" && field.helper ? (
-                            <select
-                              value={row.data[field.fieldName] || ""}
-                              onChange={(e) =>
-                                handleCellChange(row.rowIndex, field.fieldName, e.target.value)
-                              }
-                              className="w-full px-2 py-1.5 text-[10px] font-semibold text-slate-900 border-2 border-slate-900 rounded focus:ring-1 focus:ring-slate-700 focus:border-slate-900 bg-white cursor-pointer"
-                            >
+                            <select value={row.data[field.fieldName] || ""} onChange={(e) => handleCellChange(row.rowIndex, field.fieldName, e.target.value)} className="w-full p-1.5 border border-slate-300 rounded-lg focus:border-indigo-500 outline-none font-bold text-[10px] text-slate-900 bg-white">
                               <option value="">-- เลือก --</option>
                               {(helperOptions[field.helper] || []).map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                  {opt.value} - {opt.label}
-                                </option>
+                                <option key={opt.value} value={opt.value}>{opt.value} - {opt.label}</option>
                               ))}
                             </select>
-                          ) : field.type === "checkbox" ? (
-                            <input
-                              type="checkbox"
-                              checked={row.data[field.fieldName] === "TRUE" || row.data[field.fieldName] === true}
-                              onChange={(e) =>
-                                handleCellChange(row.rowIndex, field.fieldName, e.target.checked ? "TRUE" : "FALSE")
-                              }
-                              className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                            />
                           ) : field.type === "date" ? (
-                            <input
-                              type="date"
-                              value={convertDateToInput(row.data[field.fieldName] || "")}
-                              onChange={(e) =>
-                                handleCellChange(row.rowIndex, field.fieldName, convertDateToSheet(e.target.value))
-                              }
-                              className="w-full px-2 py-1.5 text-[10px] font-semibold text-slate-900 border-2 border-slate-900 rounded focus:ring-1 focus:ring-slate-700 focus:border-slate-900 bg-white"
-                            />
+                            <input type="date" value={convertDateToInput(row.data[field.fieldName] || "")} onChange={(e) => handleCellChange(row.rowIndex, field.fieldName, convertDateToSheet(e.target.value))} className="w-full p-1.5 border border-slate-300 rounded-lg focus:border-indigo-500 outline-none font-bold text-[10px] text-slate-900 bg-white" />
+                          ) : field.type === "checkbox" ? (
+                            <div className="flex justify-center"><input type="checkbox" checked={row.data[field.fieldName] === "TRUE" || row.data[field.fieldName] === true} onChange={(e) => handleCellChange(row.rowIndex, field.fieldName, e.target.checked ? "TRUE" : "FALSE")} className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" /></div>
                           ) : field.type === "number" ? (
-                            <input
-                              type="number"
-                              value={row.data[field.fieldName] || ""}
-                              onChange={(e) =>
-                                handleCellChange(row.rowIndex, field.fieldName, e.target.value)
-                              }
-                              className="w-full px-2 py-1.5 text-[10px] font-semibold text-slate-900 border-2 border-slate-900 rounded focus:ring-1 focus:ring-slate-700 focus:border-slate-900 bg-white placeholder:text-slate-400"
-                              placeholder={`ใส่${field.label}...`}
-                            />
+                            <input type="number" value={row.data[field.fieldName] || ""} onChange={(e) => handleCellChange(row.rowIndex, field.fieldName, e.target.value)} className="w-full p-1.5 border border-slate-300 rounded-lg focus:border-indigo-500 outline-none font-bold text-[10px] text-slate-900 bg-white" placeholder={field.label} />
                           ) : (
-                            <textarea
-                              value={row.data[field.fieldName] || ""}
-                              onChange={(e) =>
-                                handleCellChange(row.rowIndex, field.fieldName, e.target.value)
-                              }
-                              rows={3}
-                              className="w-full px-2 py-1.5 text-[10px] leading-tight font-semibold text-slate-900 border-2 border-slate-900 rounded focus:ring-1 focus:ring-slate-700 focus:border-slate-900 bg-white placeholder:text-slate-400 resize-none"
-                              placeholder={`ใส่${field.label}...`}
-                            />
+                            <textarea rows={2} value={row.data[field.fieldName] || ""} onChange={(e) => handleCellChange(row.rowIndex, field.fieldName, e.target.value)} className="w-full p-1.5 border border-slate-300 rounded-lg focus:border-indigo-500 outline-none font-bold text-[10px] text-slate-900 bg-white resize-none" placeholder={field.label} />
                           )
                         ) : (
-                          // ✅ Read Mode - ฟอนต์ใหญ่ อ่านง่าย
-                          <div className="text-xs text-slate-800 py-1 font-medium">
-                            {field.type === "checkbox" ? (
-                              row.data[field.fieldName] === "TRUE" || row.data[field.fieldName] === true ? (
-                                <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">✓ ใช่</span>
-                              ) : (
-                                <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-medium">✗ ไม่</span>
-                              )
-                            ) : (
-                              row.data[field.fieldName] || <span className="text-slate-400 italic">-</span>
-                            )}
+                          <div className="font-bold text-slate-700 text-[10px] break-words leading-relaxed max-w-[200px]">
+                            {field.type === "checkbox" ? (row.data[field.fieldName] === "TRUE" || row.data[field.fieldName] === true ? <span className="text-emerald-500 font-bold">✓ ใช่</span> : <span className="text-slate-300">✗ ไม่</span>) : (row.data[field.fieldName] || <span className="text-slate-200 italic font-normal">-</span>)}
                           </div>
                         )}
                       </td>
                     ))}
-                    <td className="px-3 py-1.5">
-                      <div className="flex items-center justify-center gap-2">
-                        {row._isEditing ? (
-                          <button
-                            onClick={() => handleCancelEdit(row.rowIndex)}
-                            className="px-3 py-1.5 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded-lg transition-colors font-medium"
-                          >
-                            ยกเลิก
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleStartEdit(row.rowIndex)}
-                            className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded-lg transition-colors font-medium flex items-center gap-1"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                            แก้ไข
-                          </button>
-                        )}
-                        
-                        <button
-                          onClick={() => handleDeleteRow(row.rowIndex)}
-                          className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="ลบ"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
+                    <td className="px-2 py-3">
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => row._isEditing ? handleCancelEdit(row.rowIndex) : handleStartEdit(row.rowIndex)} className={`p-1.5 rounded-lg transition-all ${row._isEditing ? "bg-slate-200 text-slate-600" : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"}`}>
+                          {row._isEditing ? <span className="text-[9px] font-bold">Cancel</span> : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>}
+                        </button>
+                        <button onClick={() => handleDeleteRow(row.rowIndex)} className="p-1.5 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 transition-all">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
                       </div>
                     </td>
@@ -601,53 +437,8 @@ export default function TransactionEditPage() {
               </tbody>
             </table>
           </div>
-
-          {filteredRows.length === 0 && (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                </svg>
-              </div>
-              <p className="text-slate-600 font-medium">ไม่พบข้อมูล</p>
-              <p className="text-slate-500 text-sm mt-1">ลองค้นหาด้วยคำอื่น</p>
-            </div>
-          )}
-        </div>
-
-        {/* Info Card */}
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
-          <div className="flex items-start gap-3">
-            <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div>
-              <p className="text-sm font-semibold text-blue-800 mb-1">💡 วิธีใช้งาน</p>
-              <ul className="text-sm text-blue-700 space-y-1">
-                <li>• <strong>แก้ไขข้อมูล:</strong> กดปุ่ม "แก้ไข" แล้วเปลี่ยนข้อมูลในช่อง</li>
-                <li>• <strong>บันทึก:</strong> กดปุ่ม "บันทึกทั้งหมด" เพื่อบันทึกการเปลี่ยนแปลง</li>
-                <li>• <strong>ลบ:</strong> กดปุ่มถังขยะเพื่อลบแถว</li>
-              </ul>
-            </div>
-          </div>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-slideIn {
-          animation: slideIn 0.3s ease-out;
-        }
-      `}</style>
     </div>
   );
 }

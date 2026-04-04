@@ -1,9 +1,9 @@
 /**
  * Dashboard Data API - PRODUCTION READY ✅
  * Location: app/api/dashboard/data/route.ts
- * 
+ *
  * GET /api/dashboard/data?spreadsheetId=xxx&configSheetName=yyy&dataSheetName=zzz
- * 
+ *
  * ✅ NO CACHE (dashboard ต้องการ real-time data)
  * ✅ Retry with exponential backoff
  * ✅ Better error handling with Thai messages
@@ -17,6 +17,7 @@ export const runtime = 'nodejs'; // บังคับใช้ Node.js runtime
 
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { withLogger } from "@/lib/with-logger";
 
 interface ConfigField {
   fieldName: string;
@@ -42,10 +43,10 @@ async function fetchWithRetry(
         return response;
       }
 
-      // Retry for 5xx errors or 403 (rate limit)
-      if ((response.status >= 500 || response.status === 403) && i < maxRetries) {
-        const delay = 1000 * Math.pow(2, i);
-        console.warn(`⚠️ Retry ${i + 1}/${maxRetries} in ${delay}ms`);
+      // Retry for 5xx errors, 403 or 429 (rate limit)
+      if ((response.status >= 500 || response.status === 403 || response.status === 429) && i < maxRetries) {
+        const delay = response.status === 429 ? 2000 * Math.pow(2, i) : 1000 * Math.pow(2, i);
+        console.warn(`⚠️ Retry ${i + 1}/${maxRetries} (status ${response.status}) in ${delay}ms`);
         await new Promise((r) => setTimeout(r, delay));
         continue;
       }
@@ -68,17 +69,17 @@ function parseConfigSheet(configRows: any[][]): ConfigField[] {
   }
 
   const header = configRows[0].map((h) => (h || "").toString().toLowerCase().trim());
-  
-  const fieldNameIdx = header.findIndex((h) => 
+
+  const fieldNameIdx = header.findIndex((h) =>
     h.includes("field") || h === "fieldname" || h === "field_name"
   );
-  const labelIdx = header.findIndex((h) => 
+  const labelIdx = header.findIndex((h) =>
     h.includes("label") || h.includes("ชื่อแสดงผล")
   );
-  const typeIdx = header.findIndex((h) => 
+  const typeIdx = header.findIndex((h) =>
     h.includes("type") || h.includes("ประเภท")
   );
-  const orderIdx = header.findIndex((h) => 
+  const orderIdx = header.findIndex((h) =>
     h.includes("order") || h.includes("ลำดับ")
   );
 
@@ -102,7 +103,7 @@ function parseDataSheetByColumnIndex(
   configFields: ConfigField[]
 ): any[] {
   if (!dataRows || dataRows.length < 2) return [];
-  
+
   const dataRowsWithoutHeader = dataRows.slice(1);
 
   return dataRowsWithoutHeader
@@ -118,7 +119,7 @@ function parseDataSheetByColumnIndex(
     });
 }
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   const requestId = Math.random().toString(36).substring(7);
 
   try {
@@ -437,3 +438,4 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+export const GET = withLogger("/api/dashboard/data", _GET);

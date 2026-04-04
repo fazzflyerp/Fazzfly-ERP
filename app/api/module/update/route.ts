@@ -27,8 +27,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { withLogger } from "@/lib/with-logger";
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   try {
     console.log("💾 [API] POST /api/transaction/update");
 
@@ -147,3 +148,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+export const POST = withLogger("/api/module/update", _POST);

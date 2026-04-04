@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { withLogger } from "@/lib/with-logger";
 
 async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 2): Promise<Response> {
   for (let i = 0; i <= maxRetries; i++) {
@@ -28,7 +29,7 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 2)
   throw new Error("Max retries exceeded");
 }
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   const requestId = Math.random().toString(36).substring(7);
 
   try {
@@ -107,3 +108,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR", message: error.message }, { status: 500 });
   }
 }
+export const GET = withLogger("/api/module/helpers", _GET);

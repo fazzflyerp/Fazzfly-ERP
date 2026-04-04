@@ -2,7 +2,8 @@
 const nextConfig = {
   experimental: {
     serverActions: true,
-    serverComponentsExternalPackages: ["next-auth"],
+    serverComponentsExternalPackages: ["next-auth", "@sparticuz/chromium", "puppeteer-core"],
+    instrumentationHook: true,
   },
 };
 

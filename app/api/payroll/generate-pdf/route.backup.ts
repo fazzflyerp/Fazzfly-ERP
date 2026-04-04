@@ -2,17 +2,16 @@
  * =============================================================================
  * FILE PATH: app/api/payroll/generate-pdf/route.ts
  * =============================================================================
- *
+ * 
  * Generate Payroll Slip PDF (Layout เหมือน PayrollSlipPreview เป๊ะๆ)
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { generatePdf } from "@/lib/pdf-browser";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-
+    
     const {
       companyInfo,
       payPeriod,
@@ -43,13 +42,13 @@ export async function POST(request: NextRequest) {
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    body {
-      font-family: 'Noto Sans Thai', sans-serif;
+    
+    body { 
+      font-family: 'Noto Sans Thai', sans-serif; 
       color: #000;
       background: white;
     }
-
+    
     .container {
       width: 210mm;
       height: 297mm;
@@ -74,9 +73,9 @@ export async function POST(request: NextRequest) {
       text-align: center;
     }
 
-    .logo {
-      max-height: 64px;
-      max-width: 220px;
+    .logo { 
+      max-height: 64px; 
+      max-width: 220px; 
       margin-bottom: 12px;
     }
 
@@ -363,19 +362,19 @@ export async function POST(request: NextRequest) {
 <body>
   <div class="container">
     <div class="border-container">
-
+      
       <!-- Header -->
       <div class="header">
         ${companyInfo?.logo_url ? `
           <img src="${companyInfo.logo_url}" alt="Company Logo" class="logo" />
         ` : ''}
-
+        
         <div class="company-name">${companyInfo?.company_name || 'บริษัท ทดสอบ จำกัด'}</div>
-
+        
         ${companyInfo?.company_name_en ? `
           <div class="company-name-en">${companyInfo.company_name_en}</div>
         ` : ''}
-
+        
         <div class="company-info">
           <p>${companyInfo?.address || '123 ถนนทดสอบ กรุงเทพฯ 10100'}</p>
           <p>โทรศัพท์: ${companyInfo?.tel || '02-123-4567'} | เลขประจำตัวผู้เสียภาษี: ${companyInfo?.tax_id || '0-0000-00000-00-0'}</p>
@@ -421,7 +420,7 @@ export async function POST(request: NextRequest) {
 
           <!-- Tables Grid -->
           <div class="tables-grid">
-
+            
             <!-- Earnings Table -->
             <div class="data-table-container earnings-container">
               <div class="table-header earnings-header">รายได้ / EARNINGS</div>
@@ -468,13 +467,22 @@ export async function POST(request: NextRequest) {
                 <tbody>
                   ${activeDeductions.length > 0 ? activeDeductions.map((item: any) => {
                     let label = item.label;
-                    if (label.includes('วันลา') && leaveDays) label += ' (' + leaveDays + ' วัน)';
-                    if (label.includes('มาสาย') && lateMinutes) label += ' (' + lateMinutes + ' นาที)';
-
-                    return '<tr><td>' + label + '</td><td class="text-right amount-cell deductions-amount">' +
-                      item.amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
-                      '</td></tr>';
-                  }).join('') : '<tr><td colspan="2" class="empty-state">ไม่มีรายการ</td></tr>'}
+                    if (label.includes('วันลา') && leaveDays) label += ` (${leaveDays} วัน)`;
+                    if (label.includes('มาสาย') && lateMinutes) label += ` (${lateMinutes} นาที)`;
+                    
+                    return `
+                      <tr>
+                        <td>${label}</td>
+                        <td class="text-right amount-cell deductions-amount">
+                          ${item.amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    `;
+                  }).join('') : `
+                    <tr>
+                      <td colspan="2" class="empty-state">ไม่มีรายการ</td>
+                    </tr>
+                  `}
                   <tr class="total-row deductions-total-row">
                     <td>รวมรายการหัก</td>
                     <td class="text-right total-amount deductions-total-amount">
@@ -529,14 +537,30 @@ export async function POST(request: NextRequest) {
     `;
 
     // Generate PDF ด้วย Puppeteer
-    const pdfBuffer = await generatePdf(html);
+    const puppeteer = await import('puppeteer');
+    const browser = await puppeteer.default.launch({ 
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: 0, right: 0, bottom: 0, left: 0 },
+      preferCSSPageSize: true,
+    });
+    
+    await browser.close();
 
     // สร้างชื่อไฟล์แบบ safe (ASCII only)
     const safeEmployeeId = employeeId.replace(/[^a-zA-Z0-9]/g, '_');
     const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     const filename = `PaySlip_${safeEmployeeId}_${timestamp}.pdf`;
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(Buffer.from(pdfBuffer), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${filename}"`,

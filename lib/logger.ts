@@ -74,17 +74,83 @@ class Logger {
   private flushRetries = 3;
   private isServerless = !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
+  // Save originals before any patching
+  private readonly _origLog = console.log.bind(console);
+  private readonly _origWarn = console.warn.bind(console);
+  private readonly _origError = console.error.bind(console);
+  private _isCapturing = false;
+
   constructor() {
     this.initLogDir();
-    
+    this.interceptConsole();
+
     if (!this.isServerless) {
       this.flushTimer = setInterval(() => this.flushLogs(), 30000);
-      
+
       process.on("beforeExit", async () => {
         if (this.flushTimer) clearInterval(this.flushTimer);
         await this.flushLogs();
       });
     }
+  }
+
+  // ── Console interception ────────────────────────────────────────────────
+  private interceptConsole(): void {
+    const self = this;
+    console.log = (...args: any[]) => { self._origLog(...args); self._captureConsole("INFO", args); };
+    console.warn = (...args: any[]) => { self._origWarn(...args); self._captureConsole("WARN", args); };
+    console.error = (...args: any[]) => { self._origError(...args); self._captureConsole("ERROR", args); };
+  }
+
+  private _captureConsole(defaultLevel: string, args: any[]): void {
+    if (this._isCapturing || args.length === 0) return;
+
+    this._isCapturing = true;
+    try {
+      const firstArg = typeof args[0] === "string" ? args[0] : JSON.stringify(args[0]);
+
+      // Skip logger's own ANSI-colored output and internal messages
+      if (/^\x1b\[/.test(firstArg) || firstArg.includes("💾 Flushed") || firstArg.includes("Failed to create log")) return;
+
+      // Only capture messages that have our [requestId] bracket pattern
+      // (all our API routes log with this pattern)
+      const reqIdMatch = firstArg.match(/\[([a-zA-Z0-9]{4,16})\]/);
+      if (!reqIdMatch) return;
+      const requestId = reqIdMatch[1];
+
+      // Detect level from emoji
+      let level = defaultLevel;
+      if (firstArg.includes("❌")) level = "ERROR";
+      else if (firstArg.includes("⚠️")) level = "WARN";
+
+      // Detect API from message keywords (Turbopack hides original file paths in stack)
+      const api = this._guessApiFromMessage(firstArg);
+
+      const data = args.length > 1 ? (args.length === 2 ? args[1] : args.slice(1)) : undefined;
+
+      const levelMap: Record<string, LogLevel> = {
+        ERROR: LogLevel.ERROR, WARN: LogLevel.WARN,
+        INFO: LogLevel.INFO, DEBUG: LogLevel.DEBUG,
+      };
+
+      this.log(levelMap[level] ?? LogLevel.INFO, requestId, api, firstArg, data);
+    } finally {
+      this._isCapturing = false;
+    }
+  }
+
+  private _guessApiFromMessage(msg: string): string {
+    const m = msg.toLowerCase();
+    if (m.includes("upload") || m.includes("drive") || m.includes("image upload")) return "/api/upload";
+    if (m.includes("dashboard")) return "/api/dashboard";
+    if (m.includes("payroll")) return "/api/payroll";
+    if (m.includes("receipt") || m.includes("invoice")) return "/api/receipt";
+    if (m.includes("crm") || m.includes("customer") || m.includes("appointment") || m.includes("followup")) return "/api/crm";
+    if (m.includes("master")) return "/api/master";
+    if (m.includes("module") || m.includes("helper") || m.includes("submit")) return "/api/module";
+    if (m.includes("auth") || m.includes("sign in") || m.includes("token")) return "/api/auth";
+    if (m.includes("user")) return "/api/user";
+    return "/api/other";
   }
 
   private async initLogDir(): Promise<void> {
@@ -253,16 +319,16 @@ class Logger {
     const user = entry.userEmail ? ` [${entry.userEmail}]` : "";
     const duration = entry.duration ? ` (${entry.duration}ms)` : "";
 
-    console.log(`${prefix}${user} ${entry.message}${duration}`);
+    this._origLog(`${prefix}${user} ${entry.message}${duration}`);
 
     if (entry.data) {
-      console.log("  Data:", JSON.stringify(entry.data, null, 2));
+      this._origLog("  Data:", JSON.stringify(entry.data, null, 2));
     }
 
     if (entry.error) {
-      console.error("  Error:", entry.error.message);
+      this._origError("  Error:", entry.error.message);
       if (entry.error.stack) {
-        console.error(entry.error.stack);
+        this._origError(entry.error.stack);
       }
     }
   }
@@ -391,6 +457,10 @@ class Logger {
 
   async forceFlush(): Promise<void> {
     await this.flushLogs();
+  }
+
+  clearLogs(): void {
+    this.logs = [];
   }
 
   getLogCount(): number {
