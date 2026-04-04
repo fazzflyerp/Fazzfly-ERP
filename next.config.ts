@@ -1,10 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverActions: true,
-    serverComponentsExternalPackages: ["next-auth", "@sparticuz/chromium", "puppeteer-core"],
-    instrumentationHook: true,
-  },
+  serverExternalPackages: ["next-auth", "@sparticuz/chromium", "puppeteer-core"],
 };
 
 export default nextConfig;

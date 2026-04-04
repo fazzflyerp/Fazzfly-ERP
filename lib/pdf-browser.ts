@@ -21,9 +21,8 @@ export async function getPdfBrowser(): Promise<Browser> {
 
     return puppeteer.default.launch({
       args: chromium.default.args,
-      defaultViewport: chromium.default.defaultViewport,
       executablePath: await chromium.default.executablePath(),
-      headless: chromium.default.headless as any,
+      headless: true,
     });
   } else {
     // ── Local Dev ────────────────────────────────────────────────────
