@@ -76,6 +76,7 @@ export default function ReceiptSimplePage() {
   // ✅ Sort & Filter states
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState<string>('');
 
   // ✅ NEW: Refresh state
   const [refreshing, setRefreshing] = useState(false);
@@ -475,397 +476,203 @@ export default function ReceiptSimplePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50">
+    <div className="min-h-screen bg-slate-50">
       <QuickNav isOpen={navOpen} onClose={() => setNavOpen(false)} />
       {/* Header */}
-      <div className="bg-white/90 backdrop-blur-lg border-b border-emerald-200 sticky top-0 z-20 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <QuickNavTrigger onClick={() => setNavOpen(true)} />
-              <Link href="/ERP/home" className="group flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 rounded-xl transition-all duration-300 border border-gray-200 shadow-sm">
-                <svg className="w-5 h-5 text-gray-600 group-hover:text-gray-800 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-                <span className="text-sm font-semibold text-gray-700 group-hover:text-gray-900 transition-colors">กลับ</span>
-              </Link>
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl shadow-lg">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-800">ออกใบเสร็จรับเงิน</h1>
-                  {moduleInfo && <p className="text-sm text-gray-600 mt-0.5">{moduleInfo.moduleName}</p>}
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Stats + Refresh */}
-            <div className="hidden md:flex items-center gap-3">
-              {/* ✅ NEW: Refresh Button */}
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-emerald-200 rounded-xl text-sm font-semibold text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm disabled:opacity-50"
-              >
-                <svg
-                  className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
-                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                {refreshing ? "กำลังโหลด..." : "Refresh"}
-              </button>
-
-              <div className="px-4 py-2 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-200">
-                <div className="text-xs text-emerald-600 font-medium mb-0.5">ใบเสร็จทั้งหมด</div>
-                <div className="text-xl font-bold text-emerald-700">{groupedReceipts.length}</div>
-              </div>
-            </div>
+      <div className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm">
+        <div className="px-4 h-14 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <QuickNavTrigger onClick={() => setNavOpen(true)} />
+            <Link href="/ERP/home" className="p-2 hover:bg-slate-100 rounded-xl transition-colors flex-shrink-0">
+              <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </Link>
+            <h1 className="text-sm font-bold text-slate-800 truncate">ใบเสร็จรับเงิน</h1>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-xs text-slate-500 font-semibold hidden sm:block">{groupedReceipts.length} รายการ</span>
+            <button onClick={handleRefresh} disabled={refreshing}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-semibold text-slate-600 transition-all disabled:opacity-50">
+              <svg className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {refreshing ? "โหลด..." : "Refresh"}
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-          {/* Left: Receipt List */}
-          <div className="xl:col-span-3">
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-md overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-teal-50">
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                    <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                    รายการใบเสร็จ
-                  </h2>
-                  <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm font-semibold border border-emerald-200">
-                    {groupedReceipts.filter(r => {
-                      if (selectedMonth === 'all') return true;
-                      const date = new Date(r.date.split('/').reverse().join('-'));
-                      const month = date.getMonth() + 1;
-                      const year = date.getFullYear();
-                      return `${year}-${month.toString().padStart(2, '0')}` === selectedMonth;
-                    }).length} รายการ
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <div className="flex items-center gap-1 bg-white rounded-lg p-1 border border-gray-200">
-                    <button onClick={() => setSortOrder('newest')}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${sortOrder === 'newest' ? 'bg-emerald-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}>
-                      <span className="flex items-center gap-1">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                        ใหม่ → เก่า
-                      </span>
-                    </button>
-                    <button onClick={() => setSortOrder('oldest')}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${sortOrder === 'oldest' ? 'bg-emerald-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}>
-                      <span className="flex items-center gap-1">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                        </svg>
-                        เก่า → ใหม่
-                      </span>
-                    </button>
-                  </div>
-                  <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                    <option value="all">ทุกเดือน</option>
-                    {(() => {
-                      const months = new Set<string>();
-                      groupedReceipts.forEach(r => {
-                        try {
-                          const date = new Date(r.date.split('/').reverse().join('-'));
-                          const month = date.getMonth() + 1;
-                          const year = date.getFullYear();
-                          months.add(`${year}-${month.toString().padStart(2, '0')}`);
-                        } catch (e) {}
-                      });
-                      return Array.from(months).sort().reverse().map(m => {
-                        const [year, month] = m.split('-');
-                        const monthNames = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-                        return <option key={m} value={m}>{monthNames[parseInt(month)-1]} {parseInt(year)+543}</option>;
-                      });
-                    })()}
-                  </select>
+      {/* Main 2-col grid */}
+      <div className="h-[calc(100vh-56px)] grid grid-cols-1 md:grid-cols-2">
 
-                  {/* ✅ Mobile Refresh Button */}
-                  <button
-                    onClick={handleRefresh}
-                    disabled={refreshing}
-                    className="md:hidden flex items-center gap-1.5 px-3 py-1.5 bg-white border border-emerald-200 rounded-lg text-xs font-semibold text-emerald-700 hover:bg-emerald-50 transition-all disabled:opacity-50"
-                  >
-                    <svg className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        {/* Left: Receipt List */}
+        <div className="flex flex-col border-r border-slate-200 overflow-hidden">
+          {/* Filters */}
+          <div className="flex-none px-3 py-2 border-b border-slate-200 bg-white flex flex-wrap gap-1.5 items-center">
+            <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5">
+              <button onClick={() => setSortOrder('newest')}
+                className={`px-2 py-1 text-[10px] font-bold rounded-md transition-all ${sortOrder === 'newest' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                ใหม่→เก่า
+              </button>
+              <button onClick={() => setSortOrder('oldest')}
+                className={`px-2 py-1 text-[10px] font-bold rounded-md transition-all ${sortOrder === 'oldest' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                เก่า→ใหม่
+              </button>
+            </div>
+            <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}
+              className="px-2 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-slate-50 text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+              <option value="all">ทุกเดือน</option>
+              {(() => {
+                const months = new Set<string>();
+                groupedReceipts.forEach(r => {
+                  try {
+                    const date = new Date(r.date.split('/').reverse().join('-'));
+                    const month = date.getMonth() + 1;
+                    const year = date.getFullYear();
+                    months.add(`${year}-${month.toString().padStart(2, '0')}`);
+                  } catch (e) {}
+                });
+                return Array.from(months).sort().reverse().map(m => {
+                  const [year, month] = m.split('-');
+                  const monthNames = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+                  return <option key={m} value={m}>{monthNames[parseInt(month)-1]} {parseInt(year)+543}</option>;
+                });
+              })()}
+            </select>
+            <input type="text" placeholder="ค้นหา..." value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="flex-1 min-w-[80px] px-2 py-1.5 text-xs rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"/>
+          </div>
+
+          {/* List */}
+          <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+            {groupedReceipts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-400">
+                <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <p className="text-sm font-medium">ไม่มีรายการใบเสร็จ</p>
+              </div>
+            ) : groupedReceipts
+              .filter(receipt => {
+                if (selectedMonth !== 'all') {
+                  try {
+                    const date = new Date(receipt.date.split('/').reverse().join('-'));
+                    const month = date.getMonth() + 1;
+                    const year = date.getFullYear();
+                    if (`${year}-${month.toString().padStart(2, '0')}` !== selectedMonth) return false;
+                  } catch (e) { return false; }
+                }
+                if (searchTerm) {
+                  const term = searchTerm.toLowerCase();
+                  return (
+                    receipt.receiptNo.toLowerCase().includes(term) ||
+                    receipt.customerName.toLowerCase().includes(term) ||
+                    receipt.programs.toLowerCase().includes(term)
+                  );
+                }
+                return true;
+              })
+              .sort((a, b) => {
+                try {
+                  const dateA = new Date(a.date.split('/').reverse().join('-'));
+                  const dateB = new Date(b.date.split('/').reverse().join('-'));
+                  return sortOrder === 'newest' ? dateB.getTime() - dateA.getTime() : dateA.getTime() - dateB.getTime();
+                } catch (e) { return 0; }
+              })
+              .map((receipt, index) => {
+                const isSelected = selectedReceipt?.receiptNo === receipt.receiptNo;
+                return (
+                  <div key={index} onClick={() => setSelectedReceipt(receipt)}
+                    className={`rounded-xl border cursor-pointer transition-all px-3 py-2.5 ${
+                      isSelected ? 'border-emerald-400 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/40'}`}>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="text-xs font-bold text-slate-800">{receipt.receiptNo}</span>
+                      <span className="text-[10px] text-slate-400 flex-shrink-0">{receipt.date}</span>
+                    </div>
+                    <div className="text-[11px] text-slate-600 truncate mb-1.5">{receipt.customerName || "ไม่ระบุชื่อ"}</div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-slate-400 truncate flex-1 mr-2">{receipt.programs}</span>
+                      <span className={`text-[11px] font-bold flex-shrink-0 ${receipt.totalAmount > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        {receipt.totalAmount > 0 ? `฿${receipt.totalAmount.toLocaleString('th-TH', { maximumFractionDigits: 0 })}` : '-'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+
+        {/* Right: Detail + Actions */}
+        <div className="flex flex-col overflow-hidden bg-slate-50">
+          {!selectedReceipt ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-2 text-slate-400">
+              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <p className="text-sm font-medium">เลือกใบเสร็จเพื่อดูรายละเอียด</p>
+            </div>
+          ) : (
+            <>
+              {/* Header */}
+              <div className="flex-none px-3 py-2.5 border-b border-slate-200 bg-white">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">เลขที่</p>
+                    <p className="text-base font-bold text-slate-800">{selectedReceipt.receiptNo}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-[10px] text-slate-400">ยอดรวม</p>
+                    <p className="text-base font-bold text-emerald-600">฿{selectedReceipt.totalAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600 mb-2.5">
+                  <div><span className="text-slate-400">วันที่: </span>{selectedReceipt.date || '-'}</div>
+                  <div><span className="text-slate-400">ลูกค้า: </span><span className="font-semibold">{selectedReceipt.customerName || '-'}</span></div>
+                  <div className="col-span-2 truncate"><span className="text-slate-400">บริการ: </span>{selectedReceipt.programs}</div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setShowPreview(true)}
+                    className="flex-1 py-2 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all flex items-center justify-center gap-1.5">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
-                    {refreshing ? "โหลด..." : "Refresh"}
+                    พรีวิว
+                  </button>
+                  <button onClick={handleGeneratePDF} disabled={loadingPDF}
+                    className="flex-1 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all flex items-center justify-center gap-1.5 disabled:opacity-50">
+                    {loadingPDF ? (
+                      <><div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>กำลังสร้าง...</>
+                    ) : (
+                      <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>ดาวน์โหลด PDF</>
+                    )}
                   </button>
                 </div>
               </div>
 
-              <div className="p-4">
-                {groupedReceipts.length === 0 ? (
-                  <div className="text-center py-16">
-                    <div className="w-20 h-20 mx-auto mb-4 bg-gray-100 rounded-2xl flex items-center justify-center">
-                      <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                    </div>
-                    <p className="text-gray-600 font-medium">ไม่มีรายการใบเสร็จ</p>
-                    <p className="text-gray-500 text-sm mt-1">กรุณาตรวจสอบข้อมูลในระบบ</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3 max-h-[calc(100vh-350px)] overflow-y-auto pr-2 custom-scrollbar">
-                    {groupedReceipts
-                      .filter(receipt => {
-                        if (selectedMonth === 'all') return true;
-                        try {
-                          const date = new Date(receipt.date.split('/').reverse().join('-'));
-                          const month = date.getMonth() + 1;
-                          const year = date.getFullYear();
-                          return `${year}-${month.toString().padStart(2, '0')}` === selectedMonth;
-                        } catch (e) { return false; }
-                      })
-                      .sort((a, b) => {
-                        try {
-                          const dateA = new Date(a.date.split('/').reverse().join('-'));
-                          const dateB = new Date(b.date.split('/').reverse().join('-'));
-                          return sortOrder === 'newest' ? dateB.getTime() - dateA.getTime() : dateA.getTime() - dateB.getTime();
-                        } catch (e) { return 0; }
-                      })
-                      .map((receipt, index) => (
-                        <div key={index} onClick={() => setSelectedReceipt(receipt)}
-                          className={`group relative overflow-hidden rounded-xl border-2 cursor-pointer transition-all duration-200 ${
-                            selectedReceipt?.receiptNo === receipt.receiptNo
-                              ? "border-emerald-500 bg-gradient-to-br from-emerald-50 to-teal-50"
-                              : "border-gray-200 bg-white hover:border-emerald-300"
-                          }`}>
-                          {selectedReceipt?.receiptNo === receipt.receiptNo && (
-                            <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-emerald-500 to-teal-600"></div>
-                          )}
-                          <div className="p-5">
-                            <div className="flex items-start justify-between mb-3">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">เลขที่</span>
-                                  {selectedReceipt?.receiptNo === receipt.receiptNo && (
-                                    <span className="px-2 py-0.5 bg-emerald-500 text-white text-xs font-bold rounded-full">เลือกแล้ว</span>
-                                  )}
-                                </div>
-                                <div className="text-xl font-bold text-gray-800 mb-1">{receipt.receiptNo}</div>
-                              </div>
-                              {selectedReceipt?.receiptNo === receipt.receiptNo ? (
-                                <div className="flex-shrink-0 w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center">
-                                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                  </svg>
-                                </div>
-                              ) : (
-                                <div className="flex-shrink-0 w-8 h-8 border-2 border-gray-300 rounded-full group-hover:border-emerald-400 transition-colors"></div>
-                              )}
-                            </div>
-                            <div className="space-y-2 mb-3">
-                              <div className="flex items-center gap-2 text-sm">
-                                <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                                <span className="text-gray-600">{receipt.date || "-"}</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-sm">
-                                <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                </svg>
-                                <span className="text-gray-700 font-medium">{receipt.customerName || "ไม่ระบุชื่อ"}</span>
-                              </div>
-                              <div className="flex items-start gap-2 text-sm">
-                                <svg className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                </svg>
-                                <span className="text-gray-700 line-clamp-2">{receipt.programs}</span>
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-between pt-3 border-t border-gray-200">
-                              <span className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-semibold rounded-lg">{receipt.items.length} รายการ</span>
-                              <div className="text-right">
-                                <div className="text-xs text-gray-500 mb-0.5">ยอดรวม</div>
-                                <div className={`text-lg font-bold ${receipt.totalAmount > 0 ? "text-emerald-600" : "text-gray-400"}`}>
-                                  {receipt.totalAmount > 0 ? `฿${receipt.totalAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}` : "ไม่มียอด"}
-                                </div>
-                              </div>
-                            </div>
+              {/* Items */}
+              <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+                {selectedReceipt.items.map((item, index) => {
+                  const displayFields = config.filter(f => f.order !== null).slice(0, 5);
+                  return (
+                    <div key={index} className="bg-white rounded-xl border border-slate-200 px-3 py-2">
+                      <div className="text-[10px] font-bold text-emerald-600 mb-1.5">#{index + 1}</div>
+                      <div className="space-y-1">
+                        {displayFields.map((field, fi) => (
+                          <div key={`${field.fieldName}-${fi}`} className="flex justify-between items-center text-[11px]">
+                            <span className="text-slate-400">{field.label}</span>
+                            <span className="font-semibold text-slate-700">{item[field.fieldName] || '-'}</span>
                           </div>
-                        </div>
-                      ))}
-                  </div>
-                )}
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
-          </div>
-
-          {/* Right: Preview & Generate */}
-          <div className="xl:col-span-2">
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-md overflow-hidden sticky top-24">
-              <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-teal-50">
-                <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                  รายละเอียดใบเสร็จ
-                </h2>
-              </div>
-
-              <div className="p-6">
-                {!selectedReceipt ? (
-                  <div className="text-center py-20">
-                    <div className="w-24 h-24 mx-auto mb-6 bg-gray-100 rounded-3xl flex items-center justify-center">
-                      <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                    </div>
-                    <p className="text-gray-600 font-medium text-lg mb-2">ยังไม่ได้เลือกใบเสร็จ</p>
-                    <p className="text-gray-500 text-sm">กรุณาเลือกรายการด้านซ้ายเพื่อดูรายละเอียด</p>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-5 border border-emerald-200">
-                      <div className="flex items-start justify-between mb-4">
-                        <div>
-                          <div className="text-xs text-emerald-600 uppercase tracking-wide mb-1 font-medium">เลขที่ใบเสร็จ</div>
-                          <div className="text-2xl font-bold text-gray-800">{selectedReceipt.receiptNo}</div>
-                        </div>
-                        <div className="px-3 py-1.5 bg-emerald-100 border border-emerald-200 rounded-lg">
-                          <div className="text-xs text-emerald-700 font-semibold">{selectedReceipt.items.length} รายการ</div>
-                        </div>
-                      </div>
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <div className="text-xs text-gray-600 mb-1">วันที่</div>
-                            <div className="text-sm text-gray-800 font-medium flex items-center gap-2">
-                              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
-                              {selectedReceipt.date || "-"}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-xs text-gray-600 mb-1">ลูกค้า</div>
-                            <div className="text-sm text-gray-800 font-medium flex items-center gap-2">
-                              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                              </svg>
-                              {selectedReceipt.customerName || "ไม่ระบุ"}
-                            </div>
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-600 mb-1.5">โปรแกรม/บริการ</div>
-                          <div className="text-sm text-gray-800 font-medium bg-white rounded-lg p-3 border border-emerald-100">
-                            <div className="flex items-start gap-2">
-                              <svg className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                              </svg>
-                              <span className="text-emerald-700">{selectedReceipt.programs}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-1 h-5 bg-emerald-500 rounded-full"></div>
-                        <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">รายการสินค้า/บริการ</h3>
-                      </div>
-                      <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                        {selectedReceipt.items.map((item, index) => {
-                          const displayFields = config.filter(f => f.order !== null).slice(0, 4);
-                          return (
-                            <div key={index} className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-emerald-200 hover:bg-emerald-50/50 transition-colors">
-                              <div className="flex items-start justify-between mb-2">
-                                <div className="text-xs font-semibold text-emerald-600">#{index + 1}</div>
-                                <div className="text-xs text-gray-500">Row {item._rowIndex}</div>
-                              </div>
-                              <div className="space-y-1.5">
-                                {displayFields.map((field) => (
-                                  <div key={field.fieldName} className="flex justify-between items-center text-sm">
-                                    <span className="text-gray-600">{field.label}:</span>
-                                    <span className="font-semibold text-gray-800">{item[field.fieldName] || "-"}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl p-5 shadow-lg">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="text-xs text-emerald-100 uppercase tracking-wide mb-1 font-medium">ยอดรวมทั้งหมด</div>
-                          <div className="text-3xl font-bold text-white">
-                            ฿{selectedReceipt.totalAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
-                          </div>
-                        </div>
-                        <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center">
-                          <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <button onClick={() => setShowPreview(true)}
-                        className="w-full py-4 rounded-xl font-bold text-lg transition-all duration-300 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white shadow-lg hover:shadow-xl active:scale-98">
-                        <span className="flex items-center justify-center gap-3">
-                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                          พรีวิวใบเสร็จ
-                        </span>
-                      </button>
-                      <button onClick={handleGeneratePDF} disabled={loadingPDF}
-                        className={`w-full py-4 rounded-xl font-bold text-lg transition-all duration-300 ${loadingPDF ? "bg-gray-400 cursor-not-allowed" : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg hover:shadow-xl active:scale-98"}`}>
-                        {loadingPDF ? (
-                          <span className="flex items-center justify-center gap-3">
-                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                            กำลังสร้าง PDF...
-                          </span>
-                        ) : (
-                          <span className="flex items-center justify-center gap-3">
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            ดาวน์โหลด PDF
-                          </span>
-                        )}
-                      </button>
-                    </div>
-
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                      <div className="flex items-start gap-3">
-                        <svg className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <div className="flex-1">
-                          <p className="text-sm text-blue-700 font-semibold mb-1">💡 คำแนะนำ</p>
-                          <p className="text-sm text-blue-600">ระบบจะรวมทุกรายการที่มีเลขที่ใบเสร็จเดียวกันไว้ใน PDF เดียว</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
       </div>
 

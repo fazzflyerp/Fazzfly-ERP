@@ -335,238 +335,220 @@ export default function PayrollSlipPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+    <div className="min-h-screen bg-slate-50">
       <QuickNav isOpen={navOpen} onClose={() => setNavOpen(false)} />
-      <div className="bg-white/90 backdrop-blur-lg border-b border-blue-200 sticky top-0 z-20 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <QuickNavTrigger onClick={() => setNavOpen(true)} />
-              <Link href="/ERP/home" className="group flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 rounded-xl transition-all duration-300 border border-gray-200 shadow-sm">
-                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>
-                </svg>
-                <span className="text-sm font-semibold text-gray-700">กลับ</span>
-              </Link>
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                  </svg>
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-800">ออกสลิปเงินเดือน</h1>
-                  {moduleInfo && <p className="text-sm text-gray-600 mt-0.5">{moduleInfo.module_name}</p>}
-                </div>
-              </div>
-            </div>
 
-            {/* Right: Stats + Refresh */}
-            <div className="hidden md:flex items-center gap-3">
-              {/* ✅ NEW: Refresh Button */}
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-blue-200 rounded-xl text-sm font-semibold text-blue-700 hover:bg-blue-50 transition-all shadow-sm disabled:opacity-50"
-              >
-                <svg
-                  className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
-                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                {refreshing ? "กำลังโหลด..." : "Refresh"}
-              </button>
-
-              <div className="px-4 py-2 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
-                <div className="text-xs text-blue-600 font-medium mb-0.5">พนักงานทั้งหมด</div>
-                <div className="text-xl font-bold text-blue-700">{employees.length}</div>
-              </div>
-            </div>
+      {/* Navbar */}
+      <div className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm">
+        <div className="px-4 h-14 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <QuickNavTrigger onClick={() => setNavOpen(true)} />
+            <Link href="/ERP/home" className="p-2 hover:bg-slate-100 rounded-xl transition-colors flex-shrink-0">
+              <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>
+              </svg>
+            </Link>
+            <h1 className="text-sm font-bold text-slate-800 truncate">สลิปเงินเดือน</h1>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-xs text-slate-500 font-semibold hidden sm:block">{employees.length} รายการ</span>
+            <button onClick={handleRefresh} disabled={refreshing}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-semibold text-slate-600 transition-all disabled:opacity-50">
+              <svg className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {refreshing ? "โหลด..." : "Refresh"}
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+      {/* Main 2-col grid */}
+      <div className="h-[calc(100vh-56px)] grid grid-cols-1 md:grid-cols-2">
 
-          {/* Left: Employee List */}
-          <div className="xl:col-span-2">
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-md overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                    <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
-                    รายชื่อพนักงาน
-                  </h2>
-                  <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold border border-blue-200">
-                    {filteredEmployees.length} คน
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <select value={selectedPeriod} onChange={(e) => { setSelectedPeriod(e.target.value); setShowPreview(false); }}
-                    className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">-- เลือกงวด --</option>
-                    {availablePeriods.map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                  <div className="flex items-center gap-1 bg-white rounded-lg p-1 border border-gray-200">
-                    {(['newest','oldest'] as const).map(order => (
-                      <button key={order} onClick={() => setSortOrder(order)}
-                        className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${sortOrder === order ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}>
-                        {order === 'newest' ? 'A → Z' : 'Z → A'}
-                      </button>
-                    ))}
+        {/* Left: Employee List */}
+        <div className="flex flex-col border-r border-slate-200 overflow-hidden">
+          {/* Filters */}
+          <div className="flex-none px-3 py-2 border-b border-slate-200 bg-white flex flex-wrap gap-1.5 items-center">
+            <select value={selectedPeriod} onChange={(e) => { setSelectedPeriod(e.target.value); setShowPreview(false); }}
+              className="px-2 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-slate-50 text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 max-w-[130px]">
+              <option value="">-- เลือกงวด --</option>
+              {availablePeriods.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+            <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5">
+              {(['newest','oldest'] as const).map(order => (
+                <button key={order} onClick={() => setSortOrder(order)}
+                  className={`px-2 py-1 text-[10px] font-bold rounded-md transition-all ${sortOrder === order ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                  {order === 'newest' ? 'A→Z' : 'Z→A'}
+                </button>
+              ))}
+            </div>
+            <input type="text" placeholder="ค้นหา..." value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)} disabled={!selectedPeriod}
+              className="flex-1 min-w-[80px] px-2 py-1.5 text-xs rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-40"/>
+            <span className="text-[10px] font-bold text-slate-400 flex-shrink-0">{filteredEmployees.length} คน</span>
+          </div>
+
+          {/* List */}
+          <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+            {!selectedPeriod ? (
+              <div className="flex items-center justify-center h-full text-sm text-slate-400">เลือกงวดเงินเดือน</div>
+            ) : filteredEmployees.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-sm text-slate-400">ไม่พบพนักงาน</div>
+            ) : filteredEmployees.map(emp => {
+              const isSelected = selectedEmployee?.employeeId === emp.employeeId && selectedEmployee?.payPeriod === emp.payPeriod;
+              return (
+                <div key={`${emp.employeeId}-${emp.payPeriod}`}
+                  onClick={() => { setSelectedEmployee(emp); }}
+                  className={`rounded-xl border cursor-pointer transition-all px-3 py-2.5 ${
+                    isSelected ? 'border-blue-400 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40'}`}>
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-xs font-bold text-slate-700 truncate">{emp.employeeName}</span>
+                      {emp.nickname && <span className="text-[10px] text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0">{emp.nickname}</span>}
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-400 flex-shrink-0">{emp.employeeId}</span>
                   </div>
-                  <input type="text" placeholder="🔍 ค้นหา..." value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)} disabled={!selectedPeriod}
-                    className="flex-1 min-w-[150px] px-3 py-1.5 text-xs rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                  {emp.position && <div className="text-[10px] text-slate-400 mb-1.5 truncate">{emp.position}</div>}
+                  <div className="grid grid-cols-3 gap-1 pt-1.5 border-t border-slate-100">
+                    <div className="text-center">
+                      <div className="text-[9px] text-emerald-600 font-semibold">รายได้</div>
+                      <div className="text-[11px] font-bold text-emerald-600">{emp.totalIncome.toLocaleString('th-TH', { maximumFractionDigits: 0 })}</div>
+                    </div>
+                    <div className="text-center border-x border-slate-100">
+                      <div className="text-[9px] text-rose-500 font-semibold">หัก</div>
+                      <div className="text-[11px] font-bold text-rose-500">{emp.totalDeduction.toLocaleString('th-TH', { maximumFractionDigits: 0 })}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-[9px] text-blue-600 font-semibold">สุทธิ</div>
+                      <div className="text-[11px] font-bold text-blue-600">{emp.netSalary.toLocaleString('th-TH', { maximumFractionDigits: 0 })}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
-                  {/* ✅ Mobile Refresh Button */}
-                  <button
-                    onClick={handleRefresh}
-                    disabled={refreshing}
-                    className="md:hidden flex items-center gap-1.5 px-3 py-1.5 bg-white border border-blue-200 rounded-lg text-xs font-semibold text-blue-700 hover:bg-blue-50 transition-all disabled:opacity-50"
-                  >
-                    <svg className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        {/* Right: Detail */}
+        <div className="flex flex-col overflow-hidden bg-slate-50">
+          {!selectedEmployee ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-2 text-slate-400">
+              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+              <p className="text-sm font-medium">เลือกพนักงานเพื่อดูสลิป</p>
+            </div>
+          ) : (
+            <>
+              {/* Header — same structure as receipt */}
+              <div className="flex-none px-3 py-2.5 border-b border-slate-200 bg-white">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">พนักงาน</p>
+                    <p className="text-base font-bold text-slate-800 truncate">{selectedEmployee.employeeName}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-[10px] text-slate-400">เงินสุทธิ</p>
+                    <p className="text-base font-bold text-blue-600">฿{selectedEmployee.netSalary.toLocaleString('th-TH', { maximumFractionDigits: 0 })}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600 mb-2.5">
+                  <div><span className="text-slate-400">รหัส: </span>{selectedEmployee.employeeId}</div>
+                  <div><span className="text-slate-400">งวด: </span><span className="font-semibold">{selectedEmployee.payPeriod}</span></div>
+                  {selectedEmployee.position && <div className="col-span-2 truncate"><span className="text-slate-400">ตำแหน่ง: </span>{selectedEmployee.position}</div>}
+                  {selectedEmployee.bankAccount && <div className="col-span-2 truncate"><span className="text-slate-400">บัญชี: </span>{selectedEmployee.bankAccount}</div>}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setShowPreview(true)}
+                    className="flex-1 py-2 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all flex items-center justify-center gap-1.5">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                     </svg>
-                    {refreshing ? "โหลด..." : "Refresh"}
+                    พรีวิว
+                  </button>
+                  <button onClick={() => handleGeneratePDF(selectedEmployee)} disabled={generating}
+                    className="flex-1 py-2 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all flex items-center justify-center gap-1.5 disabled:opacity-50">
+                    {generating ? (
+                      <><div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>กำลังสร้าง...</>
+                    ) : (
+                      <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>ดาวน์โหลด PDF</>
+                    )}
                   </button>
                 </div>
               </div>
 
-              <div className="p-4">
-                {!selectedPeriod ? (
-                  <div className="text-center py-16 text-gray-500">เลือกงวดเงินเดือน</div>
-                ) : filteredEmployees.length === 0 ? (
-                  <div className="text-center py-16 text-gray-500">ไม่พบพนักงาน</div>
-                ) : (
-                  <div className="space-y-3 max-h-[calc(100vh-350px)] overflow-y-auto pr-2 custom-scrollbar">
-                    {filteredEmployees.map(emp => (
-                      <div key={`${emp.employeeId}-${emp.payPeriod}`}
-                        onClick={() => { setSelectedEmployee(emp); setShowPreview(true); }}
-                        className={`group p-5 rounded-xl border-2 transition-all duration-300 cursor-pointer ${
-                          selectedEmployee?.employeeId === emp.employeeId && selectedEmployee?.payPeriod === emp.payPeriod
-                            ? 'border-blue-500 bg-gradient-to-br from-blue-50 to-indigo-50 shadow-lg scale-[1.02]'
-                            : 'border-gray-200 hover:border-blue-300 hover:shadow-md hover:scale-[1.01] bg-white'}`}>
-                        <div className="flex items-start justify-between mb-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h3 className="font-bold text-gray-800 text-lg truncate">{emp.employeeName}</h3>
-                              {emp.nickname && <span className="px-2 py-0.5 text-xs font-medium text-blue-700 bg-blue-100 rounded-full">{emp.nickname}</span>}
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <span className="px-2 py-0.5 bg-gray-100 rounded font-mono text-xs">{emp.employeeId}</span>
-                              {emp.position && <><span className="text-gray-400">•</span><span className="truncate">{emp.position}</span></>}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-3 gap-3 pt-4 border-t-2 border-gray-200">
-                          {[
-                            { label: 'รายได้', val: emp.totalIncome,    color: 'emerald' },
-                            { label: 'หัก',    val: emp.totalDeduction, color: 'rose'    },
-                            { label: 'สุทธิ',  val: emp.netSalary,      color: 'blue'    },
-                          ].map((item, i) => (
-                            <div key={i} className={`text-center ${i === 1 ? 'border-x border-gray-200' : ''}`}>
-                              <div className="flex items-center justify-center gap-1 mb-1">
-                                <div className={`w-2 h-2 bg-${item.color}-500 rounded-full`}></div>
-                                <span className="text-xs text-gray-500 font-medium">{item.label}</span>
-                              </div>
-                              <div className={`font-bold text-${item.color}-600 ${i === 2 ? 'text-lg' : 'text-base'}`}>
-                                {item.val.toLocaleString('th-TH', { maximumFractionDigits: 0 })}
-                              </div>
-                              <div className="text-xs text-gray-400">บาท</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Right: Preview */}
-          <div className="xl:col-span-3">
-            {showPreview && selectedEmployee ? (
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-md overflow-hidden sticky top-24">
-                <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-lg font-bold text-gray-800 mb-1">พรีวิวสลิป</h3>
-                      <p className="text-sm text-gray-600 truncate">{selectedEmployee.employeeName} • {selectedEmployee.payPeriod}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => handleGeneratePDF(selectedEmployee)} disabled={generating}
-                        className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-semibold rounded-lg transition-all shadow-md disabled:opacity-50 flex items-center gap-2">
-                        {generating ? (
-                          <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div><span className="text-sm">กำลังสร้าง...</span></>
-                        ) : (
-                          <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg><span className="text-sm">ดาวน์โหลด PDF</span></>
-                        )}
-                      </button>
-                      <button onClick={() => setShowPreview(false)} className="p-2 hover:bg-white rounded-lg transition-colors">
-                        <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                      </button>
+              {/* Items — same structure as receipt */}
+              <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+                {buildEarningsArray(selectedEmployee).map((item) => (
+                  <div key={item.fieldName} className="bg-white rounded-xl border border-slate-200 px-3 py-2">
+                    <div className="text-[10px] font-bold text-emerald-600 mb-1">รายได้</div>
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-slate-400">{item.label}</span>
+                      <span className="font-semibold text-slate-700">{item.amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
                     </div>
                   </div>
-                </div>
-                <div className="p-4 max-h-[calc(100vh-280px)] overflow-y-auto custom-scrollbar bg-gray-50">
-                  <div className="flex items-start justify-center">
-                    <div style={{ transform: 'scale(0.85)', transformOrigin: 'top center' }}>
-                      <PayrollSlipPreview
-                        companyInfo={{
-                          company_name:    companyInfo?.company_name,
-                          company_name_en: companyInfo?.company_name_en,
-                          address:         companyInfo?.address,
-                          tel:             companyInfo?.phone || companyInfo?.tel,
-                          tax_id:          companyInfo?.tax_id,
-                          logo_url:        companyInfo?.logo_url,
-                        }}
-                        payPeriod={selectedEmployee.payPeriod}
-                        employeeId={selectedEmployee.employeeId}
-                        employeeName={selectedEmployee.employeeName}
-                        nickname={selectedEmployee.nickname}
-                        position={selectedEmployee.position}
-                        workingDays={selectedEmployee.workingDays}
-                        leaveDays={selectedEmployee.leaveDays}
-                        lateMinutes={selectedEmployee.lateMinutes}
-                        bankAccount={selectedEmployee.bankAccount}
-                        earnings={buildEarningsArray(selectedEmployee)}
-                        deductions={buildDeductionsArray(selectedEmployee)}
-                        totalIncome={selectedEmployee.totalIncome}
-                        totalDeduction={selectedEmployee.totalDeduction}
-                        netSalary={selectedEmployee.netSalary}
-                      />
+                ))}
+                {buildDeductionsArray(selectedEmployee).map((item) => (
+                  <div key={item.fieldName} className="bg-white rounded-xl border border-slate-200 px-3 py-2">
+                    <div className="text-[10px] font-bold text-rose-500 mb-1">รายการหัก</div>
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-slate-400">{item.label}</span>
+                      <span className="font-semibold text-slate-700">{item.amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
                     </div>
                   </div>
-                </div>
+                ))}
               </div>
-            ) : (
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-md p-12 text-center">
-                <div className="w-20 h-20 mx-auto mb-4 bg-blue-50 rounded-2xl flex items-center justify-center">
-                  <svg className="w-10 h-10 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                  </svg>
-                </div>
-                <p className="text-gray-600 font-medium">เลือกพนักงาน</p>
-                <p className="text-gray-500 text-sm mt-1">คลิกที่รายชื่อเพื่อดูสลิป</p>
-              </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
       </div>
 
-      <style jsx>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-      `}</style>
+      {/* Preview Modal */}
+      {showPreview && selectedEmployee && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+              <div>
+                <p className="text-xl font-bold text-slate-800">{selectedEmployee.employeeName}</p>
+                <p className="text-sm text-slate-400">{selectedEmployee.payPeriod}</p>
+              </div>
+              <button onClick={() => setShowPreview(false)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+            <div className="p-6">
+              <PayrollSlipPreview
+                companyInfo={{
+                  company_name:    companyInfo?.company_name,
+                  company_name_en: companyInfo?.company_name_en,
+                  address:         companyInfo?.address,
+                  tel:             companyInfo?.phone || companyInfo?.tel,
+                  tax_id:          companyInfo?.tax_id,
+                  logo_url:        companyInfo?.logo_url,
+                }}
+                payPeriod={selectedEmployee.payPeriod}
+                employeeId={selectedEmployee.employeeId}
+                employeeName={selectedEmployee.employeeName}
+                nickname={selectedEmployee.nickname}
+                position={selectedEmployee.position}
+                workingDays={selectedEmployee.workingDays}
+                leaveDays={selectedEmployee.leaveDays}
+                lateMinutes={selectedEmployee.lateMinutes}
+                bankAccount={selectedEmployee.bankAccount}
+                earnings={buildEarningsArray(selectedEmployee)}
+                deductions={buildDeductionsArray(selectedEmployee)}
+                totalIncome={selectedEmployee.totalIncome}
+                totalDeduction={selectedEmployee.totalDeduction}
+                netSalary={selectedEmployee.netSalary}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

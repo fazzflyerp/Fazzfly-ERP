@@ -51,7 +51,12 @@ function getModuleFormRoute(mod: Module): string {
 function getDashboardRoute(item: DashboardItem): string {
   return `/ERP/home?tab=dashboard&dashboardId=${item.dashboardId}`;
 }
-function getDocumentRoute(_doc: DocumentItem): string {
+function getDocumentRoute(doc: DocumentItem): string {
+  const n = doc.moduleName.toLowerCase();
+  if (n.includes("payroll") || n.includes("payslip") || n.includes("เงินเดือน") || n.includes("สลิป"))
+    return `/ERP/payroll-slip?moduleId=${doc.moduleId}&spreadsheetId=${doc.spreadsheetId}`;
+  if (n.includes("receipt") || n.includes("ใบเสร็จ"))
+    return `/ERP/receipt-simple?moduleId=${doc.moduleId}&spreadsheetId=${doc.spreadsheetId}`;
   return `/ERP/home?tab=documents`;
 }
 function getMasterDataRoute(db: MasterDbItem): string {
@@ -500,10 +505,10 @@ export default function QuickNav({ isOpen, onClose }: { isOpen: boolean; onClose
                   <SectionLabel>โมดูลทั้งหมด ({modules.length})</SectionLabel>
                   {modules.length === 0 ? (
                     <p className="text-xs text-slate-400 text-center py-8">ไม่พบโมดูล</p>
-                  ) : modules.map((mod) => {
+                  ) : modules.map((mod, i) => {
                     const accent = getModuleAccent(mod.moduleName);
                     return (
-                      <NavItem key={mod.moduleId} iconBg={accent.bg} iconNode={<ModuleIcon name={mod.moduleName} />}
+                      <NavItem key={`mod-${mod.moduleId}-${i}`} iconBg={accent.bg} iconNode={<ModuleIcon name={mod.moduleName} />}
                         label={mod.moduleName} sublabel={`เพิ่มข้อมูล · ${mod.sheetName}`}
                         isActive={false} activeTextClass={accent.text}
                         onClick={() => navigate(getModuleFormRoute(mod))} />
@@ -517,10 +522,10 @@ export default function QuickNav({ isOpen, onClose }: { isOpen: boolean; onClose
                   <SectionLabel>Dashboard ({dashboards.length})</SectionLabel>
                   {dashboards.length === 0 ? (
                     <p className="text-xs text-slate-400 text-center py-8">ไม่พบ Dashboard</p>
-                  ) : dashboards.map((dash) => {
+                  ) : dashboards.map((dash, i) => {
                     const isActive = pathname.includes(dash.dashboardConfigName);
                     return (
-                      <NavItem key={dash.dashboardId} iconBg={isActive ? "bg-violet-600" : "bg-violet-500"}
+                      <NavItem key={`dash-${dash.dashboardId}-${i}`} iconBg={isActive ? "bg-violet-600" : "bg-violet-500"}
                         iconNode={<IconChart />} label={dash.dashboardName} sublabel={dash.sheetName}
                         isActive={isActive} activeTextClass="text-violet-700"
                         onClick={() => navigate(getDashboardRoute(dash))} />
@@ -537,11 +542,11 @@ export default function QuickNav({ isOpen, onClose }: { isOpen: boolean; onClose
                       <p className="text-xs text-slate-400 mb-3">ไม่พบโมดูลเอกสาร</p>
                       <button onClick={() => navigate("/ERP/home?tab=documents")} className="text-xs text-emerald-600 hover:underline">ดูใน ERP Home →</button>
                     </div>
-                  ) : documents.map((doc) => {
+                  ) : documents.map((doc, i) => {
                     const accent = getDocumentAccent(doc.moduleName);
                     const href   = getDocumentRoute(doc);
                     return (
-                      <NavItem key={doc.moduleId} iconBg={accent.bg} iconNode={<IconDoc />}
+                      <NavItem key={`doc-${doc.moduleId}-${i}`} iconBg={accent.bg} iconNode={<IconDoc />}
                         label={doc.moduleName} sublabel={doc.sheetName}
                         isActive={pathname === href.split("?")[0]} activeTextClass={accent.text}
                         onClick={() => navigate(href)} />
@@ -558,11 +563,11 @@ export default function QuickNav({ isOpen, onClose }: { isOpen: boolean; onClose
                       <p className="text-xs text-slate-400 mb-3">ไม่พบ Master Database</p>
                       <button onClick={() => navigate("/ERP/home?tab=masterdata")} className="text-xs text-indigo-600 hover:underline">ดูใน ERP Home →</button>
                     </div>
-                  ) : masterDbs.map((db) => {
+                  ) : masterDbs.map((db, i) => {
                     const href = getMasterDataRoute(db);
                     const isActive = pathname.includes("master-data") && decodeURIComponent(pathname).includes(db.sheetName);
                     return (
-                      <NavItem key={db.databaseId} iconBg={isActive ? "bg-indigo-600" : "bg-indigo-500"}
+                      <NavItem key={`db-${db.databaseId}-${i}`} iconBg={isActive ? "bg-indigo-600" : "bg-indigo-500"}
                         iconNode={<IconDb />} label={db.sheetName} sublabel={db.configName}
                         isActive={isActive} activeTextClass="text-indigo-700"
                         onClick={() => navigate(href)} />

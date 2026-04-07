@@ -6,6 +6,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { withLogger } from "@/lib/with-logger";
 
+// แปลง column index (0-based) → A1 notation (A, B, ..., Z, AA, AB, ...)
+function colIndexToLetter(index: number): string {
+  let letter = "";
+  let n = index + 1;
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    letter = String.fromCharCode(65 + rem) + letter;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letter;
+}
+
 async function _POST(request: NextRequest) {
   try {
     const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
@@ -19,79 +31,78 @@ async function _POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required parameters" }, { status: 400 });
     }
 
-    // 1. อ่านข้อมูลทั้งหมดจาก Sheet (รวม header และทุก column)
-    const getUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}`;
-    const getResponse = await fetch(getUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (!getResponse.ok) throw new Error("Failed to fetch current data");
+    const baseUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`;
+    const headers = { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" };
 
-    const currentData = await getResponse.json();
-    const currentValues: any[][] = currentData.values || [];
+    // แยก new rows กับ existing rows
+    const existingUpdates = updates.filter((u: any) => !u.isNew);
+    const newUpdates = updates.filter((u: any) => u.isNew);
 
-    const headerRow = currentValues[0] || [];
-    const oldDataRows = currentValues.slice(1); // ข้อมูลเดิมทุกแถว (ไม่มี header)
+    // ── 1. อัปเดต existing rows ─────────────────────────────────────────
+    // ใช้ batchUpdate เพื่อเขียนเฉพาะ cell ที่ map ใน config เท่านั้น
+    // ไม่แตะ column ที่ไม่ได้ map เลย
+    if (existingUpdates.length > 0) {
+      const batchData: { range: string; values: any[][] }[] = [];
 
-    // 2. สร้าง Map: rowIndex (1-based จาก Sheets) → raw row array เดิม
-    //    เพื่อ preserve column ที่ไม่ได้ map ใน config
-    const oldRowMap = new Map<number, any[]>();
-    oldDataRows.forEach((row, idx) => {
-      const sheetsRowIndex = idx + 2; // row 1 = header, row 2 = first data row
-      oldRowMap.set(sheetsRowIndex, row);
-    });
-
-    // 3. หา total column count (เผื่อ row เดิมยาวกว่า config)
-    const maxColCount = Math.max(
-      headerRow.length,
-      ...oldDataRows.map(r => r.length)
-    );
-
-    // 4. สร้างแถวใหม่โดย merge: เอาข้อมูลเดิม + patch เฉพาะ column ที่ config map ไว้
-    const finalDataRows: any[][] = updates.map((update: any) => {
-      let baseRow: any[];
-
-      if (update.isNew) {
-        // แถวใหม่: เริ่มจาก empty array ขนาดเท่า maxColCount
-        baseRow = new Array(maxColCount).fill("");
-      } else {
-        // แถวเดิม: เอา raw row เดิมมาก่อน (preserve column ที่ไม่ได้ map)
-        const existingRow = oldRowMap.get(update.rowIndex as number) || [];
-        baseRow = [...existingRow];
-        // เติม column ที่ขาดให้ครบ
-        while (baseRow.length < maxColCount) baseRow.push("");
+      for (const update of existingUpdates) {
+        config.forEach((field: { order: number }, fieldIdx: number) => {
+          const colLetter = colIndexToLetter(field.order - 1);
+          const range = `${sheetName}!${colLetter}${update.rowIndex}`;
+          batchData.push({
+            range,
+            values: [[update.data[fieldIdx] ?? ""]],
+          });
+        });
       }
 
-      // Patch เฉพาะ column ที่อยู่ใน config
-      // update.data คือ array เรียงตาม config order (จาก page.tsx handleSave)
-      config.forEach((field: { order: number }, fieldIdx: number) => {
-        const colIndex = field.order - 1; // order เริ่มจาก 1
-        baseRow[colIndex] = update.data[fieldIdx] ?? "";
+      const batchRes = await fetch(`${baseUrl}/values:batchUpdate`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          valueInputOption: "USER_ENTERED",
+          data: batchData,
+        }),
       });
 
-      return baseRow;
-    });
+      if (!batchRes.ok) {
+        const err = await batchRes.text();
+        throw new Error(`batchUpdate failed: ${err}`);
+      }
+    }
 
-    // 5. รวม header + แถวใหม่
-    const finalValues = [headerRow, ...finalDataRows];
+    // ── 2. Append new rows ───────────────────────────────────────────────
+    // หา max column index จาก config เพื่อสร้าง row array ขนาดถูกต้อง
+    if (newUpdates.length > 0) {
+      const maxColIndex = Math.max(...config.map((f: { order: number }) => f.order - 1));
 
-    // 6. Clear sheet แล้วเขียนใหม่ทั้งหมด
-    const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}:clear`;
-    await fetch(clearUrl, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-    });
+      const newRowValues = newUpdates.map((update: any) => {
+        const rowArray = new Array(maxColIndex + 1).fill("");
+        config.forEach((field: { order: number }, fieldIdx: number) => {
+          rowArray[field.order - 1] = update.data[fieldIdx] ?? "";
+        });
+        return rowArray;
+      });
 
-    const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}?valueInputOption=USER_ENTERED`;
-    const updateResponse = await fetch(updateUrl, {
-      method: "PUT",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ values: finalValues }),
-    });
+      const appendRes = await fetch(
+        `${baseUrl}/values/${encodeURIComponent(sheetName)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ values: newRowValues }),
+        }
+      );
 
-    if (!updateResponse.ok) throw new Error("Failed to update data");
+      if (!appendRes.ok) {
+        const err = await appendRes.text();
+        throw new Error(`append failed: ${err}`);
+      }
+    }
 
     return NextResponse.json({
       success: true,
       message: "Updated successfully",
-      updatedRows: finalDataRows.length,
+      updatedRows: existingUpdates.length,
+      addedRows: newUpdates.length,
     });
 
   } catch (error: any) {

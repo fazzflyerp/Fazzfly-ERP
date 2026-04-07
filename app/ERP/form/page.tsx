@@ -152,7 +152,26 @@ export default function FormPage() {
     const handleLineItemChange = (fieldName: string, value: string, rowIdx: number, helperName?: string) => {
         setLineItems((prev) => {
             const newRows = [...prev];
-            newRows[rowIdx] = { ...newRows[rowIdx], [fieldName]: value };
+            const updatedRow = { ...newRows[rowIdx], [fieldName]: value };
+            // ✅ ถ้า price field เปลี่ยน → sync ค่าเข้า price_type และ payment field ที่เลือก (เลือกเดียว)
+            const allF = lineItemFields.length > 0 ? lineItemFields : formFields;
+            const isPriceSource = allF.find(f => f.fieldName === fieldName && !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && f.type === "number");
+            if (isPriceSource) {
+                // sync price_type
+                const priceTypeFields = allF.filter(f => isPriceTypeField(f.fieldName));
+                const activePt = priceTypeFields.find(f => updatedRow[f.fieldName] && updatedRow[f.fieldName] !== "");
+                if (activePt) updatedRow[activePt.fieldName] = value;
+                // sync payment (ถ้าเลือกแค่อันเดียว)
+                const payFields = allF.filter(f => isPaymentField(f.fieldName));
+                const activePayments = payFields.filter(f => updatedRow[f.fieldName] && updatedRow[f.fieldName] !== "");
+                if (activePayments.length === 1) {
+                    const cur = updatedRow[activePayments[0].fieldName];
+                    if (cur === "__on__" || cur === "__selected__") {
+                        updatedRow[activePayments[0].fieldName] = value;
+                    }
+                }
+            }
+            newRows[rowIdx] = updatedRow;
             return newRows;
         });
 
@@ -310,11 +329,190 @@ export default function FormPage() {
         }
     };
 
-    // ✅ Render Field Function - เหมือน Master Form
+    const baseInputClass =
+        "w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all";
+    const baseLabel = "block text-sm font-semibold text-slate-700 mb-1.5";
+
+    // ✅ fields ที่ชื่อขึ้นต้นด้วย price_type_ จะถูก group เป็น widget เดียว
+    // เลือกได้แค่อันเดียวต่อ 1 รายการ
+    const isPriceTypeField = (fieldName: string) => /^price_type_/i.test(fieldName);
+
+    const renderPriceTypeGroup = (
+        group: FormField[],
+        getValue: (fieldName: string) => string,
+        setValue: (fieldName: string, value: string) => void,
+        allFields: FormField[] = []
+    ) => {
+        const isRequired = group.some(f => f.required);
+        // หา price source field อัตโนมัติ:
+        // 1. จาก notes ของ group[0] ถ้ามี
+        // 2. หรือหา field ชื่อ "price" ใน allFields
+        // 3. หรือหา number field ที่อยู่ก่อน price_type_ ใน allFields
+        const priceSourceField = group[0]?.notes
+            || allFields.find(f => f.fieldName === "price")?.fieldName
+            || allFields.find(f => !isPriceTypeField(f.fieldName) && f.type === "number" && (f.order ?? 0) < Math.min(...group.map(g => g.order ?? 999)))?.fieldName
+            || "";
+
+        // หา selected type ปัจจุบัน (field ที่มีค่า)
+        const selectedField = group.find(f => getValue(f.fieldName) !== "");
+        const selectedFieldName = selectedField?.fieldName ?? "";
+
+        const handleSelect = (selectedFn: string) => {
+            group.forEach(g => setValue(g.fieldName, ""));
+            if (!selectedFn) return;
+            setValue(selectedFn, displayAmount || "__selected__");
+        };
+
+        // ค่าที่จะแสดง = ดึงจาก price source field real-time
+        const rawDisplay = priceSourceField ? getValue(priceSourceField) : "";
+        const displayAmount = rawDisplay && rawDisplay !== "__on__" && rawDisplay !== "__selected__" ? rawDisplay : "";
+        const showAmount = !!(selectedFieldName && displayAmount);
+
+        const locked = !displayAmount;
+        return (
+            <div key="__priceTypeGroup" className="space-y-2 bg-slate-50 rounded-xl p-4 border border-slate-200">
+                <label className={`${baseLabel} ${locked ? "opacity-40" : ""}`}>
+                    ประเภทของราคา
+                    {isRequired && <span className="text-red-500 ml-1">*</span>}
+                </label>
+                {locked ? (
+                    <div className="w-full px-3 py-2.5 bg-white border border-dashed border-slate-300 rounded-lg text-sm text-slate-400 text-center">
+                        กรอกจำนวนเงินก่อน
+                    </div>
+                ) : (
+                    <>
+                        <select
+                            value={selectedFieldName}
+                            onChange={(e) => handleSelect(e.target.value)}
+                            className={`${baseInputClass} cursor-pointer`}
+                            required={isRequired}
+                        >
+                            <option value="">-- เลือกประเภทของราคา --</option>
+                            {group.map((f, i) => (
+                                <option key={`${f.fieldName}-${i}`} value={f.fieldName}>{f.label}</option>
+                            ))}
+                        </select>
+                        {showAmount && (
+                            <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-lg">
+                                <span className="text-xs text-indigo-500 font-medium">{selectedField?.label}</span>
+                                <span className="text-sm font-bold text-indigo-700">฿{Number(displayAmount).toLocaleString('th-TH')}</span>
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+        );
+    };
+
+    // ✅ fields ที่ชื่อขึ้นต้นด้วย payment_ จะถูก group เป็น multi-select widget
+    const isPaymentField = (fieldName: string) => /^payment_/i.test(fieldName);
+
+    const renderPaymentGroup = (
+        group: FormField[],
+        getValue: (fieldName: string) => string,
+        setValues: (updates: Record<string, string>) => void,
+        allFields: FormField[] = []
+    ) => {
+        const selected = group.filter(f => getValue(f.fieldName) !== "");
+        const selectedNames = selected.map(f => f.fieldName);
+        const isRequired = group.some(f => f.required);
+
+        // หา price source — ดึงจาก price field โดยตรงเสมอ (ไม่ใช่จาก price_type)
+        const priceSourceFn =
+            allFields.find(f => f.fieldName === "price")?.fieldName
+            || allFields.find(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && f.type === "number")?.fieldName
+            || "";
+        const rawPriceVal = priceSourceFn ? getValue(priceSourceFn) : "";
+        const priceVal = rawPriceVal && rawPriceVal !== "__on__" && rawPriceVal !== "__selected__" ? rawPriceVal : "";
+
+        const togglePayment = (fieldName: string) => {
+            const isOn = selectedNames.includes(fieldName);
+            const updates: Record<string, string> = {};
+            if (isOn) {
+                // ปิด → clear
+                updates[fieldName] = "";
+            } else {
+                if (selectedNames.length === 0) {
+                    // เลือกอันแรก → auto-fill จาก price
+                    updates[fieldName] = priceVal || "__on__";
+                } else {
+                    // เลือกเพิ่ม → switch ทุกอันที่ auto-fill มาเป็น manual (__on__)
+                    selectedNames.forEach(prev => {
+                        const cur = getValue(prev);
+                        if (cur === priceVal || cur === "__on__" || cur === "__selected__") {
+                            updates[prev] = "__on__"; // ยังเลือกอยู่ แต่ให้กรอก manual
+                        }
+                    });
+                    updates[fieldName] = "__on__";
+                }
+            }
+            setValues(updates);
+        };
+
+        const paymentLocked = !priceVal;
+        return (
+            <div key="__paymentGroup" className="space-y-2 bg-slate-50 rounded-xl p-4 border border-slate-200">
+                <label className={`${baseLabel} ${paymentLocked ? "opacity-40" : ""}`}>
+                    ช่องทางชำระ
+                    {isRequired && <span className="text-red-500 ml-1">*</span>}
+                </label>
+                {paymentLocked ? (
+                    <div className="w-full px-3 py-2.5 bg-white border border-dashed border-slate-300 rounded-lg text-sm text-slate-400 text-center">
+                        กรอกจำนวนเงินก่อน
+                    </div>
+                ) : (
+                    <>
+                        {/* toggle buttons */}
+                        <div className="flex flex-wrap gap-2">
+                            {group.map((f, i) => {
+                                const on = selectedNames.includes(f.fieldName);
+                                return (
+                                    <button key={`${f.fieldName}-${i}`} type="button"
+                                        onClick={() => togglePayment(f.fieldName)}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                                            on ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
+                                               : "bg-white border-slate-300 text-slate-500 hover:border-indigo-400 hover:text-indigo-600"
+                                        }`}
+                                    >{f.label}</button>
+                                );
+                            })}
+                        </div>
+                        {/* inputs */}
+                        {selected.length === 1 && priceVal && getValue(selected[0].fieldName) === priceVal ? (
+                            <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-lg">
+                                <span className="text-xs text-indigo-500 font-medium">{selected[0].label}</span>
+                                <span className="text-sm font-bold text-indigo-700">฿{Number(priceVal).toLocaleString('th-TH')}</span>
+                            </div>
+                        ) : selected.length > 0 ? (
+                            <div className="space-y-2">
+                                {selected.map((f, i) => {
+                                    const val = getValue(f.fieldName);
+                                    const displayVal = (val === "__on__" || val === "__selected__") ? "" : val;
+                                    return (
+                                        <div key={`${f.fieldName}-input-${i}`} className="flex items-center gap-2">
+                                            <span className="text-xs font-semibold text-slate-500 w-28 flex-shrink-0">{f.label}</span>
+                                            <input
+                                                type="number"
+                                                value={displayVal}
+                                                onChange={(e) => setValues({ [f.fieldName]: e.target.value })}
+                                                placeholder="จำนวนเงิน"
+                                                className={baseInputClass}
+                                                step="any" min="0"
+                                                required={isRequired && !displayVal}
+                                            />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : null}
+                    </>
+                )}
+            </div>
+        );
+    };
+
+    // ✅ Render Field Function
     const renderField = (field: FormField, value: string, onChange: (val: string) => void) => {
-        const baseInputClass =
-            "w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all";
-        const baseLabel = "block text-sm font-semibold text-slate-700 mb-1.5";
 
         switch (field.type) {
             case "image":
@@ -349,8 +547,8 @@ export default function FormPage() {
                             required={field.required}
                         >
                             <option value="">-- {field.placeholder || "เลือก"} --</option>
-                            {options.map((opt) => (
-                                <option key={opt.value} value={opt.value}>
+                            {options.map((opt, i) => (
+                                <option key={`${opt.value}-${i}`} value={opt.value}>
                                     {opt.value} - {opt.label}
                                 </option>
                             ))}
@@ -584,21 +782,36 @@ export default function FormPage() {
                                     <h2 className="text-base font-bold text-slate-900">ข้อมูลทั่วไป</h2>
                                 </div>
                             </div>
-                            <div className="p-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                                    {customerFields.map((field) => (
-                                        <div
-                                            key={field.fieldName}
-                                            className={field.type === "textarea" || field.type === "image" ? "md:col-span-2 lg:col-span-3" : ""}
-                                        >
-                                            {renderField(
-                                                field,
-                                                customerData[field.fieldName] || "",
-                                                (val) => handleCustomerChange(field.fieldName, val, field.helper!)
-                                            )}
+                            <div className="p-6 space-y-5">
+                                {/* ── Regular fields ── */}
+                                {(() => {
+                                    const isBottomField = (fn: string) => fn === "staff" || fn === "doctor";
+                                    const regularFields = [
+                                        ...customerFields.filter(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && !isBottomField(f.fieldName)),
+                                        ...customerFields.filter(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && isBottomField(f.fieldName)),
+                                    ];
+                                    return regularFields.length > 0 ? (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                                            {regularFields.map(field => (
+                                                <div key={field.fieldName} className={field.type === "textarea" || field.type === "image" ? "md:col-span-2 lg:col-span-3" : ""}>
+                                                    {renderField(field, customerData[field.fieldName] || "", (val) => handleCustomerChange(field.fieldName, val, field.helper!))}
+                                                </div>
+                                            ))}
                                         </div>
-                                    ))}
-                                </div>
+                                    ) : null;
+                                })()}
+                                {/* ── ประเภทของราคา + ช่องทางชำระ ── */}
+                                {(() => {
+                                    const priceGroup = customerFields.filter(f => isPriceTypeField(f.fieldName));
+                                    const paymentGroup = customerFields.filter(f => isPaymentField(f.fieldName));
+                                    if (priceGroup.length === 0 && paymentGroup.length === 0) return null;
+                                    return (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-1 border-t border-slate-100">
+                                            {priceGroup.length > 0 && renderPriceTypeGroup(priceGroup, (fn) => customerData[fn] || "", (fn, val) => setCustomerData(prev => ({ ...prev, [fn]: val })), customerFields)}
+                                            {paymentGroup.length > 0 && renderPaymentGroup(paymentGroup, (fn) => customerData[fn] || "", (updates) => setCustomerData(prev => ({ ...prev, ...updates })), customerFields)}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
                     )}
@@ -628,21 +841,51 @@ export default function FormPage() {
                                             </button>
                                         )}
                                     </div>
-                                    <div className="p-6">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                                            {(lineItemFields.length > 0 ? lineItemFields : formFields).map((field) => (
-                                                <div
-                                                    key={field.fieldName}
-                                                    className={field.type === "textarea" || field.type === "image" ? "md:col-span-2 lg:col-span-3" : ""}
-                                                >
-                                                    {renderField(
-                                                        field,
-                                                        row[field.fieldName] || "",
-                                                        (val) => handleLineItemChange(field.fieldName, val, idx, field.helper!)
+                                    <div className="p-6 space-y-5">
+                                        {/* ── Regular fields ── */}
+                                        {(() => {
+                                            const allF = lineItemFields.length > 0 ? lineItemFields : formFields;
+                                            const regularFields = [
+                                                ...allF.filter(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && f.fieldName !== "staff" && f.fieldName !== "doctor"),
+                                                ...allF.filter(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && (f.fieldName === "staff" || f.fieldName === "doctor")),
+                                            ];
+                                            return regularFields.length > 0 ? (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                                                    {regularFields.map(field => (
+                                                        <div key={field.fieldName} className={field.type === "textarea" || field.type === "image" ? "md:col-span-2 lg:col-span-3" : ""}>
+                                                            {renderField(field, row[field.fieldName] || "", (val) => handleLineItemChange(field.fieldName, val, idx, field.helper!))}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : null;
+                                        })()}
+                                        {/* ── ประเภทของราคา + ช่องทางชำระ ── */}
+                                        {(() => {
+                                            const allF = lineItemFields.length > 0 ? lineItemFields : formFields;
+                                            const priceGroup = allF.filter(f => isPriceTypeField(f.fieldName));
+                                            const paymentGroup = allF.filter(f => isPaymentField(f.fieldName));
+                                            if (priceGroup.length === 0 && paymentGroup.length === 0) return null;
+                                            return (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-1 border-t border-slate-100">
+                                                    {priceGroup.length > 0 && renderPriceTypeGroup(
+                                                        priceGroup,
+                                                        (fn) => row[fn] || "",
+                                                        (fn, val) => handleLineItemChange(fn, val, idx),
+                                                        allF
+                                                    )}
+                                                    {paymentGroup.length > 0 && renderPaymentGroup(
+                                                        paymentGroup,
+                                                        (fn) => row[fn] || "",
+                                                        (updates) => setLineItems(prev => {
+                                                            const next = [...prev];
+                                                            next[idx] = { ...next[idx], ...updates };
+                                                            return next;
+                                                        }),
+                                                        allF
                                                     )}
                                                 </div>
-                                            ))}
-                                        </div>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                             ))}

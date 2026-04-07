@@ -52,7 +52,7 @@ export default function MasterDataEditPage() {
     } else if (status === "authenticated") {
       fetchData();
     }
-  }, [status]);
+  }, [status, spreadsheetId, sheetName, configName]);
 
   const fetchData = async () => {
     try {
