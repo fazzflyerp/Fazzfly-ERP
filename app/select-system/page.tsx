@@ -178,7 +178,7 @@ export default function SystemSelectorPage() {
               .catch(() => {})
           : Promise.resolve();
         const masterPromise = fetch("/api/master/databases")
-          .then((r) => r.ok ? r.json() : {})
+          .then((r) => r.ok ? r.json() : {} as any)
           .then((d) => setMasterDbs(d.databases || []))
           .catch(() => {});
 
