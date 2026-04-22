@@ -173,7 +173,7 @@ export default function SystemSelectorPage() {
         const clientId = data.clientId;
         const docsPromise = clientId
           ? fetch(`/api/user/documents?clientId=${clientId}`)
-              .then((r) => r.ok ? r.json() : {})
+              .then((r) => r.ok ? r.json() : {} as any)
               .then((d) => setDocuments(d.documents || []))
               .catch(() => {})
           : Promise.resolve();
