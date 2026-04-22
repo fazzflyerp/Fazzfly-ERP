@@ -80,7 +80,7 @@ export default function FormPage() {
 
             if (!configResponse.ok) {
                 const errorData = await configResponse.json();
-                throw new Error(errorData.error || "Failed to fetch config");
+                throw new Error(errorData.message || errorData.error || "Failed to fetch config");
             }
 
             const configData = await configResponse.json();
@@ -89,29 +89,30 @@ export default function FormPage() {
 
             const helperData: { [key: string]: HelperOption[] } = {};
 
-            for (const field of fields) {
-                if (field.helper) {
-                    try {
-                        const helperUrl = new URL(
-                            `${window.location.origin}/api/module/helpers`
-                        );
-                        helperUrl.searchParams.set("spreadsheetId", spreadsheetId!);
-                        helperUrl.searchParams.set("helperName", field.helper);
-
-                        const helperResponse = await fetch(helperUrl.toString());
-
-                        if (helperResponse.ok) {
-                            const helperJson = await helperResponse.json();
-                            helperData[field.helper] = helperJson.options || [];
-                        } else {
-                            console.warn(`⚠️ Helper not found: ${field.helper} (${helperResponse.status})`);
-                            helperData[field.helper] = [];
+            // Fetch all helpers in parallel
+            const helperFields = fields.filter(f => f.helper);
+            if (helperFields.length > 0) {
+                const uniqueHelpers = [...new Set(helperFields.map(f => f.helper!))];
+                const results = await Promise.all(
+                    uniqueHelpers.map(async (helperName) => {
+                        try {
+                            const helperUrl = new URL(`${window.location.origin}/api/module/helpers`);
+                            helperUrl.searchParams.set("spreadsheetId", spreadsheetId!);
+                            helperUrl.searchParams.set("helperName", helperName);
+                            const res = await fetch(helperUrl.toString());
+                            if (res.ok) {
+                                const json = await res.json();
+                                return { helperName, options: json.options || [] };
+                            }
+                            return { helperName, options: [] };
+                        } catch {
+                            return { helperName, options: [] };
                         }
-                    } catch (err) {
-                        console.warn(`⚠️ Failed to fetch helper ${field.helper}:`, err);
-                        helperData[field.helper] = [];
-                    }
-                }
+                    })
+                );
+                results.forEach(({ helperName, options }) => {
+                    helperData[helperName] = options;
+                });
             }
 
             setHelperOptions(helperData);
@@ -314,14 +315,8 @@ export default function FormPage() {
             setSuccess(true);
             clearAll();
 
-            window.scrollTo({
-                top: 0,
-                behavior: 'smooth'
-            });
-
-            setTimeout(() => {
-                setSuccess(false);
-            }, 5000);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            setTimeout(() => setSuccess(false), 5000);
         } catch (err: any) {
             setError(err.message || "Failed to submit form");
         } finally {

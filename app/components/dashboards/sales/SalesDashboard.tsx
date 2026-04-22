@@ -583,7 +583,7 @@ export default function SalesDashboard({
       />
 
       {/* Ranking */}
-      <SalesRanking rankingTableData={rankingTableData} />
+      <SalesRanking rankingTableData={rankingTableData} allData={filteredData} />
     </div>
   );
 }

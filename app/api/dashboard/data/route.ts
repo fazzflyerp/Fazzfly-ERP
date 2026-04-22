@@ -18,6 +18,8 @@ export const runtime = 'nodejs'; // บังคับใช้ Node.js runtime
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { withLogger } from "@/lib/with-logger";
+import { saReadRange } from "@/lib/google-sa";
+import { verifySheetAccess } from "@/lib/verify-sheet-access";
 
 interface ConfigField {
   fieldName: string;
@@ -26,41 +28,6 @@ interface ConfigField {
   order: number;
 }
 
-// ✅ Retry helper
-async function fetchWithRetry(
-  url: string,
-  options: RequestInit,
-  maxRetries = 2
-): Promise<Response> {
-  for (let i = 0; i <= maxRetries; i++) {
-    try {
-      const response = await fetch(url, {
-        ...options,
-        signal: AbortSignal.timeout(20000), // 20 sec timeout (dashboard อาจมีข้อมูลเยอะ)
-      });
-
-      if (response.ok || response.status === 404) {
-        return response;
-      }
-
-      // Retry for 5xx errors, 403 or 429 (rate limit)
-      if ((response.status >= 500 || response.status === 403 || response.status === 429) && i < maxRetries) {
-        const delay = response.status === 429 ? 2000 * Math.pow(2, i) : 1000 * Math.pow(2, i);
-        console.warn(`⚠️ Retry ${i + 1}/${maxRetries} (status ${response.status}) in ${delay}ms`);
-        await new Promise((r) => setTimeout(r, delay));
-        continue;
-      }
-
-      return response;
-    } catch (error: any) {
-      if (error.name === "TimeoutError" || i === maxRetries) {
-        throw error;
-      }
-      await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, i)));
-    }
-  }
-  throw new Error("Max retries exceeded");
-}
 
 // ✅ Parse config sheet
 function parseConfigSheet(configRows: any[][]): ConfigField[] {
@@ -187,34 +154,11 @@ async function _GET(request: NextRequest) {
       );
     }
 
-    const accessToken = (token as any)?.accessToken as string;
-    if (!accessToken) {
-      return NextResponse.json(
-        {
-          error: "Token หมดอายุ",
-          code: "NO_TOKEN",
-          message: "เซสชันของคุณหมดอายุ กรุณา Refresh Browser เพื่อเข้าสู่ระบบใหม่",
-        },
-        { status: 401 }
-      );
-    }
+    const userEmail = ((token as any)?.email as string || "").toLowerCase();
 
-    const userEmail = (token as any)?.email;
-    console.log(`👤 [${requestId}] User: ${userEmail}`);
-
-    // ✅ Check token expiry (additional check)
-    const expiresAt = (token as any).expiresAt;
-    if (expiresAt && Date.now() > expiresAt) {
-      console.error(`❌ [${requestId}] Token expired at:`, new Date(expiresAt));
-      return NextResponse.json(
-        {
-          error: "Token หมดอายุ",
-          code: "TOKEN_EXPIRED",
-          message: "เซสชันของคุณหมดอายุ กรุณา Refresh Browser เพื่อเข้าสู่ระบบใหม่",
-        },
-        { status: 401 }
-      );
-    }
+    const access = await verifySheetAccess(userEmail, spreadsheetId!);
+    if (!access.allowed)
+      return NextResponse.json({ error: "Forbidden: sheet not owned by your client", code: "FORBIDDEN" }, { status: 403 });
 
     if (periods.length > 0 || startDate || endDate) {
       console.log(`⚠️ [${requestId}] Filters ignored (handled client-side):`, {
@@ -225,66 +169,30 @@ async function _GET(request: NextRequest) {
     }
 
     // ============================================================
-    // Step 1: Fetch config sheet with retry
+    // Step 1+2: Fetch config + data in parallel
     // ============================================================
-    console.log(`⏳ [${requestId}] Step 1: Fetching config sheet...`);
+    const targetSpreadsheetId = archiveSpreadsheetId || spreadsheetId;
+    const sourceType = archiveSpreadsheetId ? `Archive (Year: ${year})` : "Main";
 
-    const configUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(
-      configSheetName
-    )}!A:K`; // ✅ เพิ่มเป็น K เผื่อมี column เพิ่ม
+    let configRows: any[][] | undefined;
+    let dataRows: any[][] | undefined;
 
-    let configResponse;
     try {
-      configResponse = await fetchWithRetry(configUrl, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      [configRows, dataRows] = await Promise.all([
+        saReadRange(spreadsheetId, `${configSheetName}!A:K`),
+        saReadRange(targetSpreadsheetId, dataSheetName),
+      ]);
     } catch (error: any) {
-      console.error(`❌ [${requestId}] Config fetch failed:`, error.message);
+      console.error(`❌ [${requestId}] Fetch failed:`, error.message);
       return NextResponse.json(
-        {
-          error: "ไม่สามารถโหลด Config ได้",
-          code: "CONFIG_FETCH_ERROR",
-          message: error.message,
-        },
+        { error: "ไม่สามารถโหลดข้อมูลได้", code: "FETCH_ERROR", message: error.message },
         { status: 500 }
       );
     }
 
-    if (!configResponse.ok) {
-      if (configResponse.status === 401) {
-        return NextResponse.json(
-          {
-            error: "Token หมดอายุ",
-            code: "TOKEN_EXPIRED",
-            message: "เซสชันของคุณหมดอายุ กรุณา Refresh Browser เพื่อเข้าสู่ระบบใหม่",
-          },
-          { status: 401 }
-        );
-      }
-
-      if (configResponse.status === 404) {
-        return NextResponse.json(
-          {
-            error: "ไม่พบ Config Sheet",
-            code: "CONFIG_NOT_FOUND",
-            message: `ไม่พบ sheet "${configSheetName}"`,
-          },
-          { status: 404 }
-        );
-      }
-
-      throw new Error(`Failed to fetch config sheet: ${configResponse.status}`);
-    }
-
-    const configData = await configResponse.json();
-    const configRows = configData.values as any[][] | undefined;
-
     if (!configRows || configRows.length === 0) {
       return NextResponse.json(
-        {
-          error: "Config Sheet ว่างเปล่า",
-          code: "EMPTY_CONFIG",
-        },
+        { error: "Config Sheet ว่างเปล่า", code: "EMPTY_CONFIG" },
         { status: 404 }
       );
     }
@@ -292,90 +200,18 @@ async function _GET(request: NextRequest) {
     let configFields: ConfigField[];
     try {
       configFields = parseConfigSheet(configRows);
-      console.log(`✅ [${requestId}] Loaded ${configFields.length} config fields`);
     } catch (error: any) {
-      console.error(`❌ [${requestId}] Config parse error:`, error.message);
       return NextResponse.json(
-        {
-          error: "Config Sheet มีรูปแบบไม่ถูกต้อง",
-          code: "INVALID_CONFIG",
-          message: error.message,
-        },
+        { error: "Config Sheet มีรูปแบบไม่ถูกต้อง", code: "INVALID_CONFIG", message: error.message },
         { status: 400 }
       );
     }
 
-    // ============================================================
-    // Step 2: Fetch data sheet with retry
-    // ============================================================
-    const targetSpreadsheetId = archiveSpreadsheetId || spreadsheetId;
-    const sourceType = archiveSpreadsheetId ? `Archive (Year: ${year})` : "Main";
-
-    console.log(`⏳ [${requestId}] Step 2: Fetching data from ${sourceType}...`);
-
-    const dataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${targetSpreadsheetId}/values/${encodeURIComponent(
-      dataSheetName
-    )}`;
-
-    let dataResponse;
-    try {
-      dataResponse = await fetchWithRetry(dataUrl, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-    } catch (error: any) {
-      console.error(`❌ [${requestId}] Data fetch failed:`, error.message);
-      return NextResponse.json(
-        {
-          error: "ไม่สามารถโหลดข้อมูลได้",
-          code: "DATA_FETCH_ERROR",
-          message: error.message,
-        },
-        { status: 500 }
-      );
-    }
-
-    if (!dataResponse.ok) {
-      if (dataResponse.status === 401) {
-        return NextResponse.json(
-          {
-            error: "Token หมดอายุ",
-            code: "TOKEN_EXPIRED",
-            message: "เซสชันของคุณหมดอายุ กรุณา Refresh Browser เพื่อเข้าสู่ระบบใหม่",
-          },
-          { status: 401 }
-        );
-      }
-
-      if (dataResponse.status === 404) {
-        return NextResponse.json(
-          {
-            error: "ไม่พบ Data Sheet",
-            code: "DATA_NOT_FOUND",
-            message: `ไม่พบ sheet "${dataSheetName}"${
-              archiveSpreadsheetId ? ` ในปี ${year}` : ""
-            }`,
-          },
-          { status: 404 }
-        );
-      }
-
-      throw new Error(`Failed to fetch data sheet: ${dataResponse.status}`);
-    }
-
-    const dataSheetData = await dataResponse.json();
-    const dataRows = dataSheetData.values as any[][] | undefined;
-
     if (!dataRows || dataRows.length === 0) {
-      console.warn(`⚠️ [${requestId}] Data sheet is empty`);
       return NextResponse.json({
         config: configFields,
         data: [],
-        metadata: {
-          source: sourceType,
-          year: year || null,
-          totalRecords: 0,
-          note: "Data sheet is empty",
-        },
+        metadata: { source: sourceType, year: year || null, totalRecords: 0, note: "Data sheet is empty" },
       });
     }
 

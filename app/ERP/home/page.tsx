@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useUserRole } from "@/app/context/UserRoleContext";
 // ✅ Import new dashboard components
 import SalesDashboard from "@/app/components/dashboards/sales/SalesDashboard";
 import UsageDashboard from "@/app/components/dashboards/usage/UsageDashboard";
@@ -14,6 +15,7 @@ import InventoryDashboard from "@/app/components/dashboards/inventory/InventoryD
 import PayrollDashboard from "@/app/components/dashboards/payroll/PayrollDashboard";
 import FinancialDashboard from "@/app/components/dashboards/financial/FinancialDashboard";
 import QuickNav, { QuickNavTrigger, QuickNavBell, type LowStockBellItem } from "@/app/components/QuickNav";
+import TaskBell from "@/app/components/TaskBell";
 
 interface Module {
   moduleId: string;
@@ -76,27 +78,23 @@ interface ModuleConfig {
 
 const MASTER_CONFIG_ID = process.env.NEXT_PUBLIC_MASTER_CONFIG_ID || "1j7LguHaX8pIvvQ1PqqenuguOsPT1QthJqXJyMYW2xo8";
 
-if (typeof window !== 'undefined') {
-  console.log("🔍 [Debug] MASTER_CONFIG_ID:", MASTER_CONFIG_ID ? `${MASTER_CONFIG_ID.substring(0, 20)}...` : "❌ NOT SET");
-  console.log("🔍 [Debug] From env?", !!process.env.NEXT_PUBLIC_MASTER_CONFIG_ID);
-  console.log("🔍 [Debug] All NEXT_PUBLIC vars:", Object.keys(process.env).filter(k => k.startsWith('NEXT_PUBLIC')));
-}
 
 export default function HomePage() {
   const { data: session, status } = useSession();
+  const { canEdit, isAdmin, loading: roleLoading } = useUserRole();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"modules" | "dashboard" | "documents" | "masterdata">("modules");
+  const [activeTab, setActiveTab] = useState<"modules" | "dashboard" | "documents" | "masterdata" | "logs">("modules");
   // ✅ เพิ่มโค้ดนี้
   useEffect(() => {
     const tabParam = searchParams.get("tab");
     if (tabParam) {
       setActiveTab(tabParam as any);
     }
-  }, [searchParams]);
+  }, [searchParams, roleLoading]);
 
   // ✅ Auto-select dashboard จาก URL param dashboardId
   useEffect(() => {
@@ -125,32 +123,35 @@ export default function HomePage() {
   const [userDocuments, setUserDocuments] = useState<Module[]>([]);
   const [loadingDocuments, setLoadingDocuments] = useState(false);
 
+  // ✅ Activity Log states
+  const [logs, setLogs] = useState<any[]>([]);
+  const [logsTotal, setLogsTotal] = useState(0);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [logFilterEmail, setLogFilterEmail] = useState("");
+  const [logFilterAction, setLogFilterAction] = useState("");
 
+  // ✅ Redirect to login when there's a fatal error and no userData
+  useEffect(() => {
+    if (error && !userData) {
+      const timer = setTimeout(() => {
+        router.push("/login");
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [error, userData, router]);
 
   useEffect(() => {
-    console.log("📋 useSession status:", status);
-    console.log("🔑 Session data:", {
-      email: (session as any)?.user?.email,
-      hasAccessToken: !!(session as any)?.accessToken,
-    });
-
     if (status === "unauthenticated") {
       router.push("/login");
     } else if (status === "authenticated") {
       if ((session as any)?.error === "RefreshAccessTokenError") {
-        console.error("❌ Session error: Token refresh failed");
         signOut({ callbackUrl: "/login" });
         return;
       }
-
       if (!(session as any)?.accessToken) {
-        console.warn("⚠️ No accessToken in session, waiting for update...");
-        const timer = setTimeout(() => {
-          fetchUserModules();
-        }, 1000);
+        const timer = setTimeout(() => fetchUserModules(), 500);
         return () => clearTimeout(timer);
       }
-
       fetchUserModules();
     }
   }, [status, session, router]);
@@ -161,14 +162,9 @@ export default function HomePage() {
       setError(null);
 
       const accessToken = (session as any)?.accessToken;
-
-      console.log("🔍 fetchUserModules - accessToken:", accessToken ? "✅ yes" : "❌ no");
-
       if (!accessToken) {
         throw new Error("ไม่มี access token ใน session");
       }
-
-      console.log("📡 Fetching user modules with token...");
 
       const response = await fetch("/api/user/modules", {
         method: "GET",
@@ -179,26 +175,15 @@ export default function HomePage() {
       });
 
       if (!response.ok) {
-        console.error(`❌ API Error: ${response.status} ${response.statusText}`);
-
-        if (response.status === 401) {
-          console.log("🔐 Unauthorized - signing out");
+        if (response.status === 401 || response.status === 403) {
           await signOut({ callbackUrl: "/login" });
           return;
         }
-
-        if (response.status === 403) {
-          console.log("⏰ Forbidden - token may be expired");
-          await signOut({ callbackUrl: "/login" });
-          return;
-        }
-
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || `HTTP ${response.status}`);
       }
 
       const data: UserData = await response.json();
-      console.log("✅ Modules loaded:", data);
       setUserData(data);
     } catch (err: any) {
       console.error("❌ Error fetching modules:", err);
@@ -210,55 +195,19 @@ export default function HomePage() {
 
   const fetchModuleConfig = async (moduleName: string): Promise<ModuleConfig | null> => {
     try {
-      console.log("━".repeat(60));
-      console.log(`📦 [fetchModuleConfig] Fetching config for: ${moduleName}`);
-      console.log("━".repeat(60));
-
-      if (!MASTER_CONFIG_ID) {
-        console.error("❌ MASTER_CONFIG_ID not set in environment");
-        return null;
-      }
-
+      if (!MASTER_CONFIG_ID) return null;
       const accessToken = (session as any)?.accessToken;
-      if (!accessToken) {
-        console.error("❌ No access token");
-        return null;
-      }
+      if (!accessToken) return null;
 
-      const params = new URLSearchParams({
-        masterConfigId: MASTER_CONFIG_ID,
-        moduleName: moduleName,
+      const params = new URLSearchParams({ masterConfigId: MASTER_CONFIG_ID, moduleName });
+      const res = await fetch(`/api/dashboard/module-config?${params}`, {
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
       });
 
-      const url = `/api/dashboard/module-config?${params}`;
-      console.log("🌐 API URL:", url);
-
-      const res = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      console.log("📡 Response status:", res.status);
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error("❌ API Error:", errorText);
-        return null;
-      }
-
+      if (!res.ok) return null;
       const data = await res.json();
-
-      console.log("✅ [fetchModuleConfig] Success:");
-      console.log("   Config:", data.config);
-      console.log("━".repeat(60));
-
       return data.config as ModuleConfig;
-    } catch (err: any) {
-      console.error("━".repeat(60));
-      console.error(`❌ [fetchModuleConfig] Error for ${moduleName}:`, err.message);
-      console.error("━".repeat(60));
+    } catch {
       return null;
     }
   };
@@ -335,25 +284,14 @@ export default function HomePage() {
 
       setHasInventoryDashboard(true);
 
-      const accessToken = (session as any)?.accessToken;
-      if (!accessToken) {
-        console.error("❌ No access token");
-        return;
-      }
-
-      // Fetch data from Inventory sheet
+      // Fetch data from Inventory sheet (API ใช้ SA + NextAuth JWT cookie)
       const params = new URLSearchParams({
         spreadsheetId: inventoryDash.spreadsheetId,
         configSheetName: inventoryDash.dashboardConfigName,
         dataSheetName: inventoryDash.sheetName,
       });
 
-      const response = await fetch(`/api/dashboard/data?${params}`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await fetch(`/api/dashboard/data?${params}`);
 
       if (!response.ok) {
         console.error("❌ Failed to fetch inventory data");
@@ -478,7 +416,7 @@ export default function HomePage() {
   };
 
   // ✅ NEW: Fetch master databases
-  const fetchMasterDatabases = async () => {
+  const fetchMasterDatabases = async (forceRefresh = false) => {
     try {
       console.log("📊 Fetching master databases...");
       setLoadingMasterData(true);
@@ -491,7 +429,8 @@ export default function HomePage() {
         return;
       }
 
-      const response = await fetch("/api/master/databases", {
+      const url = forceRefresh ? "/api/master/databases?refresh=true" : "/api/master/databases";
+      const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
@@ -549,19 +488,42 @@ export default function HomePage() {
     }
   }, [userData, activeTab]);
 
-  // ✅ NEW: useEffect: Fetch user documents when tab is documents
+  // Prefetch documents immediately when userData loads (no tab dependency)
   useEffect(() => {
-    if (userData && activeTab === "documents") {
+    if (userData && userDocuments.length === 0 && !loadingDocuments) {
       fetchUserDocuments();
     }
-  }, [userData, activeTab]);
+  }, [userData]);
 
-  // ✅ NEW: useEffect: Fetch master databases when tab is masterdata
+  // Prefetch master databases immediately when userData loads (no tab dependency)
   useEffect(() => {
-    if (userData && activeTab === "masterdata") {
+    if (userData && masterDatabases.length === 0 && !loadingMasterData) {
       fetchMasterDatabases();
     }
-  }, [userData, activeTab]);
+  }, [userData]);
+
+  // ✅ Activity Log fetch
+  const fetchActivityLogs = async () => {
+    setLoadingLogs(true);
+    try {
+      const res = await fetch("/api/admin/logs?limit=300");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setLogs(data.logs || []);
+      setLogsTotal(data.total || 0);
+    } catch (err: any) {
+      console.error("❌ fetchActivityLogs:", err.message);
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
+  // Prefetch activity logs for admin immediately after userData+role ready
+  useEffect(() => {
+    if (userData && !roleLoading && isAdmin() && logs.length === 0 && !loadingLogs) {
+      fetchActivityLogs();
+    }
+  }, [userData, roleLoading]);
 
   useEffect(() => {
     if (selectedDashboard && userData) {
@@ -629,28 +591,7 @@ export default function HomePage() {
   // const documentModules จะมาจาก userDocuments ที่ดึงผ่าน API /api/user/documents
   const documentModules = userDocuments;
 
-  if (status === "loading" || loading) {
-    return (
-      <div
-        className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50"
-        style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
-      >
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-slate-600">กำลังโหลด...</p>
-        </div>
-      </div>
-    );
-  }
-
   if (error && !userData) {
-    useEffect(() => {
-      const timer = setTimeout(() => {
-        router.push("/login");
-      }, 3000);
-      return () => clearTimeout(timer);
-    }, [router]);
-
     return (
       <div
         className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 p-4"
@@ -676,8 +617,8 @@ export default function HomePage() {
     );
   }
 
-  const daysLeft = userData ? getDaysUntilExpiry(userData.expiresAt) : -1;
-  const isExpiringSoon = daysLeft >= 0 && daysLeft <= 5;
+  const daysLeft = userData ? getDaysUntilExpiry(userData.expiresAt) : 0;
+  const isExpiringSoon = userData ? (daysLeft >= 0 && daysLeft <= 5) : false;
 
   return (
     <div
@@ -756,7 +697,10 @@ export default function HomePage() {
               {(session as any)?.user?.name?.charAt(0) || "U"}
             </div>
 
-            {/* Bell */}
+            {/* Task Bell */}
+            <TaskBell />
+
+            {/* Inventory Bell */}
             <QuickNavBell items={lowStockItems} loading={loadingLowStock} onBellClick={goToInventoryDashboard} />
 
             {/* Sign Out Button */}
@@ -777,9 +721,13 @@ export default function HomePage() {
         <div className="mb-6 lg:mb-10">
           <h1 className="text-3xl lg:text-5xl font-bold text-slate-800 mb-2 lg:mb-3 break-words">
             ยินดีต้อนรับกลับ,{' '}
-            <span className="bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">
-              {userData?.clientName}
-            </span>
+            {userData ? (
+              <span className="bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">
+                {userData.clientName}
+              </span>
+            ) : (
+              <span className="inline-block w-36 h-9 bg-slate-200 animate-pulse rounded-xl align-middle" />
+            )}
           </h1>
           <p className="text-base lg:text-lg text-slate-600">
             จัดการข้อมูล ติดตามสถิติ และใช้งานโมดูลต่างๆ
@@ -787,48 +735,56 @@ export default function HomePage() {
         </div>
 
         {/* Account Status Card with Low Stock Alert */}
-        {userData && (
-          <div className={`rounded-2xl lg:rounded-3xl p-4 lg:p-8 mb-6 lg:mb-10 border backdrop-blur-md transition-all duration-300 ${isExpiringSoon
-            ? 'bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-300 shadow-lg shadow-yellow-100'
-            : 'bg-gradient-to-r from-blue-50 via-sky-50 to-cyan-50 border-blue-200 shadow-lg shadow-blue-100/50'
-            }`}>
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-6">
-              {/* 1. แพ็คเจจ */}
-              <div className="p-3 lg:p-4 rounded-xl lg:rounded-2xl bg-white/60 backdrop-blur-sm border border-blue-100">
-                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1 lg:mb-2">แพ็คเจจ</p>
-                <p className="text-xl lg:text-2xl font-bold text-slate-800 truncate">{userData.planType}</p>
-              </div>
-
-              {/* 2. ลูกค้า ID */}
-              <div className="p-3 lg:p-4 rounded-xl lg:rounded-2xl bg-white/60 backdrop-blur-sm border border-blue-100">
-                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1 lg:mb-2">ลูกค้า ID</p>
-                <p className="text-xl lg:text-2xl font-bold text-blue-600 truncate">{userData.clientId}</p>
-              </div>
-
-              {/* 3. คงเหลือ */}
-              <div className={`p-3 lg:p-4 rounded-xl lg:rounded-2xl backdrop-blur-sm border ${isExpiringSoon
-                ? 'bg-yellow-100/50 border-yellow-300'
-                : 'bg-green-100/50 border-green-300'
-                }`}>
-                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1 lg:mb-2">คงเหลือ</p>
-                <p className={`text-xl lg:text-2xl font-bold ${isExpiringSoon ? 'text-yellow-700' : 'text-green-700'}`}>
-                  {daysLeft >= 0 ? daysLeft : 0} วัน
-                </p>
-              </div>
-            </div>
-
-            {userData.expiryWarning && (
-              <div className="mt-4 lg:mt-6 pt-4 lg:pt-6 border-t border-yellow-200">
-                <p className="text-xs lg:text-sm text-yellow-800 font-medium">
-                  ⚠️ {userData.expiryWarning}
-                </p>
-              </div>
+        <div className={`rounded-2xl lg:rounded-3xl p-4 lg:p-8 mb-6 lg:mb-10 border backdrop-blur-md transition-all duration-300 ${isExpiringSoon
+          ? 'bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-300 shadow-lg shadow-yellow-100'
+          : 'bg-gradient-to-r from-blue-50 via-sky-50 to-cyan-50 border-blue-200 shadow-lg shadow-blue-100/50'
+          }`}>
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-6">
+            {userData ? (
+              <>
+                {/* 1. แพ็คเจจ */}
+                <div className="p-3 lg:p-4 rounded-xl lg:rounded-2xl bg-white/60 backdrop-blur-sm border border-blue-100">
+                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1 lg:mb-2">แพ็คเจจ</p>
+                  <p className="text-xl lg:text-2xl font-bold text-slate-800 truncate">{userData.planType}</p>
+                </div>
+                {/* 2. ลูกค้า ID */}
+                <div className="p-3 lg:p-4 rounded-xl lg:rounded-2xl bg-white/60 backdrop-blur-sm border border-blue-100">
+                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1 lg:mb-2">ลูกค้า ID</p>
+                  <p className="text-xl lg:text-2xl font-bold text-blue-600 truncate">{userData.clientId}</p>
+                </div>
+                {/* 3. คงเหลือ */}
+                <div className={`p-3 lg:p-4 rounded-xl lg:rounded-2xl backdrop-blur-sm border ${isExpiringSoon
+                  ? 'bg-yellow-100/50 border-yellow-300'
+                  : 'bg-green-100/50 border-green-300'
+                  }`}>
+                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1 lg:mb-2">คงเหลือ</p>
+                  <p className={`text-xl lg:text-2xl font-bold ${isExpiringSoon ? 'text-yellow-700' : 'text-green-700'}`}>
+                    {daysLeft >= 0 ? daysLeft : 0} วัน
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="p-3 lg:p-4 rounded-xl lg:rounded-2xl bg-white/60 backdrop-blur-sm border border-blue-100">
+                    <div className="h-3 w-16 bg-slate-200 animate-pulse rounded mb-3" />
+                    <div className="h-7 bg-slate-200 animate-pulse rounded w-3/4" />
+                  </div>
+                ))}
+              </>
             )}
           </div>
-        )}
+          {userData?.expiryWarning && (
+            <div className="mt-4 lg:mt-6 pt-4 lg:pt-6 border-t border-yellow-200">
+              <p className="text-xs lg:text-sm text-yellow-800 font-medium">
+                ⚠️ {userData.expiryWarning}
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* Tab Navigation - Mobile Optimized */}
-        <div className="flex gap-2 mb-6 lg:mb-8 overflow-x-auto scrollbar-hide bg-white/50 backdrop-blur-md rounded-xl lg:rounded-2xl p-2 border border-blue-100/50">
+        <div className="flex gap-2 mb-6 lg:mb-8 overflow-x-auto scrollbar-hide bg-white/50 backdrop-blur-md rounded-xl lg:rounded-2xl p-2 border border-blue-100/50 min-h-[52px]">
           <button
             onClick={() => setActiveTab("modules")}
             className={`px-4 lg:px-6 py-2.5 lg:py-3 font-semibold transition-all relative whitespace-nowrap text-sm lg:text-base ${activeTab === "modules"
@@ -846,23 +802,25 @@ export default function HomePage() {
               <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-full"></div>
             )}
           </button>
-          <button
-            onClick={() => setActiveTab("dashboard")}
-            className={`px-4 lg:px-6 py-2.5 lg:py-3 font-semibold transition-all relative whitespace-nowrap text-sm lg:text-base ${activeTab === "dashboard"
-              ? "text-blue-600"
-              : "text-slate-600 hover:text-slate-800"
-              }`}
-          >
-            <span className="flex items-center gap-1 lg:gap-2">
-              <svg className="w-4 lg:w-5 h-4 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-              Dashboard
-            </span>
-            {activeTab === "dashboard" && (
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-full"></div>
-            )}
-          </button>
+          {(userData?.dashboardItems?.length ?? 0) > 0 && isAdmin() && (
+            <button
+              onClick={() => setActiveTab("dashboard")}
+              className={`px-4 lg:px-6 py-2.5 lg:py-3 font-semibold transition-all relative whitespace-nowrap text-sm lg:text-base ${activeTab === "dashboard"
+                ? "text-blue-600"
+                : "text-slate-600 hover:text-slate-800"
+                }`}
+            >
+              <span className="flex items-center gap-1 lg:gap-2">
+                <svg className="w-4 lg:w-5 h-4 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                Dashboard
+              </span>
+              {activeTab === "dashboard" && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-full"></div>
+              )}
+            </button>
+          )}
 
           {/* ✅ NEW: Tab เอกสาร */}
           <button
@@ -890,8 +848,7 @@ export default function HomePage() {
 
 
           {/* ✅ Tab ข้อมูลหลัก */}
-          {(hasMasterDataAccess || true) && (
-            <button
+          <button
               onClick={() => setActiveTab("masterdata")}
               className={`px-4 lg:px-6 py-2.5 lg:py-3 font-semibold transition-all relative whitespace-nowrap text-sm lg:text-base ${activeTab === "masterdata"
                 ? "text-indigo-600"
@@ -913,12 +870,51 @@ export default function HomePage() {
                 <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-600 to-purple-500 rounded-full"></div>
               )}
             </button>
+
+          {/* ✅ Tab Activity Log — Admin only */}
+          {isAdmin() && (
+            <button
+              onClick={() => setActiveTab("logs")}
+              className={`px-4 lg:px-6 py-2.5 lg:py-3 font-semibold transition-all relative whitespace-nowrap text-sm lg:text-base ${activeTab === "logs"
+                ? "text-rose-600"
+                : "text-slate-600 hover:text-slate-800"
+                }`}
+            >
+              <span className="flex items-center gap-1 lg:gap-2">
+                <svg className="w-4 lg:w-5 h-4 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                Activity Log
+              </span>
+              {activeTab === "logs" && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-rose-500 to-pink-500 rounded-full"></div>
+              )}
+            </button>
           )}
 
         </div>
 
         {/* Tab Content - Modules */}
-        {activeTab === "modules" && validModules.length > 0 && (
+        {activeTab === "modules" && loading && (
+          <div className="animate-fadeIn">
+            <div className="h-8 w-64 bg-slate-200 animate-pulse rounded-lg mb-6 lg:mb-8" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="bg-white/90 rounded-2xl lg:rounded-3xl shadow-lg p-5 lg:p-7 border border-blue-100/50 animate-pulse">
+                  <div className="w-12 h-12 bg-slate-200 rounded-2xl mb-4" />
+                  <div className="h-5 bg-slate-200 rounded mb-2 w-3/4" />
+                  <div className="h-4 bg-slate-100 rounded mb-1 w-full" />
+                  <div className="h-4 bg-slate-100 rounded w-2/3 mb-5" />
+                  <div className="pt-4 border-t border-slate-100 flex gap-2">
+                    <div className="h-9 flex-1 bg-slate-200 rounded-lg" />
+                    <div className="h-9 flex-1 bg-slate-200 rounded-lg" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {activeTab === "modules" && !loading && validModules.length > 0 && (
           <div className="animate-fadeIn">
             <h2 className="text-2xl lg:text-3xl font-bold text-slate-800 mb-4 lg:mb-8">
               โมดูลที่สามารถใช้งาน <span className="text-blue-600">({validModules.length})</span>
@@ -961,15 +957,17 @@ export default function HomePage() {
                       เพิ่มข้อมูล
                     </Link>
 
-                    <Link
-                      href={`/ERP/transaction/edit?moduleId=${module.moduleId}&spreadsheetId=${module.spreadsheetId}&sheetName=${module.sheetName}&configName=${module.configName}&moduleName=${encodeURIComponent(module.moduleName)}`}
-                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg font-semibold text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 group/btn"
-                    >
-                      <svg className="w-4 h-4 group-hover/btn:rotate-12 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                      แก้ไข/ลบ
-                    </Link>
+                    {canEdit() && (
+                      <Link
+                        href={`/ERP/transaction/edit?moduleId=${module.moduleId}&spreadsheetId=${module.spreadsheetId}&sheetName=${module.sheetName}&configName=${module.configName}&moduleName=${encodeURIComponent(module.moduleName)}`}
+                        className="flex-1 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg font-semibold text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 group/btn"
+                      >
+                        <svg className="w-4 h-4 group-hover/btn:rotate-12 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        แก้ไข/ลบ
+                      </Link>
+                    )}
                   </div>
                 </div>
               ))}
@@ -977,8 +975,8 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Tab Content - Dashboard */}
-        {activeTab === "dashboard" && (
+        {/* Tab Content - Dashboard — ซ่อนถ้าไม่มี dashboardItems */}
+        {activeTab === "dashboard" && (userData?.dashboardItems?.length ?? 0) > 0 && (
           <div className="animate-fadeIn">
             <h2 className="text-2xl lg:text-3xl font-bold text-slate-800 mb-4 lg:mb-8">
               Dashboard <span className="text-purple-600">({validDashboards.length})</span>
@@ -1244,16 +1242,23 @@ export default function HomePage() {
               เอกสาร <span className="text-emerald-600">({documentModules.length})</span>
             </h2>
 
-            {/* Loading State */}
+            {/* Skeleton Loading */}
             {loadingDocuments && (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-8 lg:p-12 text-center mb-6">
-                <div className="flex items-center justify-center gap-3 mb-4">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
-                  <p className="text-emerald-700 font-semibold text-lg">กำลังโหลดรายการเอกสาร...</p>
-                </div>
-                <p className="text-emerald-600 text-sm">
-                  กรุณารอสักครู่ ระบบกำลังดึงข้อมูลจาก Google Sheets
-                </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="bg-white/90 rounded-2xl lg:rounded-3xl shadow-lg p-5 lg:p-7 border border-emerald-100/50 animate-pulse">
+                    <div className="flex justify-between mb-4">
+                      <div className="w-12 h-12 bg-slate-200 rounded-2xl" />
+                      <div className="w-5 h-5 bg-slate-100 rounded" />
+                    </div>
+                    <div className="h-5 bg-slate-200 rounded mb-2 w-3/4" />
+                    <div className="h-4 bg-slate-100 rounded w-full mb-1" />
+                    <div className="pt-4 border-t border-slate-100 mt-4">
+                      <div className="h-3 bg-slate-100 rounded w-1/2 mb-2" />
+                      <div className="h-3 bg-slate-100 rounded w-2/3" />
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -1267,10 +1272,13 @@ export default function HomePage() {
                     let docUrl = "";
                     const moduleName = doc.moduleName.toLowerCase();
 
+                    const configName = (doc.configName || "").toLowerCase();
                     if (moduleName.includes("payroll") || moduleName.includes("สลิป") || moduleName.includes("payslip") || moduleName.includes("เงินเดือน")) {
                       docUrl = `/ERP/payroll-slip?moduleId=${doc.moduleId}&spreadsheetId=${doc.spreadsheetId}`;
                     } else if (moduleName.includes("receipt") || moduleName.includes("ใบเสร็จ")) {
                       docUrl = `/ERP/receipt-simple?moduleId=${doc.moduleId}&spreadsheetId=${doc.spreadsheetId}`;
+                    } else if (moduleName.includes("หัก") || moduleName.includes("withholding") || configName.includes("หัก_ณ") || configName.includes("withholding")) {
+                      docUrl = `/ERP/withholding-tax?moduleId=${doc.moduleId}&spreadsheetId=${doc.spreadsheetId}&configName=${encodeURIComponent(doc.configName)}&sheetName=${encodeURIComponent(doc.sheetName)}`;
                     } else if (moduleName.includes("invoice") || moduleName.includes("ใบแจ้งหนี้")) {
                       docUrl = `/ERP/invoice?moduleId=${doc.moduleId}&spreadsheetId=${doc.spreadsheetId}`;
                     } else if (moduleName.includes("quotation") || moduleName.includes("ใบเสนอราคา")) {
@@ -1336,20 +1344,36 @@ export default function HomePage() {
         {/* ✅ NEW: Tab Content - Master Data - เพิ่มตรงนี้! */}
         {activeTab === "masterdata" && (
           <div className="animate-fadeIn">
-            <h2 className="text-2xl lg:text-3xl font-bold text-slate-800 mb-4 lg:mb-8">
-              ข้อมูลหลัก (Master Data) <span className="text-indigo-600">({masterDatabases.length})</span>
-            </h2>
+            <div className="flex items-center justify-between mb-4 lg:mb-8">
+              <h2 className="text-2xl lg:text-3xl font-bold text-slate-800">
+                ข้อมูลหลัก (Master Data) <span className="text-indigo-600">({masterDatabases.length})</span>
+              </h2>
+              <button
+                onClick={() => fetchMasterDatabases(true)}
+                disabled={loadingMasterData}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                <svg className={`w-4 h-4 ${loadingMasterData ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                รีเฟรช
+              </button>
+            </div>
 
-            {/* Loading State */}
+            {/* Skeleton Loading */}
             {loadingMasterData && (
-              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-8 lg:p-12 text-center mb-6">
-                <div className="flex items-center justify-center gap-3 mb-4">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                  <p className="text-indigo-700 font-semibold text-lg">กำลังโหลดรายการข้อมูลหลัก...</p>
-                </div>
-                <p className="text-indigo-600 text-sm">
-                  กรุณารอสักครู่ ระบบกำลังดึงข้อมูลจาก Google Sheets
-                </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="bg-white/90 rounded-2xl lg:rounded-3xl shadow-lg p-5 lg:p-7 border border-indigo-100/50 animate-pulse">
+                    <div className="w-12 h-12 bg-slate-200 rounded-2xl mb-4" />
+                    <div className="h-5 bg-slate-200 rounded mb-2 w-3/4" />
+                    <div className="h-4 bg-slate-100 rounded w-full mb-5" />
+                    <div className="pt-4 border-t border-slate-100 flex gap-2">
+                      <div className="h-9 flex-1 bg-slate-200 rounded-lg" />
+                      <div className="h-9 flex-1 bg-slate-200 rounded-lg" />
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -1399,15 +1423,17 @@ export default function HomePage() {
                         เพิ่มข้อมูล
                       </Link>
 
-                      <Link
-                        href={`/ERP/master-data/edit?spreadsheetId=${db.spreadsheetId}&sheetName=${encodeURIComponent(db.sheetName)}&configName=${encodeURIComponent(db.configName)}&title=${encodeURIComponent(db.sheetName)}`}
-                        className="flex-1 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg font-semibold text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 group/btn"
-                      >
-                        <svg className="w-4 h-4 group-hover/btn:rotate-12 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                        แก้ไข/ลบ
-                      </Link>
+                      {canEdit() && (
+                        <Link
+                          href={`/ERP/master-data/edit?spreadsheetId=${db.spreadsheetId}&sheetName=${encodeURIComponent(db.sheetName)}&configName=${encodeURIComponent(db.configName)}&title=${encodeURIComponent(db.sheetName)}`}
+                          className="flex-1 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg font-semibold text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 group/btn"
+                        >
+                          <svg className="w-4 h-4 group-hover/btn:rotate-12 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                          แก้ไข/ลบ
+                        </Link>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1449,6 +1475,180 @@ export default function HomePage() {
             )}
           </div>
         )}
+        {/* Tab Content - Activity Log */}
+        {activeTab === "logs" && isAdmin() && (
+          <div className="animate-fadeIn">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl lg:text-3xl font-bold text-slate-800">Activity Log</h2>
+                <p className="text-slate-500 text-sm mt-1">ประวัติการทำงานของทีม — ทั้งหมด {logsTotal} รายการ</p>
+              </div>
+              <button
+                onClick={fetchActivityLogs}
+                disabled={loadingLogs}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                <svg className={`w-4 h-4 ${loadingLogs ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                รีเฟรช
+              </button>
+            </div>
+
+            {loadingLogs ? (
+              <div className="space-y-3">
+                {/* Skeleton stats row */}
+                <div className="grid grid-cols-3 gap-3 mb-5">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="bg-white/90 rounded-2xl border border-rose-100 p-4 animate-pulse">
+                      <div className="h-7 bg-slate-200 rounded w-1/2 mx-auto mb-1" />
+                      <div className="h-3 bg-slate-100 rounded w-3/4 mx-auto" />
+                    </div>
+                  ))}
+                </div>
+                {/* Skeleton table rows */}
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="flex gap-3 bg-white/80 rounded-xl p-3 animate-pulse">
+                    <div className="h-4 bg-slate-200 rounded w-28 flex-shrink-0" />
+                    <div className="h-4 bg-slate-100 rounded w-40" />
+                    <div className="h-4 bg-slate-200 rounded w-16" />
+                    <div className="h-4 bg-slate-100 rounded flex-1" />
+                  </div>
+                ))}
+              </div>
+            ) : logs.length === 0 ? (
+              <div className="bg-rose-50 border border-rose-100 rounded-2xl p-12 text-center">
+                <p className="text-4xl mb-3">📋</p>
+                <p className="text-rose-700 font-semibold">ยังไม่มี Activity Log</p>
+                <p className="text-rose-500 text-sm mt-1">จะเริ่มบันทึกเมื่อ Staff ใช้งานระบบ</p>
+              </div>
+            ) : (
+              <>
+                {/* Stats */}
+                {(() => {
+                  const today = new Date().toLocaleDateString("th-TH");
+                  const todayLogs = logs.filter((l) => l.timestamp.startsWith(today) || l.timestamp.includes(new Date().toLocaleDateString("en-GB")));
+                  const uniqueUsers = new Set(logs.map((l) => l.email)).size;
+                  const uniqueActions = [...new Set(logs.map((l) => l.action))];
+                  return (
+                    <div className="grid grid-cols-3 gap-3 mb-5">
+                      <div className="bg-white/90 rounded-2xl border border-rose-100 p-4 text-center">
+                        <p className="text-2xl font-bold text-rose-600">{logsTotal}</p>
+                        <p className="text-xs text-slate-500 mt-1">รายการทั้งหมด</p>
+                      </div>
+                      <div className="bg-white/90 rounded-2xl border border-rose-100 p-4 text-center">
+                        <p className="text-2xl font-bold text-rose-600">{uniqueUsers}</p>
+                        <p className="text-xs text-slate-500 mt-1">ผู้ใช้งาน</p>
+                      </div>
+                      <div className="bg-white/90 rounded-2xl border border-rose-100 p-4 text-center">
+                        <p className="text-2xl font-bold text-rose-600">{uniqueActions.length}</p>
+                        <p className="text-xs text-slate-500 mt-1">ประเภท Action</p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Filters */}
+                <div className="flex gap-2 mb-4 flex-wrap">
+                  <select
+                    value={logFilterEmail}
+                    onChange={(e) => setLogFilterEmail(e.target.value)}
+                    className="text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-rose-200"
+                  >
+                    <option value="">ทุกคน</option>
+                    {[...new Set(logs.map((l) => l.email))].map((e) => (
+                      <option key={e as string} value={e as string}>{e as string}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={logFilterAction}
+                    onChange={(e) => setLogFilterAction(e.target.value)}
+                    className="text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-rose-200"
+                  >
+                    <option value="">ทุก Action</option>
+                    {[...new Set(logs.map((l) => l.action))].map((a) => (
+                      <option key={a as string} value={a as string}>
+                        {a === "submit" ? "บันทึก" : a === "update" ? "แก้ไข" : a === "upload_pdf" ? "อัป PDF" : a === "delete" ? "ลบ" : a as string}
+                      </option>
+                    ))}
+                  </select>
+                  {(logFilterEmail || logFilterAction) && (
+                    <button onClick={() => { setLogFilterEmail(""); setLogFilterAction(""); }} className="text-sm text-rose-500 hover:text-rose-700 px-2">
+                      ล้างตัวกรอง
+                    </button>
+                  )}
+                </div>
+
+                {/* Table */}
+                <div className="bg-white/90 rounded-2xl border border-rose-100 overflow-hidden shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-rose-50 border-b border-rose-100">
+                          <th className="text-left px-4 py-3 font-semibold text-rose-700 whitespace-nowrap">เวลา</th>
+                          <th className="text-left px-4 py-3 font-semibold text-rose-700">ผู้ใช้</th>
+                          <th className="text-left px-4 py-3 font-semibold text-rose-700">Action</th>
+                          <th className="text-left px-4 py-3 font-semibold text-rose-700">Module</th>
+                          <th className="text-left px-4 py-3 font-semibold text-rose-700">รายละเอียด</th>
+                          <th className="px-4 py-3"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {logs
+                          .filter((l) => (!logFilterEmail || l.email === logFilterEmail) && (!logFilterAction || l.action === logFilterAction))
+                          .map((log, i) => {
+                            const actionMap: Record<string, { label: string; color: string }> = {
+                              submit:     { label: "บันทึก",  color: "bg-green-100 text-green-700" },
+                              update:     { label: "แก้ไข",   color: "bg-yellow-100 text-yellow-700" },
+                              upload_pdf: { label: "อัป PDF", color: "bg-blue-100 text-blue-700" },
+                              delete:     { label: "ลบ",      color: "bg-red-100 text-red-700" },
+                            };
+                            const badge = actionMap[log.action] || { label: log.action, color: "bg-gray-100 text-gray-600" };
+                            // หา module config จาก userData เพื่อสร้าง link
+                            const matchedMod = userData?.modules?.find(
+                              (m: any) => m.sheetName === log.module && m.spreadsheetId === log.spreadsheetId
+                            );
+                            const editUrl = matchedMod
+                              ? `/ERP/transaction/edit?moduleId=${matchedMod.moduleId}&spreadsheetId=${log.spreadsheetId}&sheetName=${encodeURIComponent(log.module)}&configName=${encodeURIComponent(matchedMod.configName)}&moduleName=${encodeURIComponent(matchedMod.moduleName)}&highlight=new`
+                              : null;
+
+                            return (
+                              <tr key={i} className="hover:bg-rose-50/30 transition-colors">
+                                <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{log.timestamp}</td>
+                                <td className="px-4 py-3 text-gray-700 max-w-[180px] truncate text-xs" title={log.email}>{log.email}</td>
+                                <td className="px-4 py-3">
+                                  <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${badge.color}`}>
+                                    {badge.label}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-gray-600 text-xs">{log.module}</td>
+                                <td className="px-4 py-3 text-gray-400 text-xs">{log.detail}</td>
+                                <td className="px-4 py-3">
+                                  {editUrl && (
+                                    <button
+                                      onClick={() => router.push(editUrl)}
+                                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-600 text-xs font-medium hover:bg-rose-100 transition-colors whitespace-nowrap"
+                                    >
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                      </svg>
+                                      ดูข้อมูล
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Empty State - Modules */}
         {activeTab === "modules" && validModules.length === 0 && !error && (
           <div className="bg-blue-50 border border-blue-200 rounded-2xl lg:rounded-3xl p-8 lg:p-12 text-center">

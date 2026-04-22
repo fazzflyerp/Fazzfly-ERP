@@ -1,321 +1,195 @@
 /**
- * User Modules API - PRODUCTION READY ✅ + CRM Support
+ * User Modules API
  * Location: app/api/user/modules/route.ts
- * 
- * ✅ รองรับ multi-user พร้อมกัน
- * ✅ Auto-retry เมื่อ token หมดอายุ
- * ✅ Better error handling
- * ✅ CRM Access from modules column (NEW)
+ *
+ * ✅ รองรับ multi-user (admin + staff) พร้อมกัน
+ * ✅ ใช้ SA อ่าน sheet ทั้งหมด — ไม่กิน quota user, ไม่ depend on OAuth token
+ * ✅ Lookup user จาก client_user ก่อน → ได้ clientId → หา client_master ด้วย clientId
+ * ✅ Server-side cache + thundering-herd guard
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { saReadRange } from "@/lib/google-sa";
 
-const MASTER_SHEET_ID = process.env.MASTER_SHEET_ID;
+const MASTER_SHEET_ID = process.env.MASTER_SHEET_ID!;
 
-// ✅ Helper function สำหรับ fetch Google Sheets พร้อม retry
-async function fetchGoogleSheets(
-  url: string,
-  accessToken: string,
-  retries = 2
-): Promise<any> {
-  for (let i = 0; i <= retries; i++) {
-    try {
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-        // ✅ เพิ่ม timeout เพื่อไม่ให้ค้างนาน
-        signal: AbortSignal.timeout(15000), // 15 seconds
-      });
+// ─── SA-based cache (ไม่ต้องใช้ accessToken เป็น key) ──────────────────────
+interface CacheEntry {
+  rows: any[][];
+  expiry: number;
+  pending?: Promise<any[][]>;
+}
+const MAX_SA_CACHE = 50;
+const _saCache = new Map<string, CacheEntry>();
 
-      if (response.ok) {
-        return await response.json();
-      }
+function evictOldestSa() {
+  if (_saCache.size < MAX_SA_CACHE) return;
+  const firstKey = _saCache.keys().next().value;
+  if (firstKey) _saCache.delete(firstKey);
+}
 
-      // ✅ Handle specific error cases
-      if (response.status === 401) {
-        // Token หมดอายุ - ต้อง re-login
-        throw new Error("TOKEN_EXPIRED");
-      }
+async function saGetCachedRows(range: string, ttlMs: number): Promise<any[][]> {
+  const now = Date.now();
+  const entry = _saCache.get(range);
 
-      if (response.status === 403) {
-        const errorBody = await response.text();
-        if (errorBody.includes("PERMISSION_DENIED")) {
-          throw new Error("PERMISSION_DENIED");
-        }
-        // Retry สำหรับ rate limit
-        if (i < retries) {
-          console.warn(`⚠️ Rate limited, retrying... (${i + 1}/${retries})`);
-          await new Promise((r) => setTimeout(r, 1000 * (i + 1))); // exponential backoff
-          continue;
-        }
-      }
+  if (entry && now < entry.expiry) return entry.rows;
+  if (entry?.pending) return entry.pending;
 
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    } catch (error: any) {
-      // ถ้าเป็น error ที่ไม่ควร retry ให้ throw ทันที
-      if (
-        error.message === "TOKEN_EXPIRED" ||
-        error.message === "PERMISSION_DENIED" ||
-        error.name === "TimeoutError"
-      ) {
-        throw error;
-      }
+  const pending: Promise<any[][]> = saReadRange(MASTER_SHEET_ID, range)
+    .then((rows) => {
+      evictOldestSa();
+      _saCache.set(range, { rows, expiry: Date.now() + ttlMs });
+      return rows;
+    })
+    .catch((err) => {
+      const e = _saCache.get(range);
+      _saCache.set(range, { rows: e?.rows ?? [], expiry: e?.expiry ?? 0 });
+      throw err;
+    });
 
-      // Retry สำหรับ network errors
-      if (i < retries) {
-        console.warn(`⚠️ Network error, retrying... (${i + 1}/${retries})`);
-        await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
-        continue;
-      }
+  _saCache.set(range, {
+    rows: entry?.rows ?? [],
+    expiry: entry?.expiry ?? 0,
+    pending,
+  });
 
-      throw error;
-    }
-  }
+  return pending;
 }
 
 export async function GET(request: NextRequest) {
-  // ✅ เพิ่ม request ID สำหรับ tracking
   const requestId = Math.random().toString(36).substring(7);
-  
+
   try {
-    console.log("=".repeat(50));
-    console.log(`📡 [${requestId}] START: Fetching user modules`);
-    console.log("=".repeat(50));
+    // 1. ตรวจ session — ใช้ JWT เพื่อเอา email เท่านั้น
+    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
 
-    // Step 1-3: Get token
-    console.log(`⏳ [${requestId}] Step 1-3: Getting JWT token...`);
-    
-    const token = await getToken({
-      req: request,
-      secret: process.env.NEXTAUTH_SECRET,
-    });
-
-    if (!token || !(token as any)?.accessToken || !(token as any)?.email) {
-      console.error(`❌ [${requestId}] Authentication failed`);
-      return NextResponse.json(
-        { error: "Not authenticated", code: "AUTH_REQUIRED" },
-        { status: 401 }
-      );
+    if (!token?.email) {
+      return NextResponse.json({ error: "Not authenticated", code: "AUTH_REQUIRED" }, { status: 401 });
     }
 
-    // ✅ Check for token refresh error
     if ((token as any).error === "RefreshAccessTokenError") {
-      console.error(`❌ [${requestId}] Token refresh failed`);
       return NextResponse.json(
-        { 
-          error: "Session expired", 
-          code: "TOKEN_EXPIRED",
-          message: "Please sign out and sign in again" 
-        },
+        { error: "Session expired", code: "TOKEN_EXPIRED", message: "Please sign out and sign in again" },
         { status: 401 }
       );
     }
 
-    const accessToken = (token as any).accessToken as string;
-    const userEmail = (token as any).email as string;
-
-    console.log(`✅ [${requestId}] Authentication OK:`, userEmail);
+    const userEmail = (token.email as string).toLowerCase().trim();
+    console.log(`📡 [${requestId}] modules request — email: ${userEmail}`);
 
     if (!MASTER_SHEET_ID) {
-      console.error(`❌ [${requestId}] MASTER_SHEET_ID not configured`);
-      return NextResponse.json(
-        { error: "Configuration error", code: "CONFIG_ERROR" },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Configuration error", code: "CONFIG_ERROR" }, { status: 500 });
     }
 
-    // Step 5: Fetch client_master with retry (✅ เปลี่ยนเป็น A:H เพื่อรวม modules column)
-    console.log(`⏳ [${requestId}] Step 5: Fetching client_master...`);
-    
-    const masterUrl = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_SHEET_ID}/values/client_master!A:H`;
-    
-    let masterData;
-    try {
-      masterData = await fetchGoogleSheets(masterUrl, accessToken);
-    } catch (error: any) {
-      if (error.message === "TOKEN_EXPIRED") {
-        return NextResponse.json(
-          { 
-            error: "Session expired", 
-            code: "TOKEN_EXPIRED",
-            message: "Please sign out and sign in again" 
-          },
-          { status: 401 }
-        );
-      }
-      
-      if (error.message === "PERMISSION_DENIED") {
-        return NextResponse.json(
-          {
-            error: "Permission denied",
-            code: "PERMISSION_DENIED",
-            message: "Need to grant Google Sheets access. Please sign out and sign in again.",
-          },
-          { status: 403 }
-        );
-      }
+    // 2. อ่านทุก sheet ผ่าน SA พร้อมกัน
+    const [userRows, masterRows, modulesRows, dashboardRows] = await Promise.all([
+      saGetCachedRows("client_user!A:E",      5 * 60 * 1000),
+      saGetCachedRows("client_master!A:H",   10 * 60 * 1000),
+      saGetCachedRows("client_modules!A:H",   5 * 60 * 1000),
+      saGetCachedRows("client_dashboard!A:I", 5 * 60 * 1000).catch(() => [] as any[][]),
+    ]);
 
-      throw error;
+    console.log(`✅ [${requestId}] SA fetch — users:${userRows.length} master:${masterRows.length} modules:${modulesRows.length}`);
+
+    // 3. หา clientId จาก client_user (รองรับทั้ง admin และ staff)
+    //    client_user columns: A=client_id, B=user_email, C=role, D=is_active, E=notes
+    const userRow = userRows.slice(1).find(
+      (r) => (r[1] ?? "").toString().toLowerCase().trim() === userEmail
+    );
+
+    if (!userRow) {
+      console.error(`❌ [${requestId}] email not found in client_user: ${userEmail}`);
+      return NextResponse.json({ error: "User not found in system", code: "USER_NOT_FOUND" }, { status: 404 });
     }
 
-    if (!masterData.values || masterData.values.length === 0) {
-      console.error(`❌ [${requestId}] Master sheet is empty`);
-      return NextResponse.json(
-        { error: "Master sheet is empty", code: "EMPTY_SHEET" },
-        { status: 500 }
-      );
+    const clientId = (userRow[0] ?? "").toString().trim();
+    const isActive = (userRow[3] ?? "").toString().toUpperCase() === "TRUE";
+
+    if (!isActive) {
+      return NextResponse.json({ error: "Account is inactive", code: "ACCOUNT_INACTIVE" }, { status: 403 });
     }
 
-    const masterRows = masterData.values as any[][];
-    console.log(`✅ [${requestId}] Master sheet fetched:`, masterRows.length, "rows");
+    console.log(`✅ [${requestId}] clientId: ${clientId}`);
 
-    // Step 6: Find client by email
-    console.log(`⏳ [${requestId}] Step 6: Finding client for email:`, userEmail);
-    
-    const clientRow = masterRows.find((row, idx) => {
-      if (idx === 0) return false;
-      const email = row[2]?.toString().toLowerCase() || "";
-      return email === userEmail.toLowerCase();
-    });
+    // 4. หาข้อมูล plan/status จาก client_master ด้วย clientId (column A = index 0)
+    //    client_master columns: A=client_id, B=client_name, C=admin_email, D=plan_type,
+    //                           E=status, F=start_date, G=expires_at, H=modules
+    const clientRow = masterRows.slice(1).find(
+      (r) => (r[0] ?? "").toString().trim() === clientId
+    );
 
     if (!clientRow) {
-      console.error(`❌ [${requestId}] Client not found for email:`, userEmail);
-      return NextResponse.json(
-        { error: "User not found in system", code: "USER_NOT_FOUND" },
-        { status: 404 }
-      );
+      console.error(`❌ [${requestId}] clientId ${clientId} not found in client_master`);
+      return NextResponse.json({ error: "Client not configured", code: "CLIENT_NOT_FOUND" }, { status: 403 });
     }
 
-    const clientId = clientRow[0]?.toString() || "";
-    const clientName = clientRow[1]?.toString() || "";
-    const planType = clientRow[3]?.toString() || "";
-    const status = clientRow[4]?.toString() || "";
-    const expiresAt = clientRow[6]?.toString() || "";
-
-    // ==============================
-    // ✅ NEW: Check CRM Access from column H
-    // ==============================
-    const modulesStr = clientRow[7]?.toString() || "ERP"; // column H: modules
-    const hasCRM = modulesStr.includes("CRM");
-    const hasHRM = modulesStr.includes("HRM"); // สำหรับอนาคต
+    const clientName  = (clientRow[1] ?? "").toString();
+    const planType    = (clientRow[3] ?? "").toString();
+    const status      = (clientRow[4] ?? "").toString();
+    const expiresAt   = (clientRow[6] ?? "").toString();
+    const modulesStr  = (clientRow[7] ?? "ERP").toString();
+    const hasCRM      = modulesStr.includes("CRM");
+    const hasHRM      = modulesStr.includes("HRM");
     const crmExpiresAt = hasCRM ? expiresAt : null;
 
-    console.log(`✅ [${requestId}] Client found:`, { 
-      clientId, 
-      clientName, 
-      status, 
-      modules: modulesStr,
-      hasCRM,
-      hasHRM 
-    });
-
-    // Step 7-8: Check status and expiry
     if (status.toUpperCase() !== "TRUE" && status.toUpperCase() !== "ACTIVE") {
-      console.warn(`❌ [${requestId}] Account not active:`, status);
-      return NextResponse.json(
-        { error: "Account is inactive", code: "ACCOUNT_INACTIVE" },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: "Account is inactive", code: "ACCOUNT_INACTIVE" }, { status: 403 });
     }
 
     const expireDate = parseDate(expiresAt);
     if (expireDate && expireDate < new Date()) {
-      console.warn(`❌ [${requestId}] Account expired:`, expiresAt);
-      return NextResponse.json(
-        { error: "Subscription expired", code: "SUBSCRIPTION_EXPIRED" },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: "Subscription expired", code: "SUBSCRIPTION_EXPIRED" }, { status: 403 });
     }
 
-    console.log(`✅ [${requestId}] Account is active and not expired`);
-
-    // Step 9: Fetch modules with retry
-    console.log(`⏳ [${requestId}] Step 9: Fetching client_modules...`);
-    
-    const modulesUrl = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_SHEET_ID}/values/client_modules!A:I`;
-    
-    const modulesData = await fetchGoogleSheets(modulesUrl, accessToken);
-    const modulesRows = modulesData.values as any[][] || [];
-    
-    console.log(`✅ [${requestId}] Modules sheet fetched:`, modulesRows.length, "rows");
-
-    // Step 10: Filter modules
-    console.log(`⏳ [${requestId}] Step 10: Filtering modules for client:`, clientId);
-    
+    // 5. Filter modules ตาม clientId
     const modules = modulesRows
       .slice(1)
       .filter((row) => {
-        const mClientId = row[1]?.toString() || "";
-        const isActive = row[6]?.toString().toUpperCase() === "TRUE";
-        const configName = row[5]?.toString() || "";
-        
-        return mClientId === clientId && isActive && configName.trim() !== "";
+        const mClientId  = (row[1] ?? "").toString().trim();
+        const isActive   = (row[6] ?? "").toString().toUpperCase() === "TRUE";
+        const configName = (row[5] ?? "").toString().trim();
+        return mClientId === clientId && isActive && configName !== "";
       })
       .map((row) => ({
-        moduleId: row[0]?.toString() || "",
-        moduleName: row[2]?.toString() || "",
-        spreadsheetId: row[3]?.toString() || "",
-        sheetName: row[4]?.toString() || "",
-        configName: row[5]?.toString() || "",
-        notes: row[7]?.toString() || "",
+        moduleId:      (row[0] ?? "").toString(),
+        moduleName:    (row[2] ?? "").toString(),
+        spreadsheetId: (row[3] ?? "").toString(),
+        sheetName:     (row[4] ?? "").toString(),
+        configName:    (row[5] ?? "").toString(),
+        notes:         (row[7] ?? "").toString(),
       }));
 
-    console.log(`✅ [${requestId}] Filtered modules:`, modules.length);
-
-    // Step 11: Filter dashboards
-    console.log(`⏳ [${requestId}] Step 11: Preparing dashboardItems...`);
-
-    const dashboardItems = modulesRows
+    // 6. Filter dashboard items ตาม clientId
+    const dashboardItems = dashboardRows
       .slice(1)
       .filter((row) => {
-        const mClientId = row[1]?.toString() || "";
-        const isActive = row[6]?.toString().toUpperCase() === "TRUE";
-        const dashboardConfigName = row[8]?.toString() || "";
-        
-        return mClientId === clientId && isActive && dashboardConfigName.trim() !== "";
+        const mClientId  = (row[1] ?? "").toString().trim();
+        const isActive   = (row[6] ?? "").toString().toUpperCase() === "TRUE";
+        const configName = (row[5] ?? "").toString().trim();
+        return mClientId === clientId && isActive && configName !== "";
       })
       .map((row) => ({
-        dashboardId: row[0]?.toString() || "",
-        dashboardName: row[2]?.toString() || "",
-        spreadsheetId: row[3]?.toString() || "",
-        sheetName: row[4]?.toString() || "",
-        dashboardConfigName: row[8]?.toString() || "",
-        notes: row[7]?.toString() || "",
+        dashboardId:         (row[0] ?? "").toString(),
+        dashboardName:       (row[2] ?? "").toString(),
+        spreadsheetId:       (row[3] ?? "").toString(),
+        sheetName:           (row[4] ?? "").toString(),
+        dashboardConfigName: (row[5] ?? "").toString(),
+        notes:               (row[7] ?? "").toString(),
+        archiveFolderId:     (row[8] ?? "").toString(),
       }));
 
-    console.log(`✅ [${requestId}] Dashboard items prepared:`, dashboardItems.length);
-
-    const response = {
-      clientId,
-      clientName,
-      planType,
-      expiresAt,
-      hasCRM,           // ✅ NEW
-      crmExpiresAt,     // ✅ NEW
-      hasHRM,           // ✅ NEW (สำหรับอนาคต)
-      modules,
-      dashboardItems,
-    };
-
-    console.log("=".repeat(50));
-    console.log(`✅ [${requestId}] SUCCESS`);
-    console.log(`   hasCRM: ${hasCRM}, hasHRM: ${hasHRM}`); // ✅ NEW
-    console.log("=".repeat(50));
-
-    return NextResponse.json(response);
-  } catch (error: any) {
-    console.error("=".repeat(50));
-    console.error(`❌ [${requestId}] ERROR:`, error.message);
-    console.error("=".repeat(50));
+    console.log(`✅ [${requestId}] modules:${modules.length} dashboards:${dashboardItems.length} hasCRM:${hasCRM}`);
 
     return NextResponse.json(
-      {
-        error: "Server error",
-        code: "INTERNAL_ERROR",
-        message: error.message,
-      },
+      { clientId, clientName, planType, expiresAt, hasCRM, crmExpiresAt, hasHRM, modules, dashboardItems },
+      { headers: { "Cache-Control": "private, max-age=300, stale-while-revalidate=60" } }
+    );
+
+  } catch (error: any) {
+    console.error(`❌ [${requestId}] ERROR: ${error.message}`);
+    return NextResponse.json(
+      { error: "Server error", code: "INTERNAL_ERROR", message: error.message },
       { status: 500 }
     );
   }

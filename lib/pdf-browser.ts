@@ -16,12 +16,17 @@ export async function getPdfBrowser(): Promise<Browser> {
 
   if (isServerless) {
     // ── Production / Serverless ──────────────────────────────────────
-    const chromium = await import("@sparticuz/chromium");
+    // ใช้ chromium-min → binary อยู่บน GitHub Releases, download ตอน runtime
+    const chromium = await import("@sparticuz/chromium-min");
     const puppeteer = await import("puppeteer-core");
+
+    const chromiumPath =
+      process.env.CHROMIUM_EXECUTABLE_PATH ||
+      `https://github.com/Sparticuz/chromium/releases/download/v131.0.0/chromium-v131.0.0-pack.tar`;
 
     return puppeteer.default.launch({
       args: chromium.default.args,
-      executablePath: await chromium.default.executablePath(),
+      executablePath: await chromium.default.executablePath(chromiumPath),
       headless: true,
     });
   } else {

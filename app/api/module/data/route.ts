@@ -1,103 +1,48 @@
 /**
- * =============================================================================
- * FILE PATH: app/api/module/data/route.ts
- * =============================================================================
- * 
- * API: GET /api/module/data
- * 
- * Purpose: ดึงข้อมูล Transaction/Module ทั้งหมดจาก Google Sheets
- * 
- * Query Parameters:
- * - spreadsheetId: Google Sheets ID
- * - sheetName: ชื่อ sheet
- * 
- * Returns:
- * {
- *   success: true,
- *   count: number,
- *   rows: array of arrays
- * }
+ * Module Data API
+ * Location: app/api/module/data/route.ts
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { withLogger } from "@/lib/with-logger";
+import { saReadRange } from "@/lib/google-sa";
+import { verifySheetAccess } from "@/lib/verify-sheet-access";
 
 async function _GET(request: NextRequest) {
   try {
-    console.log("📊 [API] GET /api/transaction/data");
+    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    // ✅ Auth
-    const token = await getToken({
-      req: request,
-      secret: process.env.NEXTAUTH_SECRET,
-    });
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
-    const accessToken = (token as any)?.accessToken;
-    if (!accessToken) {
-      return NextResponse.json(
-        { error: "No access token" },
-        { status: 401 }
-      );
-    }
-
-    // ✅ Get params
     const { searchParams } = new URL(request.url);
     const spreadsheetId = searchParams.get("spreadsheetId");
-    const sheetName = searchParams.get("sheetName");
+    const sheetName     = searchParams.get("sheetName");
+    const includeHeader = searchParams.get("includeHeader") === "true";
 
-    if (!spreadsheetId || !sheetName) {
-      return NextResponse.json(
-        { error: "Missing required parameters" },
-        { status: 400 }
-      );
-    }
+    if (!spreadsheetId || !sheetName)
+      return NextResponse.json({ error: "Missing required parameters" }, { status: 400 });
 
-    console.log(`   📁 Spreadsheet: ${spreadsheetId}`);
-    console.log(`   📄 Sheet: ${sheetName}`);
+    const userEmail = ((token as any)?.email as string || "").toLowerCase();
+    const access = await verifySheetAccess(userEmail, spreadsheetId);
+    if (!access.allowed)
+      return NextResponse.json({ error: "Forbidden: sheet not owned by your client", code: "FORBIDDEN" }, { status: 403 });
 
-    // ✅ Fetch data from Google Sheets
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}`;
-    
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
+    const values = await saReadRange(spreadsheetId, sheetName);
+    const rows   = values.slice(1);
+
+    return NextResponse.json(
+      {
+        success: true,
+        count: rows.length,
+        rows,
+        ...(includeHeader ? { allRows: values } : {}),
       },
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("❌ Sheets API error:", errorText);
-      throw new Error(`Failed to fetch data: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const values = data.values || [];
-
-    console.log(`   ✅ Rows fetched: ${values.length}`);
-
-    // ✅ Remove header row
-    const rows = values.slice(1);
-
-    return NextResponse.json({
-      success: true,
-      count: rows.length,
-      rows: rows,
-    });
+      { headers: { "Cache-Control": "private, max-age=60, stale-while-revalidate=30" } }
+    );
 
   } catch (error: any) {
-    console.error("❌ [API] Error:", error.message);
-    return NextResponse.json(
-      { error: error.message || "Failed to fetch data" },
-      { status: 500 }
-    );
+    console.error("❌ [module/data] Error:", error.message);
+    return NextResponse.json({ error: error.message || "Failed to fetch data" }, { status: 500 });
   }
 }
 export const GET = withLogger("/api/module/data", _GET);

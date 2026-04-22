@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -42,6 +42,7 @@ export default function TransactionEditPage() {
   const sheetName = searchParams.get("sheetName");
   const configName = searchParams.get("configName");
   const moduleName = searchParams.get("moduleName") || "จัดการข้อมูล";
+  const highlightNew = searchParams.get("highlight") === "new";
 
   const [config, setConfig] = useState<ConfigField[]>([]);
   const [dataRows, setDataRows] = useState<DataRow[]>([]);
@@ -52,6 +53,8 @@ export default function TransactionEditPage() {
   const [success, setSuccess] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [navOpen, setNavOpen] = useState(false);
+  const [highlightedRow, setHighlightedRow] = useState<number | string | null>(null);
+  const highlightRef = useRef<HTMLTableRowElement>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -82,54 +85,47 @@ export default function TransactionEditPage() {
       const sortedConfig = configData.fields.sort((a: ConfigField, b: ConfigField) => a.order - b.order);
       setConfig(sortedConfig);
 
-      // ✅ Fetch helpers สำหรับ dropdown fields
-      const helpersToFetch = sortedConfig
-        .filter((f: ConfigField) => f.helper && f.type === "dropdown")
-        .map((f: ConfigField) => f.helper!);
+      // Fetch helpers (parallel) + data at the same time
+      const helpersToFetch: string[] = [...new Set<string>(
+        sortedConfig
+          .filter((f: ConfigField) => f.helper && f.type === "dropdown")
+          .map((f: ConfigField) => f.helper!)
+      )];
 
-      if (helpersToFetch.length > 0) {
-        const helperData: { [key: string]: HelperOption[] } = {};
-        
-        for (const helperName of helpersToFetch) {
-          try {
-            const helperUrl = new URL(`${window.location.origin}/api/module/helpers`);
-            helperUrl.searchParams.set("spreadsheetId", spreadsheetId!);
-            helperUrl.searchParams.set("helperName", helperName);
-
-            const helperResponse = await fetch(helperUrl.toString(), {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                "Content-Type": "application/json",
-              },
-            });
-
-            if (helperResponse.ok) {
-              const helperJson = await helperResponse.json();
-              helperData[helperName] = helperJson.options || [];
-              console.log(`✅ Loaded helper: ${helperName}`, helperJson.options?.length, "options");
-            } else {
-              console.warn(`⚠️ Helper not found: ${helperName}`);
-              helperData[helperName] = [];
+      const [helperResults, dataRes] = await Promise.all([
+        Promise.all(
+          helpersToFetch.map(async (helperName) => {
+            try {
+              const helperUrl = new URL(`${window.location.origin}/api/module/helpers`);
+              helperUrl.searchParams.set("spreadsheetId", spreadsheetId!);
+              helperUrl.searchParams.set("helperName", helperName);
+              const res = await fetch(helperUrl.toString(), {
+                headers: { Authorization: `Bearer ${accessToken}` },
+              });
+              if (res.ok) {
+                const json = await res.json();
+                return { helperName, options: json.options || [] };
+              }
+              return { helperName, options: [] };
+            } catch {
+              return { helperName, options: [] };
             }
-          } catch (err) {
-            console.warn(`⚠️ Failed to fetch helper ${helperName}:`, err);
-            helperData[helperName] = [];
-          }
-        }
-        
+          })
+        ),
+        fetch(
+          `/api/module/data?spreadsheetId=${spreadsheetId}&sheetName=${sheetName}`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        ),
+      ]);
+
+      // Apply helper results
+      if (helperResults.length > 0) {
+        const helperData: { [key: string]: HelperOption[] } = {};
+        helperResults.forEach(({ helperName, options }) => {
+          helperData[helperName] = options;
+        });
         setHelperOptions(helperData);
       }
-
-      // Fetch data from API
-      const dataRes = await fetch(
-        `/api/module/data?spreadsheetId=${spreadsheetId}&sheetName=${sheetName}`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
 
       if (!dataRes.ok) throw new Error("Failed to fetch data");
       const rawData = await dataRes.json();
@@ -151,6 +147,17 @@ export default function TransactionEditPage() {
       });
 
       setDataRows(mappedData);
+
+      // highlight แถวล่าสุดถ้ามาจาก form
+      if (highlightNew && mappedData.length > 0) {
+        const lastRow = mappedData[mappedData.length - 1];
+        setHighlightedRow(lastRow.rowIndex);
+        setTimeout(() => {
+          highlightRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 300);
+        // ลบ highlight หลัง 4 วิ
+        setTimeout(() => setHighlightedRow(null), 4000);
+      }
     } catch (err: any) {
       console.error("Error:", err);
       setError(err.message);
@@ -391,8 +398,20 @@ export default function TransactionEditPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredRows.map((row, idx) => (
-                  <tr key={row.rowIndex} className={`hover:bg-slate-50/50 transition-colors ${row._isNew ? "bg-emerald-50/30" : row._isEditing ? "bg-indigo-50/30" : ""}`}>
+                {filteredRows.map((row, idx) => {
+                  const isHighlighted = row.rowIndex === highlightedRow;
+                  return (
+                  <tr
+                    key={row.rowIndex}
+                    ref={isHighlighted ? highlightRef : null}
+                    className={`transition-all duration-700 ${
+                      isHighlighted
+                        ? "bg-amber-100 ring-2 ring-amber-400 ring-inset"
+                        : row._isNew ? "bg-emerald-50/30"
+                        : row._isEditing ? "bg-indigo-50/30"
+                        : "hover:bg-slate-50/50"
+                    }`}
+                  >
                     <td className="px-2 py-4 text-center font-bold text-slate-400 text-[10px]">
                       {row._isNew ? <span className="text-[8px] bg-emerald-500 text-white px-1.5 py-0.5 rounded-full font-bold">NEW</span> : idx + 1}
                     </td>
@@ -433,7 +452,8 @@ export default function TransactionEditPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

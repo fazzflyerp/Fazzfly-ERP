@@ -315,10 +315,13 @@ export default function PayrollSlipPage() {
   };
 
   if (loading) return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+    <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
-        <p className="text-blue-600 font-medium text-lg">กำลังโหลด...</p>
+        <div className="relative w-16 h-16 mx-auto mb-4">
+          <div className="absolute inset-0 rounded-full border-4 border-emerald-100" />
+          <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-emerald-600 animate-spin" />
+        </div>
+        <p className="text-slate-600 font-medium">กำลังโหลดข้อมูล...</p>
       </div>
     </div>
   );
@@ -379,7 +382,7 @@ export default function PayrollSlipPage() {
               {(['newest','oldest'] as const).map(order => (
                 <button key={order} onClick={() => setSortOrder(order)}
                   className={`px-2 py-1 text-[10px] font-bold rounded-md transition-all ${sortOrder === order ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                  {order === 'newest' ? 'A→Z' : 'Z→A'}
+                  {order === 'newest' ? 'ใหม่→เก่า' : 'เก่า→ใหม่'}
                 </button>
               ))}
             </div>

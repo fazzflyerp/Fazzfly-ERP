@@ -1,84 +1,55 @@
 /**
  * Module Config API
  * Location: app/api/module/config/route.ts
- * 
- * ✅ No in-memory cache (Vercel serverless = multiple instances)
- * ✅ ใช้ HTTP Cache-Control แทน
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { withLogger } from "@/lib/with-logger";
-
-async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 2): Promise<Response> {
-  for (let i = 0; i <= maxRetries; i++) {
-    try {
-      const response = await fetch(url, { ...options, signal: AbortSignal.timeout(10000) });
-      if (response.ok || response.status === 404) return response;
-      if (response.status >= 500 && i < maxRetries) {
-        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i)));
-        continue;
-      }
-      return response;
-    } catch (error: any) {
-      if (error.name === "TimeoutError" || i === maxRetries) throw error;
-      await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i)));
-    }
-  }
-  throw new Error("Max retries exceeded");
-}
+import { saReadRange } from "@/lib/google-sa";
+import { verifySheetAccess } from "@/lib/verify-sheet-access";
 
 async function _GET(request: NextRequest) {
   const requestId = Math.random().toString(36).substring(7);
 
   try {
-    console.log(`⚙️ [${requestId}] MODULE CONFIG API`);
-
     const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
     if (!token) return NextResponse.json({ error: "Unauthorized", code: "AUTH_REQUIRED" }, { status: 401 });
     if ((token as any).error === "RefreshAccessTokenError")
       return NextResponse.json({ error: "Session expired", code: "TOKEN_EXPIRED" }, { status: 401 });
 
-    const accessToken = (token as any)?.accessToken;
-    if (!accessToken) return NextResponse.json({ error: "No access token", code: "NO_TOKEN" }, { status: 401 });
-
-    const searchParams = request.nextUrl.searchParams;
-    const spreadsheetId = searchParams.get("spreadsheetId");
-    const configName    = searchParams.get("configName");
+    const spreadsheetId = request.nextUrl.searchParams.get("spreadsheetId");
+    const configName    = request.nextUrl.searchParams.get("configName");
 
     if (!spreadsheetId || !configName)
       return NextResponse.json({ error: "Missing parameters", code: "MISSING_PARAMS" }, { status: 400 });
 
-    console.log(`⚙️ [${requestId}] Config: ${configName}`);
+    const userEmail = ((token as any)?.email as string || "").toLowerCase();
+    const access = await verifySheetAccess(userEmail, spreadsheetId);
+    if (!access.allowed)
+      return NextResponse.json({ error: "Forbidden: sheet not owned by your client", code: "FORBIDDEN" }, { status: 403 });
 
-    const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(configName)}!A1:K100`;
-
-    let response: Response;
+    let rows: any[][];
     try {
-      response = await fetchWithRetry(sheetsUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+      rows = await saReadRange(spreadsheetId, `${configName}!A1:K100`);
     } catch (error: any) {
-      return NextResponse.json({ error: "Failed to fetch config", code: "FETCH_ERROR", message: error.message }, { status: 500 });
+      const httpStatus = error?.response?.status;
+      const msg = httpStatus === 404
+        ? `ไม่พบ Sheet ชื่อ "${configName}" ใน Spreadsheet`
+        : httpStatus === 403
+        ? "Service Account ไม่มีสิทธิ์เข้าถึง Spreadsheet นี้"
+        : error.message;
+      console.error(`❌ [${requestId}] saReadRange failed (HTTP ${httpStatus ?? "?"}) :`, error.message);
+      return NextResponse.json({ error: "Failed to fetch config", code: "FETCH_ERROR", message: msg }, { status: 500 });
     }
 
-    if (!response.ok) {
-      if (response.status === 401) return NextResponse.json({ error: "Session expired", code: "TOKEN_EXPIRED" }, { status: 401 });
-      if (response.status === 404) return NextResponse.json({ error: "Config not found", code: "CONFIG_NOT_FOUND" }, { status: 404 });
-      const errorText = await response.text();
-      return NextResponse.json({ error: "Failed to fetch config", code: "FETCH_ERROR", details: errorText }, { status: 500 });
-    }
-
-    const data = await response.json();
-    const rows: string[][] = Array.isArray(data.values) ? data.values : [];
-
-    if (rows.length === 0)
+    if (!rows || rows.length === 0)
       return NextResponse.json({ error: "Config sheet is empty", code: "EMPTY_CONFIG" }, { status: 404 });
 
     const headerRow = Array.isArray(rows[0]) ? rows[0] : [];
-    const headers: string[] = headerRow.map(h => (h ?? "").toString().toLowerCase().trim());
+    const headers   = headerRow.map((h: any) => (h ?? "").toString().toLowerCase().trim());
 
-    console.log(`📋 [${requestId}] Headers found:`, headers);
-
-    const findHeader = (names: string[]) => headers.findIndex(h => names.includes(h));
+    const findHeader = (names: string[]) => headers.findIndex((h: string) => names.includes(h));
 
     const fieldNameIdx   = findHeader(["field_name", "field", "fieldname"]);
     const labelIdx       = findHeader(["label", "ชื่อแสดงผล", "name"]);
@@ -111,28 +82,20 @@ async function _GET(request: NextRequest) {
         notes:       notesIdx       >= 0 ? row[notesIdx]?.toString()                    || "" : "",
       }));
 
-    console.log(`📝 [${requestId}] Fields parsed: ${fields.length}`);
-
     const hasSection = fields.some(f => f.section && f.section.length > 0);
 
-    const result = {
-      success: true,
-      spreadsheetId,
-      configName,
-      fields,
-      totalFields: fields.length,
-      hasSection,
-      sections: hasSection ? [...new Set(fields.filter(f => f.section).map(f => f.section))] : [],
-    };
-
-    console.log(`✅ [${requestId}] Config loaded successfully`);
-
-    return NextResponse.json(result, {
-      headers: {
-        // Config เปลี่ยนน้อยกว่า helper → cache นานกว่าได้ (5 นาที)
-        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=60",
+    return NextResponse.json(
+      {
+        success: true,
+        spreadsheetId,
+        configName,
+        fields,
+        totalFields: fields.length,
+        hasSection,
+        sections: hasSection ? [...new Set(fields.filter(f => f.section).map(f => f.section))] : [],
       },
-    });
+      { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=60" } }
+    );
 
   } catch (error: any) {
     console.error(`❌ [${requestId}] ERROR:`, error.message);

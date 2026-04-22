@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ["next-auth", "@sparticuz/chromium", "puppeteer-core"],
+  serverExternalPackages: ["next-auth", "@sparticuz/chromium", "@sparticuz/chromium-min", "puppeteer-core"],
 };
 
 export default nextConfig;

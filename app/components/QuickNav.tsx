@@ -53,10 +53,13 @@ function getDashboardRoute(item: DashboardItem): string {
 }
 function getDocumentRoute(doc: DocumentItem): string {
   const n = doc.moduleName.toLowerCase();
+  const c = (doc.configName || "").toLowerCase();
   if (n.includes("payroll") || n.includes("payslip") || n.includes("เงินเดือน") || n.includes("สลิป"))
     return `/ERP/payroll-slip?moduleId=${doc.moduleId}&spreadsheetId=${doc.spreadsheetId}`;
   if (n.includes("receipt") || n.includes("ใบเสร็จ"))
     return `/ERP/receipt-simple?moduleId=${doc.moduleId}&spreadsheetId=${doc.spreadsheetId}`;
+  if (n.includes("หัก") || n.includes("withholding") || c.includes("หัก_ณ") || c.includes("withholding"))
+    return `/ERP/withholding-tax?moduleId=${doc.moduleId}&spreadsheetId=${doc.spreadsheetId}&configName=${encodeURIComponent(doc.configName)}&sheetName=${encodeURIComponent(doc.sheetName)}`;
   return `/ERP/home?tab=documents`;
 }
 function getMasterDataRoute(db: MasterDbItem): string {
@@ -140,26 +143,6 @@ const IconSpinner = () => (
   </svg>
 );
 
-// ─── Mock notifications (สินค้า) ─────────────────────
-interface Notification {
-  id: string;
-  title: string;
-  detail: string;
-  tag: string;
-  urgent: boolean;
-}
-const MOCK_NOTIFICATIONS: Notification[] = [
-  { id: "n1",  title: "วิตามินซี 1000mg",      detail: "สต็อกเหลือ 5 ชิ้น",    tag: "ใกล้หมด",  urgent: false },
-  { id: "n2",  title: "ครีมกันแดด SPF50",       detail: "สต็อกหมดแล้ว",         tag: "หมดแล้ว",  urgent: true  },
-  { id: "n3",  title: "โบท็อกซ์ 100u",          detail: "สต็อกเหลือ 2 กล่อง",   tag: "ใกล้หมด",  urgent: false },
-  { id: "n4",  title: "ฟิลเลอร์ Juvederm",      detail: "สต็อกหมดแล้ว",         tag: "หมดแล้ว",  urgent: true  },
-  { id: "n5",  title: "เซรั่มไฮยาลูรอน",        detail: "สต็อกเหลือ 8 ขวด",    tag: "ใกล้หมด",  urgent: false },
-  { id: "n6",  title: "ครีมบำรุงผิวหน้า 50ml",  detail: "สต็อกเหลือ 3 กระปุก",  tag: "ใกล้หมด",  urgent: false },
-  { id: "n7",  title: "แผ่นมาส์กหน้า (กล่อง)", detail: "สต็อกหมดแล้ว",         tag: "หมดแล้ว",  urgent: true  },
-  { id: "n8",  title: "น้ำยาทำความสะอาดผิว",   detail: "สต็อกเหลือ 6 ขวด",    tag: "ใกล้หมด",  urgent: false },
-  { id: "n9",  title: "คอลลาเจนผง 200g",        detail: "สต็อกเหลือ 4 ซอง",    tag: "ใกล้หมด",  urgent: false },
-  { id: "n10", title: "ยาชาทาผิว EMLA",         detail: "สต็อกหมดแล้ว",         tag: "หมดแล้ว",  urgent: true  },
-];
 
 function ModuleIcon({ name }: { name: string }) {
   const n = name.toLowerCase();
@@ -364,6 +347,7 @@ export default function QuickNav({ isOpen, onClose }: { isOpen: boolean; onClose
   const [dashboards, setDashboards] = useState<DashboardItem[]>([]);
   const [documents,  setDocuments]  = useState<DocumentItem[]>([]);
   const [masterDbs,  setMasterDbs]  = useState<MasterDbItem[]>([]);
+  const [hasCRM,     setHasCRM]     = useState(false);
   const [loading,    setLoading]    = useState(false);
   const [fetched,    setFetched]    = useState(false);
 
@@ -379,12 +363,19 @@ export default function QuickNav({ isOpen, onClose }: { isOpen: boolean; onClose
         ]);
         if (r1.ok) {
           const d = await r1.json();
-          setModules(d.modules || []);
-          setDashboards(d.dashboardItems || []);
+          const mods = d.modules || [];
+          const dash = d.dashboardItems || [];
+          setModules(mods);
+          setDashboards(dash);
+          setHasCRM(!!d.hasCRM);
           if (d.clientId) {
             const r2 = await fetch(`/api/user/documents?clientId=${d.clientId}`);
             if (r2.ok) { const d2 = await r2.json(); setDocuments(d2.documents || []); }
           }
+          // เปิด tab แรกที่มีข้อมูลอัตโนมัติ
+          if (mods.length > 0) setTab("modules");
+          else if (dash.length > 0) setTab("dashboards");
+          else if (d.hasCRM) setTab("crm");
         }
         if (r3.ok) { const d = await r3.json(); setMasterDbs(d.databases || []); }
       } catch (e) {
@@ -458,8 +449,8 @@ export default function QuickNav({ isOpen, onClose }: { isOpen: boolean; onClose
             <IconArrow />
           </button>
 
-          {/* CRM Home shortcut */}
-          <button
+          {/* CRM Home shortcut — ซ่อนถ้าไม่มีสิทธิ์ CRM */}
+          {hasCRM && <button
             onClick={() => navigate("/CRM/home")}
             className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-100 hover:border-violet-200 hover:shadow-sm transition-all group mt-2"
           >
@@ -468,28 +459,41 @@ export default function QuickNav({ isOpen, onClose }: { isOpen: boolean; onClose
             </div>
             <span className="flex-1 text-sm font-semibold text-violet-700 text-left">CRM Home</span>
             <IconArrow />
-          </button>
+          </button>}
         </div>
 
-        {/* Tab Switcher */}
-        <div className="flex-none px-3 pt-3 pb-2">
-          <div className="grid grid-cols-5 gap-1 p-1 bg-slate-100 rounded-xl">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`
-                  flex flex-col items-center gap-0.5 py-2 rounded-lg
-                  text-[10px] font-semibold transition-all duration-150
-                  ${tab === t.id ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}
-                `}
-              >
-                {t.icon}
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        {/* Tab Switcher — ซ่อน tab ที่ไม่มีข้อมูล */}
+        {(() => {
+          const visibleTabs = TABS.filter((t) => {
+            if (t.id === "modules")    return modules.length > 0;
+            if (t.id === "dashboards") return dashboards.length > 0;
+            if (t.id === "documents")  return documents.length > 0;
+            if (t.id === "masterdata") return masterDbs.length > 0;
+            if (t.id === "crm")        return hasCRM;
+            return true;
+          });
+          if (visibleTabs.length === 0) return null;
+          return (
+            <div className="flex-none px-3 pt-3 pb-2">
+              <div className={`grid gap-1 p-1 bg-slate-100 rounded-xl`} style={{ gridTemplateColumns: `repeat(${visibleTabs.length}, minmax(0, 1fr))` }}>
+                {visibleTabs.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setTab(t.id)}
+                    className={`
+                      flex flex-col items-center gap-0.5 py-2 rounded-lg
+                      text-[10px] font-semibold transition-all duration-150
+                      ${tab === t.id ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}
+                    `}
+                  >
+                    {t.icon}
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-3 pb-4">

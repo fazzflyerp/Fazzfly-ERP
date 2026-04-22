@@ -1,490 +1,598 @@
 "use client";
 
 /**
- * System Selector Page - COMPLETE FIXED VERSION
- * ✅ Inventory Alerts จาก API เหมือน ERP Home
- * ✅ Clickable card ไปที่ Inventory Dashboard
- * ✅ Loading state & error handling
+ * System Selector Page - Sidebar Layout
+ * ✅ Left sidebar สำหรับเลือกระบบ
+ * ✅ Overview Dashboard สำหรับ Admin (main area)
+ * ✅ White/Light theme
  */
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import Image from 'next/image';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
+import { useUserRole } from "@/app/context/UserRoleContext";
+import OverviewDashboard from "@/app/components/dashboards/overview/OverviewDashboard";
 
 const ROUTES = {
-  ERP_HOME: '/ERP/home',
-  ERP_SALES: '/modules/sales',
-  ERP_USAGE: '/modules/usage',
-  ERP_FINANCIAL: '/modules/financial',
-  ERP_INVENTORY: '/modules/inventory',
-  CRM_HOME: '/CRM/home',
-  PRICING: '/pricing',
-  SUPPORT: '/support',
+  ERP_HOME: "/ERP/home",
+  CRM_HOME: "/CRM/home",
+  TASKS: "/tasks",
+  SUPPORT: "/support",
 };
+
+function getDocumentRoute(doc: any): string {
+  const n = (doc.moduleName || "").toLowerCase();
+  const c = (doc.configName || "").toLowerCase();
+  if (n.includes("payroll") || n.includes("payslip") || n.includes("เงินเดือน") || n.includes("สลิป"))
+    return `/ERP/payroll-slip?moduleId=${doc.moduleId}&spreadsheetId=${doc.spreadsheetId}`;
+  if (n.includes("receipt") || n.includes("ใบเสร็จ"))
+    return `/ERP/receipt-simple?moduleId=${doc.moduleId}&spreadsheetId=${doc.spreadsheetId}`;
+  if (n.includes("หัก") || n.includes("withholding") || c.includes("หัก_ณ") || c.includes("withholding"))
+    return `/ERP/withholding-tax?moduleId=${doc.moduleId}&spreadsheetId=${doc.spreadsheetId}&configName=${encodeURIComponent(doc.configName)}&sheetName=${encodeURIComponent(doc.sheetName)}`;
+  return `/ERP/home?tab=documents`;
+}
+
+function getMasterDataRoute(db: any): string {
+  return `/ERP/master-data/edit?spreadsheetId=${db.spreadsheetId}&sheetName=${encodeURIComponent(db.sheetName)}&configName=${encodeURIComponent(db.configName)}&title=${encodeURIComponent(db.sheetName)}`;
+}
+
+function AnimatedNumber({ value, suffix = "" }: { value: number; suffix?: string }) {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    let start = 0;
+    const step = Math.ceil(value / 30);
+    const timer = setInterval(() => {
+      start += step;
+      if (start >= value) { setDisplay(value); clearInterval(timer); }
+      else setDisplay(start);
+    }, 30);
+    return () => clearInterval(timer);
+  }, [value]);
+  return <>{display}{suffix}</>;
+}
+
+const SYSTEMS = [
+  {
+    key: "erp",
+    label: "Fazzfly ERP",
+    sub: "ระบบบริหารจัดการองค์กร",
+    route: "/ERP/home",
+    gradient: "from-blue-500 to-cyan-500",
+    glow: "shadow-blue-500/30",
+    border: "border-blue-200",
+    bg: "bg-blue-50",
+    textGrad: "from-blue-600 to-cyan-500",
+    dot: "bg-blue-500",
+    icon: (
+      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      </svg>
+    ),
+    features: ["📊 Sales & Financial", "📦 Inventory", "💸 Expense", "👥 Payroll"],
+    condition: (d: any) => d.hasERP,
+  },
+  {
+    key: "crm",
+    label: "Fazzfly CRM",
+    sub: "ระบบบริหารลูกค้าสัมพันธ์",
+    route: "/CRM/home",
+    gradient: "from-purple-500 to-pink-500",
+    glow: "shadow-purple-500/30",
+    border: "border-purple-200",
+    bg: "bg-purple-50",
+    textGrad: "from-purple-600 to-pink-500",
+    dot: "bg-purple-500",
+    icon: (
+      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+    ),
+    features: ["👥 Contacts", "🎯 Lead Tracking", "💼 Pipeline", "📈 Analytics"],
+    condition: (d: any) => d.hasCRM,
+  },
+  {
+    key: "tasks",
+    label: "Fazzfly Task Manager",
+    sub: "ระบบมอบหมายและติดตามงาน",
+    route: "/tasks",
+    gradient: "from-violet-500 to-fuchsia-500",
+    glow: "shadow-violet-500/30",
+    border: "border-violet-200",
+    bg: "bg-violet-50",
+    textGrad: "from-violet-600 to-fuchsia-500",
+    dot: "bg-violet-500",
+    icon: (
+      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+      </svg>
+    ),
+    features: ["📋 มอบหมายงาน", "🔔 แจ้งเตือน", "✅ ติดตามสถานะ", "📅 Due Date"],
+    condition: () => true,
+  },
+];
 
 export default function SystemSelectorPage() {
   const { data: session, status } = useSession();
+  const { role, isAdmin, loading: roleLoading } = useUserRole();
   const router = useRouter();
-  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
-  const [userData, setUserData] = useState({
-    clientName: "ABC Company",
-    clientId: "C003",
-    package: "Deluxe",
-    daysRemaining: 72,
-    hasERP: true,
-    hasCRM: true,
-  });
 
-  // ✅ NEW: Inventory Alerts State
-  const [lowStockCount, setLowStockCount] = useState<number | null>(null);
-  const [loadingLowStock, setLoadingLowStock] = useState(true);
-  const [hasInventoryDashboard, setHasInventoryDashboard] = useState(false);
-  const [inventoryDashboardUrl, setInventoryDashboardUrl] = useState<string>("");
+  const [userData, setUserData] = useState<any>(null);
+  const [modules, setModules] = useState<any[]>([]);
+  const [dashboardItems, setDashboardItems] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [masterDbs, setMasterDbs] = useState<any[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [inboxTasks, setInboxTasks] = useState<any[]>([]);
+  const [sentTasks, setSentTasks] = useState<any[]>([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
 
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/login");
-    }
+    if (status === "unauthenticated") router.push("/login");
   }, [status, router]);
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const response = await fetch("/api/user/modules");
-        if (response.ok) {
-          const data = await response.json();
-
-          const hasERP = data.modules.some(
-            (m: any) => ["Sales", "Usage", "Financial", "Inventory"].includes(m.moduleName)
-          );
-          // ✅ ใช้ hasCRM จาก API แทน
-          const hasCRM = data.hasCRM || false;
-
-          console.log("📊 User Data:", {
-            clientId: data.clientId,
-            clientName: data.clientName,
-            hasCRM: data.hasCRM,
-            hasERP
-          });
-
-          // ✅ เช็คว่ามี Inventory Dashboard หรือไม่
-          const invDashboard = data.dashboardItems?.find(
-            (d: any) => d.dashboardConfigName === "Inventory_Dashboard_Config"
-          );
-
-          if (invDashboard) {
-            setHasInventoryDashboard(true);
-            setInventoryDashboardUrl(
-              `/dashboard/${invDashboard.dashboardConfigName}?spreadsheetId=${invDashboard.spreadsheetId}&sheetName=${encodeURIComponent(invDashboard.sheetName)}`
-            );
-          }
-
-          setUserData({
-            clientName: data.clientName || "Guest User",
-            clientId: data.clientId || "N/A",
-            package: data.planType || "Basic",
-            daysRemaining: data.expiresAt
-              ? Math.ceil((new Date(data.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-              : 0,
-            hasERP,
-            hasCRM,
-          });
-        }
-      } catch (error) {
-        console.error("Failed to fetch user data:", error);
-      }
-    };
-
-    if (session) {
-      fetchUserData();
-    }
+    if (!session) return;
+    setLoadingTasks(true);
+    Promise.all([
+      fetch("/api/tasks?mode=inbox").then((r) => r.json()).catch(() => ({})),
+      fetch("/api/tasks?mode=sent").then((r) => r.json()).catch(() => ({})),
+    ]).then(([inbox, sent]) => {
+      setInboxTasks(inbox.tasks || []);
+      setSentTasks(sent.tasks || []);
+    }).finally(() => setLoadingTasks(false));
   }, [session]);
 
-  // ✅ NEW: Fetch Low Stock Count
   useEffect(() => {
-    const fetchLowStockCount = async () => {
-      if (!session || !hasInventoryDashboard) {
-        setLoadingLowStock(false);
-        return;
-      }
+    if (!session) return;
+    fetch("/api/user/modules")
+      .then((r) => r.json())
+      .then((data) => {
+        const hasERP = (data.modules?.length || 0) > 0;
+        const hasCRM = data.hasCRM || false;
+        const daysLeft = data.expiresAt
+          ? (() => {
+              const [m, d, y] = data.expiresAt.split("/").map(Number);
+              return Math.ceil((new Date(y, m - 1, d).getTime() - Date.now()) / 86400000);
+            })()
+          : 0;
+        setUserData({
+          clientName: data.clientName || "Guest",
+          clientId: data.clientId || "N/A",
+          package: data.planType || "Basic",
+          daysRemaining: Math.max(0, daysLeft),
+          hasERP,
+          hasCRM,
+        });
+        setModules(data.modules || []);
+        setDashboardItems(data.dashboardItems || []);
 
-      try {
-        setLoadingLowStock(true);
-        const response = await fetch("/api/inventory/low-stock");
+        // fetch documents + master databases ต่อ
+        const clientId = data.clientId;
+        const docsPromise = clientId
+          ? fetch(`/api/user/documents?clientId=${clientId}`)
+              .then((r) => r.ok ? r.json() : {})
+              .then((d) => setDocuments(d.documents || []))
+              .catch(() => {})
+          : Promise.resolve();
+        const masterPromise = fetch("/api/master/databases")
+          .then((r) => r.ok ? r.json() : {})
+          .then((d) => setMasterDbs(d.databases || []))
+          .catch(() => {});
 
-        if (response.ok) {
-          const data = await response.json();
-          setLowStockCount(data.count || 0);
-        } else {
-          console.error("Failed to fetch low stock count");
-          setLowStockCount(null);
-        }
-      } catch (error) {
-        console.error("Error fetching low stock count:", error);
-        setLowStockCount(null);
-      } finally {
-        setLoadingLowStock(false);
-      }
-    };
+        Promise.all([docsPromise, masterPromise]).then(() => {
+          setTimeout(() => setLoaded(true), 100);
+        });
+      })
+      .catch(() => setLoaded(true));
+  }, [session]);
 
-    if (hasInventoryDashboard) {
-      fetchLowStockCount();
-    }
-  }, [session, hasInventoryDashboard]);
-
-  // ✅ NEW: Go to Inventory Dashboard
-  const goToInventoryDashboard = () => {
-    if (hasInventoryDashboard && inventoryDashboardUrl) {
-      router.push(inventoryDashboardUrl);
-    }
-  };
-
-  if (status === "loading") {
+  if (status === "loading" || !userData) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4" />
           <p className="text-slate-600 font-medium">กำลังโหลด...</p>
         </div>
       </div>
     );
   }
 
+  const isExpiringSoon = userData.daysRemaining <= 5;
+  const availableSystems = SYSTEMS.filter((s) => s.condition(userData));
+
+  // Today in DD/MM/YYYY (Thai timezone)
+  const todayStr = new Date().toLocaleDateString("th-TH", {
+    timeZone: "Asia/Bangkok", day: "2-digit", month: "2-digit", year: "numeric",
+  }).replace(/\//g, "/");
+  const todayNum = new Date().toLocaleDateString("en-GB", { timeZone: "Asia/Bangkok" }); // DD/MM/YYYY
+
+  const todayTasks = inboxTasks.filter((t) => t.status === "pending" && t.dueDate === todayNum);
+  const allPendingTasks = inboxTasks.filter((t) => t.status === "pending");
+  const displayTasks = todayTasks.length > 0 ? todayTasks : allPendingTasks.slice(0, 5);
+
+  const sentPending = sentTasks.filter((t) => t.status === "pending").length;
+  const sentDone = sentTasks.filter((t) => t.status === "done").length;
+
   return (
-    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50">
+    <div
+      className="h-screen flex flex-col overflow-hidden bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50"
+      style={{ fontFamily: "var(--font-noto-sans-thai), sans-serif" }}
+    >
       {/* Animated Background Blobs */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-300 rounded-full mix-blend-multiply filter blur-3xl opacity-40 animate-blob"></div>
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-cyan-300 rounded-full mix-blend-multiply filter blur-3xl opacity-40 animate-blob animation-delay-2000"></div>
-        <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-sky-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob" />
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-cyan-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000" />
+        <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-sky-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000" />
       </div>
 
-      {/* Header */}
-      <div className="relative z-10 px-6 py-6">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-
-          {/* Logo */}
+      {/* Top Header */}
+      <div className="relative z-20 flex-shrink-0 px-6 py-4 bg-white/80 backdrop-blur-xl border-b border-blue-100">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Image src="/logo2.png" alt="Fazzfly Logo" width={48} height={48} className="object-contain" />
+            <Image src="/logo2.png" alt="Fazzfly Logo" width={40} height={40} className="object-contain" />
             <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">
+              <h1 className="text-lg font-bold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent leading-none">
                 Fazzfly Platform
               </h1>
-              <p className="text-xs text-slate-500">Enterprise Solutions</p>
+              <p className="text-[10px] text-slate-400 tracking-widest uppercase mt-0.5">Enterprise Solutions</p>
             </div>
           </div>
 
-          {/* User Profile + Logout */}
-          <div className="flex items-center gap-3">
-
-            {/* Desktop: Avatar + Name + Logout combo */}
-            <button
-              onClick={() => signOut({ callbackUrl: "/login" })}
-              className="hidden md:flex items-center gap-2 pl-1.5 pr-4 py-1.5 rounded-full border border-slate-200 hover:border-red-200 hover:bg-red-50 transition-all duration-200 group"
-            >
-              {session?.user?.image ? (
-                <img
-                  src={session.user.image}
-                  alt="Profile"
-                  width={28}
-                  height={28}
-                  className="rounded-full"
-                />
-              ) : (
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-cyan-400 flex items-center justify-center text-white text-xs font-semibold">
-                  {session?.user?.name?.charAt(0) || "U"}
-                </div>
-              )}
-              <div className="text-left">
-                <p className="text-xs font-semibold text-slate-700 group-hover:text-red-700 leading-none">
-                  {session?.user?.name}
-                </p>
-                <p className="text-[10px] text-slate-400 group-hover:text-red-400 leading-none mt-0.5">
-                  ออกจากระบบ
-                </p>
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="flex items-center gap-2 pl-2 pr-4 py-1.5 rounded-full border border-slate-200 bg-white/80 hover:border-red-200 hover:bg-red-50 transition-all duration-200 group"
+          >
+            {session?.user?.image ? (
+              <img src={session.user.image} alt="Profile" width={28} height={28} className="rounded-full" />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-cyan-400 flex items-center justify-center text-white text-xs font-semibold">
+                {session?.user?.name?.charAt(0) || "U"}
               </div>
-              <svg className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-            </button>
-
-            {/* Mobile: Icon Only */}
-            <button
-              onClick={() => signOut({ callbackUrl: "/login" })}
-              title="ออกจากระบบ"
-              className="flex md:hidden items-center justify-center w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-all duration-200"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-            </button>
-
-          </div>
-
+            )}
+            <div className="hidden md:block text-left">
+              <p className="text-xs font-semibold text-slate-700 group-hover:text-red-700 leading-none">{session?.user?.name}</p>
+              <p className="text-[10px] text-slate-400 group-hover:text-red-400 leading-none mt-0.5">ออกจากระบบ</p>
+            </div>
+            <svg className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+          </button>
         </div>
       </div>
-      {/* Main Content */}
-      <div className="relative z-10 px-6 py-8">
-        <div className="max-w-7xl mx-auto">
-          {/* Welcome Section */}
-          <div className="text-center mb-12 animate-slideDown">
-            <h2 className="text-4xl font-bold text-slate-800 mb-3">
-              ยินดีต้อนรับกลับ, <span className="bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">{userData.clientName}</span>
-            </h2>
-            <p className="text-lg text-slate-600 font-medium">
-              จัดการข้อมูล ติดตามสถิติ และใช้งานโมดูลต่างๆ
-            </p>
-          </div>
 
-          {/* Info Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12 animate-slideDown" style={{ animationDelay: '100ms' }}>
-            {/* Package Card */}
-            <div className="bg-white/95 backdrop-blur-xl rounded-2xl p-5 border border-blue-100 shadow-lg shadow-blue-100/50 hover:shadow-xl transition-all duration-300">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 font-medium">แพ็คเกจ</p>
-                  <p className="text-lg font-bold text-slate-800">{userData.package}</p>
-                </div>
-              </div>
-            </div>
+      {/* Body: Sidebar + Main */}
+      <div className="relative z-10 flex flex-1 overflow-hidden">
 
-            {/* Client ID Card */}
-            <div className="bg-white/95 backdrop-blur-xl rounded-2xl p-5 border border-blue-100 shadow-lg shadow-blue-100/50 hover:shadow-xl transition-all duration-300">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 font-medium">ลูกค้า ID</p>
-                  <p className="text-lg font-bold text-slate-800">{userData.clientId}</p>
-                </div>
-              </div>
-            </div>
+        {/* ── Sidebar ─────────────────────────────────────────── */}
+        <aside className={`flex-shrink-0 w-72 bg-white/80 backdrop-blur-xl border-r border-blue-100 flex flex-col transition-all duration-700 ${loaded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4"}`}>
 
-            {/* Days Remaining Card */}
-            <div className="bg-white/95 backdrop-blur-xl rounded-2xl p-5 border border-green-100 shadow-lg shadow-green-100/50 hover:shadow-xl transition-all duration-300">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-500 rounded-lg">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 font-medium">คงเหลือ</p>
-                  <p className="text-lg font-bold text-green-600">{userData.daysRemaining} วัน</p>
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* System Nav — Accordion */}
+          <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+            <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold px-2 mb-3">ระบบที่ใช้งานได้</p>
+            {availableSystems.map((sys) => {
+              const isOpen = expandedKey === sys.key;
 
+              // build sub-items per system
+              const subItems: { label: string; sub?: string; color: string; onClick: () => void; section?: boolean }[] = [];
 
-          {/* System Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto animate-slideDown" style={{ animationDelay: '200ms' }}>
-            {/* ERP Card */}
-            {userData.hasERP && (
-              <div
-                onMouseEnter={() => setHoveredCard('erp')}
-                onMouseLeave={() => setHoveredCard(null)}
-                onClick={() => router.push(ROUTES.ERP_HOME)}
-                className="relative group cursor-pointer"
-              >
-                <div className={`
-                  bg-white/95 backdrop-blur-xl rounded-3xl p-8 border border-blue-100 
-                  transition-all duration-500 shadow-xl
-                  ${hoveredCard === 'erp' ? 'shadow-2xl shadow-blue-500/30 -translate-y-2 scale-105' : 'shadow-blue-100/50'}
-                `}>
-                  <div className="absolute -top-3 -right-3 bg-gradient-to-r from-blue-600 to-cyan-500 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-lg">
-                    Active
-                  </div>
+              if (sys.key === "erp") {
+                subItems.push({ label: "หน้าหลัก ERP", color: "bg-blue-500", onClick: () => router.push("/ERP/home") });
 
-                  <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/30 group-hover:scale-110 transition-transform duration-300">
-                    <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                  </div>
+                if (modules.length > 0) {
+                  subItems.push({ label: "── โมดูล ──", color: "bg-slate-300", onClick: () => {}, section: true });
+                  modules.forEach((m: any) => subItems.push({
+                    label: m.moduleName, sub: "บันทึกข้อมูล", color: "bg-emerald-500",
+                    onClick: () => router.push(`/ERP/form?moduleId=${m.moduleId}&spreadsheetId=${m.spreadsheetId}&configName=${m.configName}&sheetName=${m.sheetName}`),
+                  }));
+                }
 
-                  <h3 className="text-3xl font-bold text-center mb-3 bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">
-                    FAZZFLY ERP
-                  </h3>
+                if (dashboardItems.length > 0) {
+                  subItems.push({ label: "── Dashboard ──", color: "bg-slate-300", onClick: () => {}, section: true });
+                  dashboardItems.forEach((d: any) => subItems.push({
+                    label: d.dashboardName, sub: "Dashboard", color: "bg-violet-500",
+                    onClick: () => router.push(`/ERP/home?tab=dashboard&dashboardId=${d.dashboardId}`),
+                  }));
+                }
 
-                  <p className="text-center text-slate-600 mb-6 font-medium">
-                    ระบบบริหารจัดการทรัพยากรองค์กร
-                  </p>
+                if (documents.length > 0) {
+                  subItems.push({ label: "── เอกสาร ──", color: "bg-slate-300", onClick: () => {}, section: true });
+                  documents.forEach((doc: any) => subItems.push({
+                    label: doc.moduleName, sub: "สร้างเอกสาร", color: "bg-teal-500",
+                    onClick: () => router.push(getDocumentRoute(doc)),
+                  }));
+                }
 
-                  <div className="space-y-3 mb-6">
-                    {[
-                      { icon: "📊", text: "Sales & Financial" },
-                      { icon: "📦", text: "Inventory Management" },
-                      { icon: "💰", text: "Expense Tracking" },
-                      { icon: "👥", text: "Payroll System" },
-                    ].map((feature, idx) => (
-                      <div key={idx} className="flex items-center gap-3 text-sm bg-blue-50 rounded-xl p-3 border border-blue-100">
-                        <span className="text-xl">{feature.icon}</span>
-                        <span className="text-slate-700 font-medium">{feature.text}</span>
-                      </div>
-                    ))}
-                  </div>
+                if (masterDbs.length > 0) {
+                  subItems.push({ label: "── ข้อมูลหลัก ──", color: "bg-slate-300", onClick: () => {}, section: true });
+                  masterDbs.forEach((db: any) => subItems.push({
+                    label: db.sheetName, sub: "Master Data", color: "bg-amber-500",
+                    onClick: () => router.push(getMasterDataRoute(db)),
+                  }));
+                }
 
-                  <button className={`
-                    w-full py-4 rounded-2xl font-bold text-lg
-                    bg-gradient-to-r from-blue-600 to-cyan-500 text-white
-                    transition-all duration-300
-                    ${hoveredCard === 'erp' ? 'shadow-xl shadow-blue-500/40' : 'shadow-lg'}
-                  `}>
-                    เข้าสู่ระบบ ERP
-                    <svg className="w-5 h-5 inline-block ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                subItems.push({ label: "── อื่นๆ ──", color: "bg-slate-300", onClick: () => {}, section: true });
+                subItems.push({ label: "Activity Log", sub: "ประวัติการทำงาน", color: "bg-rose-500", onClick: () => router.push("/ERP/home?tab=logs") });
+              }
+
+              if (sys.key === "crm") {
+                subItems.push({ label: "หน้าหลัก CRM", color: "bg-purple-500", onClick: () => router.push("/CRM/home") });
+              }
+
+              if (sys.key === "tasks") {
+                subItems.push({ label: "งานที่ได้รับ (Inbox)", color: "bg-violet-500", onClick: () => router.push("/tasks?tab=inbox") });
+                subItems.push({ label: "งานที่มอบหมาย (Sent)", color: "bg-fuchsia-500", onClick: () => router.push("/tasks?tab=sent") });
+              }
+
+              return (
+                <div key={sys.key}>
+                  {/* System header button */}
+                  <button
+                    onClick={() => setExpandedKey(isOpen ? null : sys.key)}
+                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-2xl text-left transition-all duration-200 group
+                      ${isOpen ? "bg-slate-100" : "hover:bg-slate-50"}`}
+                  >
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br ${sys.gradient} shadow-md ${sys.glow}`}>
+                      {sys.icon}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold truncate text-slate-800">{sys.label}</p>
+                      <p className="text-[11px] truncate text-slate-400">{sys.sub}</p>
+                    </div>
+                    <svg
+                      className={`w-4 h-4 flex-shrink-0 text-slate-400 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
+                      fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </button>
+
+                  {/* Sub-items */}
+                  {isOpen && (
+                    <div className="ml-4 mt-1 space-y-0.5 border-l-2 border-slate-100 pl-3">
+                      {subItems.map((item, i) =>
+                        item.section ? (
+                          <p key={i} className="text-[9px] text-slate-400 uppercase tracking-widest font-bold px-2 pt-2 pb-0.5">
+                            {item.label.replace(/──\s?|\s?──/g, "").trim()}
+                          </p>
+                        ) : (
+                          <button
+                            key={i}
+                            onClick={item.onClick}
+                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl text-left hover:bg-slate-50 transition-colors group"
+                          >
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${item.color}`} />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-semibold text-slate-700 truncate group-hover:text-slate-900">{item.label}</p>
+                              {item.sub && <p className="text-[10px] text-slate-400">{item.sub}</p>}
+                            </div>
+                            <svg className="w-3 h-3 text-slate-300 flex-shrink-0 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        )
+                      )}
+                    </div>
+                  )}
                 </div>
-
-                <div className={`
-                  absolute inset-0 rounded-3xl bg-gradient-to-r from-blue-500 to-cyan-400 
-                  transition-opacity duration-300 -z-10 blur-2xl
-                  ${hoveredCard === 'erp' ? 'opacity-40' : 'opacity-0'}
-                `}></div>
-              </div>
-            )}
-
-            {/* CRM Card */}
-            {userData.hasCRM && (
-              <div
-                onMouseEnter={() => setHoveredCard('crm')}
-                onMouseLeave={() => setHoveredCard(null)}
-                onClick={() => router.push(ROUTES.CRM_HOME)}
-                className="relative group cursor-pointer"
-              >
-                <div className={`
-                  bg-white/95 backdrop-blur-xl rounded-3xl p-8 border border-purple-100 
-                  transition-all duration-500 shadow-xl
-                  ${hoveredCard === 'crm' ? 'shadow-2xl shadow-purple-500/30 -translate-y-2 scale-105' : 'shadow-purple-100/50'}
-                `}>
-                  <div className="absolute -top-3 -right-3 bg-gradient-to-r from-purple-600 to-pink-500 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-lg">
-                    Active
-                  </div>
-
-                  <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/30 group-hover:scale-110 transition-transform duration-300">
-                    <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                  </div>
-
-                  <h3 className="text-3xl font-bold text-center mb-3 bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent">
-                    FAZZFLY CRM
-                  </h3>
-
-                  <p className="text-center text-slate-600 mb-6 font-medium">
-                    ระบบบริหารจัดการลูกค้าสัมพันธ์
-                  </p>
-
-                  <div className="space-y-3 mb-6">
-                    {[
-                      { icon: "👥", text: "Contact Management" },
-                      { icon: "🎯", text: "Lead Tracking" },
-                      { icon: "💼", text: "Sales Pipeline" },
-                      { icon: "📈", text: "Analytics & Reports" },
-                    ].map((feature, idx) => (
-                      <div key={idx} className="flex items-center gap-3 text-sm bg-purple-50 rounded-xl p-3 border border-purple-100">
-                        <span className="text-xl">{feature.icon}</span>
-                        <span className="text-slate-700 font-medium">{feature.text}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <button className={`
-                    w-full py-4 rounded-2xl font-bold text-lg
-                    bg-gradient-to-r from-purple-600 to-pink-500 text-white
-                    transition-all duration-300
-                    ${hoveredCard === 'crm' ? 'shadow-xl shadow-purple-500/40' : 'shadow-lg'}
-                  `}>
-                    เข้าสู่ระบบ CRM
-                    <svg className="w-5 h-5 inline-block ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                    </svg>
-                  </button>
-                </div>
-
-                <div className={`
-                  absolute inset-0 rounded-3xl bg-gradient-to-r from-purple-500 to-pink-400 
-                  transition-opacity duration-300 -z-10 blur-2xl
-                  ${hoveredCard === 'crm' ? 'opacity-40' : 'opacity-0'}
-                `}></div>
-              </div>
-            )}
+              );
+            })}
           </div>
-
-          {/* No Access Message */}
-          {!userData.hasERP && !userData.hasCRM && (
-            <div className="text-center py-12 animate-slideDown" style={{ animationDelay: '300ms' }}>
-              <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-8 max-w-md mx-auto">
-                <svg className="w-16 h-16 mx-auto mb-4 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <h3 className="text-xl font-bold text-slate-800 mb-2">ไม่มีสิทธิ์เข้าถึงระบบ</h3>
-                <p className="text-slate-600 mb-4">กรุณาติดต่อผู้ดูแลระบบเพื่อขอสิทธิ์การใช้งาน</p>
-                <Link href={ROUTES.PRICING} className="inline-block px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors">
-                  ดูแพ็คเกจ
-                </Link>
-              </div>
-            </div>
-          )}
 
           {/* Footer */}
-          <div className="text-center mt-12 animate-slideDown" style={{ animationDelay: '400ms' }}>
-            <p className="text-sm text-slate-600 font-medium">
-              ต้องการความช่วยเหลือ? <Link href={ROUTES.SUPPORT} className="text-blue-600 hover:text-blue-700 font-semibold">ติดต่อฝ่ายสนับสนุน</Link>
-            </p>
-            <p className="text-xs text-slate-500 mt-2">
-              © 2025 Fazzfly Platform. All rights reserved.
+          <div className="px-5 py-4 border-t border-slate-100">
+            <p className="text-[10px] text-slate-400 text-center">
+              <Link href={ROUTES.SUPPORT} className="hover:text-blue-600 transition-colors">ติดต่อฝ่ายสนับสนุน</Link>
+              {" · "}© 2025 Fazzfly
             </p>
           </div>
-        </div>
+        </aside>
+
+        {/* ── Main Content ────────────────────────────────────── */}
+        <main className="flex-1 overflow-y-auto px-8 py-8">
+          <div className={`transition-all duration-700 ${loaded ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
+
+            {/* User Info — center */}
+            <div className="mb-10 text-center">
+              {/* Role badge */}
+              {!roleLoading && role && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-4
+                  bg-gradient-to-r from-blue-100 to-cyan-100 border border-blue-200">
+                  <span className={`w-2 h-2 rounded-full animate-pulse ${
+                    role === "SUPER_ADMIN" ? "bg-rose-500" :
+                    role === "ADMIN" ? "bg-blue-500" : "bg-green-500"
+                  }`} />
+                  <span className={`text-xs font-bold tracking-wide ${
+                    role === "SUPER_ADMIN" ? "text-rose-600" :
+                    role === "ADMIN" ? "text-blue-600" : "text-green-600"
+                  }`}>
+                    {role === "SUPER_ADMIN" ? "Super Admin" :
+                     role === "ADMIN" ? "Admin" : "Staff"}
+                  </span>
+                </div>
+              )}
+
+              <h2 className="text-5xl font-bold text-slate-800 mb-2 leading-tight">
+                ยินดีต้อนรับ,{" "}
+                <span className="bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">
+                  {userData.clientName}
+                </span>
+              </h2>
+              <p className="text-slate-400 mb-8">เลือกระบบจากแถบซ้ายเพื่อเริ่มใช้งาน</p>
+
+              <div className="inline-flex items-stretch gap-4 flex-wrap justify-center">
+                <div className="bg-white/90 backdrop-blur-xl rounded-2xl px-8 py-5 border border-blue-100 shadow-lg text-center min-w-[120px]">
+                  <p className="text-xs text-slate-400 font-medium mb-1.5">แพ็คเกจ</p>
+                  <p className="text-xl font-bold text-slate-800">{userData.package}</p>
+                </div>
+                <div className={`bg-white/90 backdrop-blur-xl rounded-2xl px-8 py-5 border shadow-lg text-center min-w-[120px] ${isExpiringSoon ? "border-amber-200" : "border-green-200"}`}>
+                  <p className="text-xs text-slate-400 font-medium mb-1.5">คงเหลือ</p>
+                  <p className={`text-xl font-bold ${isExpiringSoon ? "text-amber-600" : "text-green-600"}`}>
+                    <AnimatedNumber value={userData.daysRemaining} /> วัน
+                  </p>
+                </div>
+                <div className="bg-white/90 backdrop-blur-xl rounded-2xl px-8 py-5 border border-blue-100 shadow-lg text-center min-w-[120px]">
+                  <p className="text-xs text-slate-400 font-medium mb-1.5">Client ID</p>
+                  <p className="text-xl font-bold text-blue-600">{userData.clientId}</p>
+                </div>
+              </div>
+            </div>
+
+            {!roleLoading && (
+              <>
+                {/* ── Admin: Overview Dashboard + Task Summary ── */}
+                {isAdmin() && (
+                  <div className="space-y-6">
+                    {/* Task Summary */}
+                    <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-violet-100 shadow-lg p-6">
+                      <div className="flex items-center justify-between mb-5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-md">
+                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                            </svg>
+                          </div>
+                          <span className="font-bold text-slate-800">สรุปงานที่มอบหมาย</span>
+                        </div>
+                        <button onClick={() => router.push("/tasks")} className="text-xs text-violet-600 hover:text-violet-800 font-medium">
+                          ดูทั้งหมด →
+                        </button>
+                      </div>
+                      {loadingTasks ? (
+                        <div className="flex justify-center py-4">
+                          <div className="w-5 h-5 border-2 border-violet-300 border-t-violet-600 rounded-full animate-spin" />
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="bg-slate-50 rounded-2xl p-4 text-center">
+                            <p className="text-2xl font-bold text-slate-800">{sentTasks.length}</p>
+                            <p className="text-xs text-slate-400 mt-1">ทั้งหมด</p>
+                          </div>
+                          <div className="bg-amber-50 rounded-2xl p-4 text-center border border-amber-100">
+                            <p className="text-2xl font-bold text-amber-600">{sentPending}</p>
+                            <p className="text-xs text-amber-500 mt-1">ยังไม่เสร็จ</p>
+                          </div>
+                          <div className="bg-green-50 rounded-2xl p-4 text-center border border-green-100">
+                            <p className="text-2xl font-bold text-green-600">{sentDone}</p>
+                            <p className="text-xs text-green-500 mt-1">เสร็จแล้ว</p>
+                          </div>
+                        </div>
+                      )}
+                      {/* Recent pending tasks */}
+                      {!loadingTasks && sentPending > 0 && (
+                        <div className="mt-4 space-y-2">
+                          <p className="text-xs text-slate-400 font-medium">งานที่ยังค้างอยู่</p>
+                          {sentTasks.filter((t) => t.status === "pending").slice(0, 3).map((t) => (
+                            <div key={t.taskId} className="flex items-center gap-3 px-3 py-2 bg-amber-50/50 rounded-xl border border-amber-100">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
+                              <p className="text-sm text-slate-700 truncate flex-1">{t.title}</p>
+                              <p className="text-[11px] text-slate-400 flex-shrink-0">{t.assigneeEmail.split("@")[0]}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Overview Dashboard */}
+                    {dashboardItems.length > 0 && (
+                      <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-blue-100 shadow-lg shadow-blue-100/30 p-6">
+                        <OverviewDashboard dashboardItems={dashboardItems} />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Staff: Today's Tasks ── */}
+                {!isAdmin() && (
+                  <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-violet-100 shadow-lg p-6">
+                    <div className="flex items-center justify-between mb-5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-md">
+                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                          </svg>
+                        </div>
+                        <div>
+                          <span className="font-bold text-slate-800">งานของฉันวันนี้</span>
+                          {todayTasks.length === 0 && allPendingTasks.length > 0 && (
+                            <span className="ml-2 text-xs text-slate-400">(แสดงงานที่รอดำเนินการ)</span>
+                          )}
+                        </div>
+                      </div>
+                      <button onClick={() => router.push("/tasks")} className="text-xs text-violet-600 hover:text-violet-800 font-medium">
+                        ดูทั้งหมด →
+                      </button>
+                    </div>
+
+                    {loadingTasks ? (
+                      <div className="flex justify-center py-8">
+                        <div className="w-5 h-5 border-2 border-violet-300 border-t-violet-600 rounded-full animate-spin" />
+                      </div>
+                    ) : displayTasks.length === 0 ? (
+                      <div className="py-10 text-center">
+                        <p className="text-3xl mb-2">✅</p>
+                        <p className="text-slate-400 text-sm">ไม่มีงานที่ค้างอยู่ สบายใจได้เลย!</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {displayTasks.map((t) => {
+                          const isToday = t.dueDate === todayNum;
+                          const isDue = t.dueDate && t.dueDate < todayNum;
+                          return (
+                            <div key={t.taskId} className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-colors
+                              ${isDue ? "bg-red-50 border-red-100" : isToday ? "bg-amber-50 border-amber-100" : "bg-slate-50 border-slate-100"}`}>
+                              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isDue ? "bg-red-400" : isToday ? "bg-amber-400" : "bg-violet-400"}`} />
+                              <p className="text-sm text-slate-700 flex-1 truncate">{t.title}</p>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                {t.dueDate && (
+                                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full
+                                    ${isDue ? "bg-red-100 text-red-600" : isToday ? "bg-amber-100 text-amber-700" : "text-slate-400"}`}>
+                                    {isDue ? "🔴 เกินกำหนด" : isToday ? "⚠️ วันนี้" : t.dueDate}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {allPendingTasks.length > 5 && (
+                          <p className="text-center text-xs text-slate-400 pt-1">และอีก {allPendingTasks.length - 5} งาน</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Stats */}
+                    {!loadingTasks && (
+                      <div className="grid grid-cols-2 gap-3 mt-5 pt-5 border-t border-slate-100">
+                        <div className="bg-amber-50 rounded-2xl p-3 text-center border border-amber-100">
+                          <p className="text-xl font-bold text-amber-600">{allPendingTasks.length}</p>
+                          <p className="text-xs text-amber-500 mt-0.5">ยังไม่เสร็จ</p>
+                        </div>
+                        <div className="bg-green-50 rounded-2xl p-3 text-center border border-green-100">
+                          <p className="text-xl font-bold text-green-600">{inboxTasks.filter((t) => t.status === "done").length}</p>
+                          <p className="text-xs text-green-500 mt-0.5">เสร็จแล้ว</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </main>
       </div>
 
-      <style jsx>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @keyframes blob {
-          0%, 100% {
-            transform: translate(0, 0) scale(1);
-          }
-          33% {
-            transform: translate(30px, -50px) scale(1.1);
-          }
-          66% {
-            transform: translate(-20px, 20px) scale(0.9);
-          }
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          33% { transform: translate(30px, -50px) scale(1.1); }
+          66% { transform: translate(-20px, 20px) scale(0.9); }
         }
-        @keyframes slideDown {
-          from {
-            opacity: 0;
-            transform: translateY(-20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-blob {
-          animation: blob 7s infinite;
-        }
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-        .animation-delay-4000 {
-          animation-delay: 4s;
-        }
-        .animate-slideDown {
-          animation: slideDown 0.6s ease-out;
-        }
-      `}</style>
+        .animate-blob { animation: blob 7s infinite; }
+        .animation-delay-2000 { animation-delay: 2s; }
+        .animation-delay-4000 { animation-delay: 4s; }
+      `}} />
     </div>
   );
 }

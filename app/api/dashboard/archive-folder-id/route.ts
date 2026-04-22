@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 
 const MASTER_CONFIG_ID = process.env.MASTER_SHEET_ID || "1j7LguHaX8pIvvQ1PqqenuguOsPT1QthJqXJyMYW2xo8";
-const SHEET_NAME = "client_modules";
+const SHEET_NAME = "client_dashboard";
 
 // ✅ Cache (15 minutes - archive folder IDs ไม่ค่อยเปลี่ยน)
 const folderCache = new Map<string, { data: any; timestamp: number }>();
@@ -204,7 +204,9 @@ export async function GET(request: NextRequest) {
 
     console.log(`📊 [${requestId}] Sheet: ${rows.length} rows`);
 
-    // ✅ Column indices (verified)
+    // ✅ Column indices — client_dashboard sheet
+    // A:module_id B:client_id C:module_name D:spreadsheet_id E:sheet_name
+    // F:config_name G:is_active H:notes I:archive_folder_id
     const COLS = {
       moduleId: 0,
       clientId: 1,
@@ -214,8 +216,7 @@ export async function GET(request: NextRequest) {
       configName: 5,
       isActive: 6,
       notes: 7,
-      dashboardConfigName: 8,
-      archiveFolderId: 9, // ✅ Column J
+      archiveFolderId: 8, // ✅ Column I
     };
 
     console.log(`🔎 [${requestId}] Searching: clientId="${clientId}", moduleName="${moduleName}"`);
@@ -281,7 +282,7 @@ export async function GET(request: NextRequest) {
             module_name: matchingRow[COLS.moduleName],
             is_active: matchingRow[COLS.isActive],
           },
-          hint: "Please add archive folder ID in Google Sheet Column J",
+          hint: "Please add archive folder ID in client_dashboard Sheet Column I",
         },
         { status: 404 }
       );

@@ -451,8 +451,11 @@ export default function ReceiptSimplePage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-teal-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-emerald-600 mx-auto mb-4"></div>
-          <p className="text-slate-600">กำลังโหลดข้อมูล...</p>
+          <div className="relative w-16 h-16 mx-auto mb-4">
+            <div className="absolute inset-0 rounded-full border-4 border-emerald-100" />
+            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-emerald-600 animate-spin" />
+          </div>
+          <p className="text-slate-600 font-medium">กำลังโหลดข้อมูล...</p>
         </div>
       </div>
     );
