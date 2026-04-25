@@ -160,7 +160,37 @@ export const getDays = (y: number, m: number) => new Date(y, m + 1, 0).getDate()
 export const getFirst = (y: number, m: number) => new Date(y, m, 1).getDay();
 export const fmtDate = (s: string) => {
   if (!s) return "—";
-  try { const d = new Date(s); return `${d.getDate()} ${TH_M_SHORT[d.getMonth()]} ${d.getFullYear() + 543}`; } catch { return s; }
+  try {
+    let d: Date;
+
+    // Google Sheets serial number (เช่น 46000 = วันที่นับจาก 30 ธ.ค. 1899)
+    if (/^\d{4,6}$/.test(s.trim()) && Number(s) > 1000) {
+      const serial = Number(s);
+      d = new Date(Date.UTC(1899, 11, 30) + serial * 86400000);
+      return `${d.getUTCDate()} ${TH_M_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear() + 543}`;
+    }
+
+    // DD/MM/YYYY หรือ DD-MM-YYYY (Thai format)
+    const dmyMatch = s.trim().match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+    if (dmyMatch) {
+      const [, dd, mm, yy] = dmyMatch;
+      let year = Number(yy);
+      // ถ้าปีเป็น Buddhist era (> 2400) ให้แปลงเป็น CE ก่อน
+      if (year > 2400) year -= 543;
+      d = new Date(year, Number(mm) - 1, Number(dd));
+      return `${d.getDate()} ${TH_M_SHORT[d.getMonth()]} ${d.getFullYear() + 543}`;
+    }
+
+    // YYYY-MM-DD หรือ ISO
+    d = new Date(s);
+    if (isNaN(d.getTime())) return s;
+    const year = d.getFullYear();
+    // ถ้าปีเป็น Buddhist era แล้ว (> 2400) ไม่ต้องบวก 543
+    const buddhistYear = year > 2400 ? year : year + 543;
+    return `${d.getDate()} ${TH_M_SHORT[d.getMonth()]} ${buddhistYear}`;
+  } catch {
+    return s;
+  }
 };
 
 // ─── Row converters ───────────────────────────────────────────────────────────

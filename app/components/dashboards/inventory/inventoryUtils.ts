@@ -81,11 +81,6 @@ export function generateInventoryKPI(
   rows: any[],
   configFields: ConfigField[]
 ): KPIData {
-  console.log("═".repeat(60));
-  console.log("📦 [generateInventoryKPI] START");
-  console.log("   Rows:", rows.length);
-  console.log("   Config fields:", configFields.length);
-  console.log("═".repeat(60));
 
   // Find required fields with fallbacks
   let productField = configFields.find((f) => f.fieldName === "product");
@@ -121,7 +116,6 @@ export function generateInventoryKPI(
   }
 
   if (!productField || !stockPriceField) {
-    console.error("\n❌ Required fields not found!");
     return { 
       totalValue: 0, 
       productCount: 0, 
@@ -131,10 +125,7 @@ export function generateInventoryKPI(
     };
   }
 
-  console.log("\n✅ All required fields found!");
-  console.log(`   Using: product="${productField.fieldName}", stockprice="${stockPriceField.fieldName}"`);
   if (statusField) {
-    console.log(`   Status field: "${statusField.fieldName}"`);
   }
 
   let totalValue = 0;
@@ -176,9 +167,6 @@ export function generateInventoryKPI(
 
     // Debug first 3 processed rows
     if (processedRows <= 3) {
-      console.log(`\n   Processing row ${index}: ${product}`);
-      console.log(`     Stock Price: ${row[stockPriceField.fieldName]} → ${value}`);
-      console.log(`     Status: "${status}"`);
     }
   });
 
@@ -190,16 +178,6 @@ export function generateInventoryKPI(
     normalStockCount,
   };
 
-  console.log("\n" + "═".repeat(60));
-  console.log("✅ [generateInventoryKPI] COMPLETE");
-  console.log(`   Processed: ${processedRows} rows`);
-  console.log(`   Skipped: ${skippedRows} rows (empty product)`);
-  console.log(`   Total Value: ฿${result.totalValue.toLocaleString("th-TH")}`);
-  console.log(`   Unique Products: ${result.productCount}`);
-  console.log(`    Critical (ใกล้หมด): ${result.criticalStockCount}`);
-  console.log(`    Low Stock (สต๊อกต่ำ): ${result.lowStockCount}`);
-  console.log(`    Normal (ปกติ): ${result.normalStockCount}`);
-  console.log("═".repeat(60));
 
   return result;
 }
@@ -217,8 +195,6 @@ export function getLowStockItems(
   rows: any[],
   configFields: ConfigField[]
 ): LowStockItem[] {
-  console.log("⚠️ [getLowStockItems] Checking low stock...");
-  console.log(`   Total rows: ${rows.length}`);
 
   // Find fields with fallbacks
   let productField = configFields.find((f) => f.fieldName === "product");
@@ -259,11 +235,9 @@ export function getLowStockItems(
   }
 
   if (!productField || !remainField || !stockPriceField || !statusField) {
-    console.error("❌ Required fields not found for low stock check!");
     return [];
   }
 
-  console.log(`   Using: status="${statusField.fieldName}"`);
 
   const lowStockStatuses = ["สต๊อกต่ำ", "ใกล้หมด"];
 
@@ -287,7 +261,6 @@ export function getLowStockItems(
     })
     .filter((item) => item.product); // Remove empty products
 
-  console.log(`   ✅ Found ${results.length} low stock items`);
   return results;
 }
 
@@ -303,8 +276,6 @@ export function generateProductTableData(
   rows: any[],
   configFields: ConfigField[]
 ): ProductTableRow[] {
-  console.log("📋 [generateProductTableData] Generating table...");
-  console.log(`   Total rows: ${rows.length}`);
 
   // Find fields with fallbacks
   let productField = configFields.find((f) => f.fieldName === "product");
@@ -345,7 +316,6 @@ export function generateProductTableData(
   }
 
   if (!productField || !remainField || !stockPriceField || !statusField) {
-    console.error("❌ Required fields not found for product table!");
     return [];
   }
 
@@ -365,7 +335,6 @@ export function generateProductTableData(
     })
     .filter((item) => item.product); // Remove empty products
 
-  console.log(`   ✅ Generated ${results.length} table rows`);
   return results;
 }
 

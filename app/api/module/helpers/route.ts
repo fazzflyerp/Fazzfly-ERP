@@ -1,6 +1,14 @@
 /**
- * Helper/Dropdown Options API
- * Location: app/api/module/helpers/route.ts
+ * Helper / Dropdown Options API — ดึงตัวเลือก dropdown จาก helper sheet
+ * path: app/api/module/helpers/route.ts
+ *
+ * GET /api/module/helpers?spreadsheetId=&helperName=
+ *   → อ่านชีท helperName (เช่น Helper_OPD, Helper_Doctor) แล้วคืน options[]
+ *   → ใช้ render dropdown ในฟอร์มกรอกข้อมูล ERP
+ *
+ * helper sheet: A=id | B=label | C=extra (optional)
+ * ✅ ถ้าไม่พบ sheet → คืน options=[] แทน error (ไม่ block UI)
+ * ✅ ตรวจสิทธิ์ verifySheetAccess ก่อนอ่าน
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -47,11 +55,21 @@ async function _GET(request: NextRequest) {
       );
     }
 
-    const options = rows.slice(1)
+    // detect ว่าแถวแรกเป็น header จริงมั้ย
+    // ถ้า cell ใดใน row 1 ตรงกับ keyword → มี header → slice(1)
+    // ถ้าไม่ตรง → ไม่มี header → ใช้ทั้งหมด
+    const HEADER_KEYWORDS = ["id","value","name","label","detail","ชื่อ","รหัส","หมายเหตุ","รายละเอียด"];
+    const firstRow = rows[0] || [];
+    const hasHeader = firstRow.some((cell: any) =>
+      HEADER_KEYWORDS.includes(cell?.toString().trim().toLowerCase())
+    );
+    const dataRows = hasHeader ? rows.slice(1) : rows;
+
+    const options = dataRows
       .filter((row: any[]) => row[0])
       .map((row: any[]) => {
         const value  = row[0]?.toString() || "";
-        const name   = row[1]?.toString() || "";
+        const name   = row[1]?.toString() || value;
         const detail = row[2]?.toString() || "";
         return { value, label: detail ? `${name} - ${detail}` : name };
       });

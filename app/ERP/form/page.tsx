@@ -54,6 +54,8 @@ export default function FormPage() {
     const configName = searchParams.get("configName");
     const sheetName = searchParams.get("sheetName");
 
+    const isPayroll = !!(configName?.toLowerCase().includes("payroll"));
+
     useEffect(() => {
         if (status === "unauthenticated") {
             router.push("/login");
@@ -116,6 +118,17 @@ export default function FormPage() {
             }
 
             setHelperOptions(helperData);
+
+            // payroll: init skeleton rows for current month
+            if (configName?.toLowerCase().includes("payroll") && spreadsheetId && sheetName) {
+                try {
+                    await fetch("/api/payroll/init-month", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ spreadsheetId, sheetName, fields }),
+                    });
+                } catch { /* silent — init failure shouldn't block form */ }
+            }
         } catch (err: any) {
             console.error("Error fetching form config:", err);
             setError(err.message || "Failed to load form");
@@ -217,7 +230,7 @@ export default function FormPage() {
 
         if (hasSection) {
             const missingCustomer = customerFields
-                .filter((f) => f.required && !customerData[f.fieldName])
+                .filter((f) => f.required && f.type !== "date" && !customerData[f.fieldName])
                 .map((f) => f.label)
                 .join(", ");
 
@@ -238,7 +251,7 @@ export default function FormPage() {
             for (let i = 0; i < filledItems.length; i++) {
                 const row = filledItems[i];
                 const missing = lineItemFields
-                    .filter((f) => f.required && !row[f.fieldName])
+                    .filter((f) => f.required && f.type !== "date" && !row[f.fieldName])
                     .map((f) => f.label)
                     .join(", ");
 
@@ -260,7 +273,7 @@ export default function FormPage() {
             for (let i = 0; i < filledRows.length; i++) {
                 const row = filledRows[i];
                 const missing = formFields
-                    .filter((f) => f.required && !row[f.fieldName])
+                    .filter((f) => f.required && f.type !== "date" && !row[f.fieldName])
                     .map((f) => f.label)
                     .join(", ");
 
@@ -274,11 +287,13 @@ export default function FormPage() {
         setSubmitting(true);
 
         try {
-            const apiEndpoint = hasSection 
-                ? "/api/module/submit-sales" 
-                : "/api/module/submit-general";
+            const apiEndpoint = isPayroll
+                ? "/api/payroll/upsert-row"
+                : hasSection
+                    ? "/api/module/submit-sales"
+                    : "/api/module/submit-general";
 
-            const payload = hasSection
+            const payload = hasSection && !isPayroll
                 ? {
                     spreadsheetId,
                     sheetName,
@@ -782,8 +797,8 @@ export default function FormPage() {
                                 {(() => {
                                     const isBottomField = (fn: string) => fn === "staff" || fn === "doctor";
                                     const regularFields = [
-                                        ...customerFields.filter(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && !isBottomField(f.fieldName)),
-                                        ...customerFields.filter(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && isBottomField(f.fieldName)),
+                                        ...customerFields.filter(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && !isBottomField(f.fieldName) && !(isPayroll && f.type === "date")),
+                                        ...customerFields.filter(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && isBottomField(f.fieldName) && !(isPayroll && f.type === "date")),
                                     ];
                                     return regularFields.length > 0 ? (
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -841,8 +856,8 @@ export default function FormPage() {
                                         {(() => {
                                             const allF = lineItemFields.length > 0 ? lineItemFields : formFields;
                                             const regularFields = [
-                                                ...allF.filter(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && f.fieldName !== "staff" && f.fieldName !== "doctor"),
-                                                ...allF.filter(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && (f.fieldName === "staff" || f.fieldName === "doctor")),
+                                                ...allF.filter(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && f.fieldName !== "staff" && f.fieldName !== "doctor" && !(isPayroll && f.type === "date")),
+                                                ...allF.filter(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && (f.fieldName === "staff" || f.fieldName === "doctor") && !(isPayroll && f.type === "date")),
                                             ];
                                             return regularFields.length > 0 ? (
                                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">

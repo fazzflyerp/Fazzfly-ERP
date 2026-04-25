@@ -89,19 +89,6 @@ export default function SalesDashboard({
   // EFFECT: Validate props on mount
   // ============================================================
   useEffect(() => {
-    console.log("🎯 Component Props:");
-    console.log(
-      "   spreadsheetId:",
-      spreadsheetId ? `${spreadsheetId.substring(0, 20)}...` : "❌ MISSING"
-    );
-    console.log("   configSheetName:", configSheetName || "❌ MISSING");
-    console.log("   dataSheetName:", dataSheetName || "❌ MISSING");
-    console.log(
-      "   accessToken:",
-      accessToken ? `${accessToken.substring(0, 20)}...` : "❌ MISSING"
-    );
-    console.log("   moduleName:", moduleName);
-    console.log("   archiveFolderId:", archiveFolderId || "(not provided)");
 
     if (!spreadsheetId || !configSheetName || !dataSheetName || !accessToken) {
       setError(
@@ -115,10 +102,8 @@ export default function SalesDashboard({
   // ============================================================
   useEffect(() => {
     if (archiveFolderId) {
-      console.log("📁 archiveFolderId is set:", archiveFolderId);
       fetchAvailableYears();
     } else {
-      console.log("ℹ️  No archiveFolderId - year filter disabled");
     }
   }, [archiveFolderId]);
 
@@ -126,16 +111,10 @@ export default function SalesDashboard({
   // EFFECT: Fetch data when year changes
   // ============================================================
   useEffect(() => {
-    console.log("━".repeat(60));
-    console.log("🔄 [Data Fetch Effect] Triggered");
 
     // ✅ Normalize: "" or null = "Current"
     const normalizedYear = selectedYear?.trim() || null;
 
-    console.log("   selectedYear (raw):", selectedYear);
-    console.log("   selectedYear (normalized):", normalizedYear || "Current");
-    console.log("   availableYears.length:", availableYears.length);
-    console.log("━".repeat(60));
 
     // ✅ Fetch data every time selectedYear changes
     // - null/"" = current year (main spreadsheet)
@@ -154,9 +133,6 @@ export default function SalesDashboard({
   // EFFECT: Filter visualizations when periods/date change (NO API CALL)
   // ============================================================
   useEffect(() => {
-    console.log("🔄 Filters changed - regenerating visualizations");
-    console.log("   Periods:", selectedPeriods.length > 0 ? selectedPeriods : "all");
-    console.log("   Date:", selectedDate || "all");
 
     if (allData.length > 0 && config.length > 0) {
       generateVisualizations(allData, selectedPeriods, config);
@@ -168,31 +144,23 @@ export default function SalesDashboard({
   // ============================================================
   const fetchAvailableYears = async () => {
     try {
-      console.log("━".repeat(60));
-      console.log("📅 [fetchAvailableYears] START");
-      console.log("━".repeat(60));
 
       setLoadingYears(true);
       let folderId = (archiveFolderId || "").trim();
 
-      console.log("📁 Input archiveFolderId:", folderId);
 
       if (
         folderId.includes("drive.google.com") ||
         folderId.includes("https://")
       ) {
-        console.log("🔗 Detected URL format, extracting ID...");
         const match = folderId.match(/folders\/([a-zA-Z0-9_-]+)/);
         if (match && match[1]) {
           folderId = match[1];
-          console.log("✅ Extracted Folder ID:", folderId);
         } else {
-          console.error("❌ Cannot extract Folder ID from URL");
           setLoadingYears(false);
           return;
         }
       } else {
-        console.log("🆔 Already in ID format:", folderId);
       }
 
       const params = new URLSearchParams({
@@ -200,9 +168,7 @@ export default function SalesDashboard({
         ...(moduleName && { moduleName }),
       });
 
-      console.log("🌐 API URL:", `/api/dashboard/archive/years?${params}`);
       if (moduleName) {
-        console.log("📦 Module Name:", moduleName);
       }
 
       const res = await fetch(`/api/dashboard/archive/years?${params}`, {
@@ -212,31 +178,21 @@ export default function SalesDashboard({
         },
       });
 
-      console.log("📡 Response status:", res.status);
 
       if (!res.ok) {
         const errorText = await res.text();
-        console.error("❌ API Error:", errorText);
         throw new Error(`HTTP ${res.status}`);
       }
 
       const data = await res.json();
 
-      console.log("✅ [fetchAvailableYears] Success:");
-      console.log("   Years found:", data.years?.length || 0);
       if (data.years && data.years.length > 0) {
-        console.log("   Years:", data.years.map((y: any) => y.year).join(", "));
         data.years.forEach((y: any) => {
-          console.log(`   - ${y.year}: ${y.fileName} (${y.spreadsheetId})`);
         });
       }
-      console.log("━".repeat(60));
 
       setAvailableYears(data.years || []);
     } catch (err: any) {
-      console.error("━".repeat(60));
-      console.error("❌ [fetchAvailableYears] Error:", err.message);
-      console.error("━".repeat(60));
     } finally {
       setLoadingYears(false);
     }
@@ -250,9 +206,6 @@ export default function SalesDashboard({
       setLoading(true);
       setError(null);
 
-      console.log("━".repeat(60));
-      console.log("📊 [fetchDashboardData] START");
-      console.log("━".repeat(60));
 
       const params = new URLSearchParams({
         spreadsheetId,
@@ -260,47 +213,27 @@ export default function SalesDashboard({
         dataSheetName,
       });
 
-      console.log("📋 Initial params:");
-      console.log("   spreadsheetId:", spreadsheetId);
-      console.log("   configSheetName:", configSheetName);
-      console.log("   dataSheetName:", dataSheetName);
 
       // ✅ Normalize: treat "" as null
       const normalizedYear = selectedYear?.trim() || null;
 
-      console.log("🔍 Year filter check:");
-      console.log("   selectedYear (raw):", selectedYear);
-      console.log("   normalizedYear:", normalizedYear || "Current");
-      console.log("   availableYears.length:", availableYears.length);
 
       if (normalizedYear && availableYears.length > 0) {
-        console.log("🔎 Looking for archive spreadsheet...");
         const found = availableYears.find((y) => y.year === normalizedYear);
 
         if (found) {
-          console.log("✅ Found archive spreadsheet:");
-          console.log("   Year:", found.year);
-          console.log("   SpreadsheetId:", found.spreadsheetId);
-          console.log("   FileName:", found.fileName);
 
           params.append("year", normalizedYear);
           params.append("archiveSpreadsheetId", found.spreadsheetId);
 
-          console.log("📦 Added to params:");
-          console.log("   year:", normalizedYear);
-          console.log("   archiveSpreadsheetId:", found.spreadsheetId);
         } else {
-          console.warn("⚠️ Archive not found for year:", normalizedYear);
         }
       } else {
-        console.log("ℹ️  No year filter (will use main spreadsheet)");
         if (normalizedYear) {
-          console.log("   (normalizedYear is set but availableYears is empty)");
         }
       }
 
       const fullUrl = `/api/dashboard/data?${params.toString()}`;
-      console.log("🌐 API URL:", fullUrl);
 
       const res = await fetch(fullUrl, {
         method: "GET",
@@ -310,11 +243,9 @@ export default function SalesDashboard({
         },
       });
 
-      console.log("📡 Response status:", res.status);
 
       if (!res.ok) {
         const errorText = await res.text();
-        console.error("❌ API Error:", errorText);
         throw new Error(`HTTP ${res.status}: ${errorText}`);
       }
 
@@ -331,27 +262,11 @@ export default function SalesDashboard({
       }
 
       // ✅ เพิ่ม Debug ตรงนี้
-      console.log("━".repeat(60));
-      console.log("📦 [API Response Debug]");
-      console.log("   Config fields:", data.config.length);
-      console.log("   Config detail:");
       data.config.forEach((f, i) => {
-        console.log(`      [${i}] ${f.fieldName} (type: ${f.type}, label: ${f.label})`);
       });
-      console.log("   Data records:", data.data.length);
       if (data.data.length > 0) {
-        console.log("   Sample data keys:", Object.keys(data.data[0]));
-        console.log("   Sample data[0]:", data.data[0]);
       }
-      console.log("   Metadata:", data.metadata);
-      console.log("   Year requested:", selectedYear || "Current");
-      console.log("━".repeat(60));
 
-      console.log("✅ [fetchDashboardData] Success:");
-      console.log("   Config fields:", data.config.length);
-      console.log("   Data records:", data.data.length);
-      console.log("   Metadata:", data.metadata);
-      console.log("━".repeat(60));
 
       setConfig(data.config);
       setAllData(data.data);
@@ -359,13 +274,9 @@ export default function SalesDashboard({
       // Generate visualizations with current filters
       generateVisualizations(data.data, selectedPeriods, data.config);
     } catch (err: any) {
-      console.error("━".repeat(60));
-      console.error("❌ [fetchDashboardData] Error:", err.message);
-      console.error("━".repeat(60));
       setError(err.message || "โหลดข้อมูลไม่สำเร็จ");
     } finally {
       // ✅ CRITICAL: Always set loading to false
-      console.log("✅ Setting loading = false");
       setLoading(false);
     }
   };
@@ -378,11 +289,6 @@ export default function SalesDashboard({
     periods: string[],
     configData: ConfigField[] = config
   ) => {
-    console.log(
-      `📊 Generating visualizations (CLIENT-SIDE ONLY):`,
-      `periods=${periods.length > 0 ? periods.join(",") : "all"}`,
-      `date=${selectedDate || "all"}`
-    );
 
     let filteredRows = rows;
 
@@ -393,9 +299,6 @@ export default function SalesDashboard({
         const beforePeriod = filteredRows.length;
         filteredRows = filteredRows.filter((row) =>
           periods.includes(String(row[periodField.fieldName]).trim())
-        );
-        console.log(
-          `   📍 Period: ${beforePeriod} → ${filteredRows.length} records`
         );
       }
     }
@@ -413,9 +316,6 @@ export default function SalesDashboard({
           const normalizedRowDate = normalizeDate(rawDate);
           return normalizedRowDate === targetDate;
         });
-        console.log(
-          `   📅 Date: ${beforeDate} → ${filteredRows.length} records (${selectedDate} = ${targetDate})`
-        );
       }
     }
 
@@ -431,12 +331,10 @@ export default function SalesDashboard({
   // HANDLERS: Filter actions
   // ============================================================
   const handlePeriodToggle = (period: string) => {
-    console.log("🔘 Period toggle clicked:", period);
     setSelectedPeriods((prev) => {
       const newSelection = prev.includes(period)
         ? prev.filter((p) => p !== period)
         : [...prev, period];
-      console.log("   📊 New selection:", newSelection);
       return newSelection;
     });
   };
@@ -448,7 +346,6 @@ export default function SalesDashboard({
   };
 
   const handleClearFilters = () => {
-    console.log("🔄 Clearing all filters");
     setSelectedYear(null);
     setSelectedDate("");
     setSelectedPeriods([]);
@@ -547,14 +444,6 @@ export default function SalesDashboard({
         archiveFolderId={archiveFolderId}
         loading={loading} // ✅ Pass loading state
         onYearChange={(year) => {
-          console.log("━".repeat(60));
-          console.log("📅 [onYearChange] Year filter changed:");
-          console.log("   From:", selectedYear);
-          console.log("   To:", year);
-          console.log("   Type:", typeof year);
-          console.log("   Is empty string?", year === "");
-          console.log("   Is null?", year === null);
-          console.log("━".repeat(60));
           setSelectedYear(year);
         }}
         onPeriodToggle={handlePeriodToggle}
@@ -562,7 +451,6 @@ export default function SalesDashboard({
         onDateChange={(date) => setSelectedDate(date)}
         onClearFilters={handleClearFilters}
         onDefaultPeriodReady={(period) => {
-          console.log("✅ Default period ready from filters:", period);
         }}
       />
 

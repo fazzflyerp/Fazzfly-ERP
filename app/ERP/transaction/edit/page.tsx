@@ -42,7 +42,9 @@ export default function TransactionEditPage() {
   const sheetName = searchParams.get("sheetName");
   const configName = searchParams.get("configName");
   const moduleName = searchParams.get("moduleName") || "จัดการข้อมูล";
-  const highlightNew = searchParams.get("highlight") === "new";
+  const highlightParam = searchParams.get("highlight");
+  const highlightNew = highlightParam === "new";
+  const highlightSpecificRow = highlightParam && highlightParam !== "new" ? parseInt(highlightParam) : null;
 
   const [config, setConfig] = useState<ConfigField[]>([]);
   const [dataRows, setDataRows] = useState<DataRow[]>([]);
@@ -148,14 +150,22 @@ export default function TransactionEditPage() {
 
       setDataRows(mappedData);
 
-      // highlight แถวล่าสุดถ้ามาจาก form
-      if (highlightNew && mappedData.length > 0) {
+      // highlight แถวที่ระบุ หรือแถวล่าสุด
+      if (highlightSpecificRow) {
+        const targetRow = mappedData.find((r) => r.rowIndex === highlightSpecificRow);
+        if (targetRow) {
+          setHighlightedRow(targetRow.rowIndex);
+          setTimeout(() => {
+            highlightRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 300);
+          setTimeout(() => setHighlightedRow(null), 4000);
+        }
+      } else if (highlightNew && mappedData.length > 0) {
         const lastRow = mappedData[mappedData.length - 1];
         setHighlightedRow(lastRow.rowIndex);
         setTimeout(() => {
           highlightRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
         }, 300);
-        // ลบ highlight หลัง 4 วิ
         setTimeout(() => setHighlightedRow(null), 4000);
       }
     } catch (err: any) {
@@ -358,20 +368,22 @@ export default function TransactionEditPage() {
       <QuickNav isOpen={navOpen} onClose={() => setNavOpen(false)} />
       <div className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 shadow-sm">
         <div className="max-w-full mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
             <QuickNavTrigger onClick={() => setNavOpen(true)} />
-            <Link href="/ERP/home?tab=transaction" className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+            <Link href="/ERP/home?tab=transaction" className="p-2 hover:bg-slate-100 rounded-full transition-colors flex-shrink-0">
               <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
             </Link>
-            <h1 className="text-lg font-bold text-slate-900">{moduleName}</h1>
+            <h1 className="text-sm sm:text-lg font-bold text-slate-900 truncate">{moduleName}</h1>
           </div>
-          <div className="flex items-center gap-3">
-            <button onClick={handleAddRow} className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-sm shadow-md flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button onClick={handleAddRow} className="p-2 sm:px-4 sm:py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-sm shadow-md flex items-center gap-2 transition-colors">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
-              เพิ่มแถว
+              <span className="hidden sm:inline">เพิ่มแถว</span>
             </button>
-            <button onClick={handleSave} disabled={saving} className="px-5 py-2 bg-indigo-600 text-white rounded-xl font-bold text-sm shadow-lg disabled:opacity-50 hover:bg-indigo-700 transition-all whitespace-nowrap">
-              {saving ? "กำลังบันทึก..." : "บันทึกทั้งหมด"}
+            <button onClick={handleSave} disabled={saving} className="px-3 py-2 sm:px-5 bg-indigo-600 text-white rounded-xl font-bold text-sm shadow-lg disabled:opacity-50 hover:bg-indigo-700 transition-all whitespace-nowrap">
+              {saving ? <span className="sm:hidden">...</span> : null}
+              <span className="hidden sm:inline">{saving ? "กำลังบันทึก..." : "บันทึกทั้งหมด"}</span>
+              <span className="sm:hidden">{saving ? "..." : "บันทึก"}</span>
             </button>
           </div>
         </div>
@@ -384,7 +396,150 @@ export default function TransactionEditPage() {
         </div>
 
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
+
+          {/* ── Mobile: Card view ─────────────────────────────── */}
+          <div className="sm:hidden divide-y divide-slate-100">
+            {filteredRows.length === 0 && (
+              <p className="py-10 text-center text-slate-400 text-sm">ไม่พบข้อมูล</p>
+            )}
+            {filteredRows.map((row, idx) => {
+              const isHighlighted = row.rowIndex === highlightedRow;
+              return (
+                <div
+                  key={row.rowIndex}
+                  ref={isHighlighted ? (highlightRef as any) : null}
+                  className={`p-4 transition-all duration-700 ${
+                    isHighlighted ? "bg-amber-50 ring-2 ring-amber-400 ring-inset"
+                    : row._isNew ? "bg-emerald-50"
+                    : row._isEditing ? "bg-indigo-50"
+                    : "bg-white"
+                  }`}
+                >
+                  {/* Card header */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      {row._isNew
+                        ? <span className="text-[10px] bg-emerald-500 text-white px-2 py-0.5 rounded-full font-bold">NEW</span>
+                        : <span className="text-xs font-bold text-slate-400">#{idx + 1}</span>
+                      }
+                      {row._isEditing && !row._isNew && (
+                        <span className="text-[10px] text-indigo-600 font-semibold bg-indigo-100 px-2 py-0.5 rounded-full">กำลังแก้ไข</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => row._isEditing ? handleCancelEdit(row.rowIndex) : handleStartEdit(row.rowIndex)}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                          row._isEditing ? "bg-slate-200 text-slate-600" : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                        }`}
+                      >
+                        {row._isEditing ? "ยกเลิก" : "แก้ไข"}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteRow(row.rowIndex)}
+                        className="p-1.5 bg-rose-50 text-rose-500 rounded-lg hover:bg-rose-100 transition-all"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Fields */}
+                  <div className="space-y-2">
+                    {config.map((field) => (
+                      <div key={field.fieldName}>
+                        {row._isEditing ? (
+                          <div className="space-y-0.5">
+                            <label className="text-[11px] font-semibold text-slate-500">
+                              {field.label}{field.required && <span className="text-red-500 ml-0.5">*</span>}
+                            </label>
+                            {field.type === "dropdown" && field.helper ? (
+                              <select
+                                value={row.data[field.fieldName] || ""}
+                                onChange={(e) => handleCellChange(row.rowIndex, field.fieldName, e.target.value)}
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 bg-white focus:border-indigo-500 outline-none"
+                              >
+                                <option value="">-- เลือก --</option>
+                                {(helperOptions[field.helper] || []).map((opt) => (
+                                  <option key={opt.value} value={opt.value}>{opt.value} - {opt.label}</option>
+                                ))}
+                              </select>
+                            ) : field.type === "date" ? (
+                              <input
+                                type="date"
+                                value={convertDateToInput(row.data[field.fieldName] || "")}
+                                onChange={(e) => handleCellChange(row.rowIndex, field.fieldName, convertDateToSheet(e.target.value))}
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 bg-white focus:border-indigo-500 outline-none"
+                              />
+                            ) : field.type === "checkbox" ? (
+                              <div className="flex items-center gap-2 py-1">
+                                <input
+                                  type="checkbox"
+                                  checked={row.data[field.fieldName] === "TRUE" || row.data[field.fieldName] === true}
+                                  onChange={(e) => handleCellChange(row.rowIndex, field.fieldName, e.target.checked ? "TRUE" : "FALSE")}
+                                  className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                />
+                                <span className="text-sm text-slate-600">{row.data[field.fieldName] === "TRUE" ? "ใช่" : "ไม่"}</span>
+                              </div>
+                            ) : field.type === "number" ? (
+                              <input
+                                type="number"
+                                value={row.data[field.fieldName] || ""}
+                                onChange={(e) => handleCellChange(row.rowIndex, field.fieldName, e.target.value)}
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 bg-white focus:border-indigo-500 outline-none"
+                                placeholder={field.label}
+                              />
+                            ) : (
+                              <textarea
+                                rows={2}
+                                value={row.data[field.fieldName] || ""}
+                                onChange={(e) => handleCellChange(row.rowIndex, field.fieldName, e.target.value)}
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 bg-white focus:border-indigo-500 outline-none resize-none"
+                                placeholder={field.label}
+                              />
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-2">
+                            <span className="text-[11px] text-slate-400 font-medium flex-shrink-0 w-24 pt-0.5">{field.label}</span>
+                            <div className="text-xs font-semibold text-slate-700 flex-1 break-words">
+                              {field.type === "checkbox" ? (
+                                row.data[field.fieldName] === "TRUE" || row.data[field.fieldName] === true
+                                  ? <span className="text-emerald-500">✓ ใช่</span>
+                                  : <span className="text-slate-300">✗ ไม่</span>
+                              ) : field.type === "image" && row.data[field.fieldName] ? (
+                                <a
+                                  href={row.data[field.fieldName]}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 text-indigo-600"
+                                >
+                                  <img
+                                    src={`https://drive.google.com/thumbnail?id=${row.data[field.fieldName].match(/[-\w]{25,}/)?.[0]}&sz=w80`}
+                                    alt="รูป"
+                                    className="w-10 h-10 object-cover rounded-lg border border-slate-200"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                  />
+                                  <span className="underline text-[11px]">ดูรูป</span>
+                                </a>
+                              ) : (
+                                row.data[field.fieldName] || <span className="text-slate-300 font-normal">-</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ── Desktop: Table view ───────────────────────────── */}
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full table-auto">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
@@ -436,7 +591,29 @@ export default function TransactionEditPage() {
                           )
                         ) : (
                           <div className="font-bold text-slate-700 text-[10px] break-words leading-relaxed max-w-[200px]">
-                            {field.type === "checkbox" ? (row.data[field.fieldName] === "TRUE" || row.data[field.fieldName] === true ? <span className="text-emerald-500 font-bold">✓ ใช่</span> : <span className="text-slate-300">✗ ไม่</span>) : (row.data[field.fieldName] || <span className="text-slate-200 italic font-normal">-</span>)}
+                            {field.type === "checkbox" ? (
+                              row.data[field.fieldName] === "TRUE" || row.data[field.fieldName] === true
+                                ? <span className="text-emerald-500 font-bold">✓ ใช่</span>
+                                : <span className="text-slate-300">✗ ไม่</span>
+                            ) : field.type === "image" && row.data[field.fieldName] ? (
+                              <a
+                                href={row.data[field.fieldName]}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 text-indigo-600 hover:text-indigo-800 transition-colors"
+                                title="คลิกเพื่อดูรูปภาพ"
+                              >
+                                <img
+                                  src={`https://drive.google.com/thumbnail?id=${row.data[field.fieldName].match(/[-\w]{25,}/)?.[0]}&sz=w80`}
+                                  alt="รูป"
+                                  className="w-10 h-10 object-cover rounded-lg border border-slate-200 flex-shrink-0"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                />
+                                <span className="underline text-[9px]">ดูรูป</span>
+                              </a>
+                            ) : (
+                              row.data[field.fieldName] || <span className="text-slate-200 italic font-normal">-</span>
+                            )}
                           </div>
                         )}
                       </td>

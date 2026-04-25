@@ -15,6 +15,7 @@ import {
   saStructuralBatchUpdate,
   saWriteRange,
   saLog,
+  saInvalidateCache,
 } from "@/lib/google-sa";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -120,6 +121,7 @@ async function insertRowsWithDateSort(params: {
 
     const endCol = getColumnLetter(headerRow.length);
     await saWriteRange(spreadsheetId, `${sheetName}!A${insertIndex}:${endCol}${insertIndex}`, [row]);
+    saInvalidateCache(spreadsheetId);
 
     console.log(`✅ [${requestId}] Row ${i + 1} inserted at ${insertIndex}`);
 

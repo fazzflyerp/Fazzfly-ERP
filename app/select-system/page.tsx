@@ -14,6 +14,8 @@ import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
 import { useUserRole } from "@/app/context/UserRoleContext";
 import OverviewDashboard from "@/app/components/dashboards/overview/OverviewDashboard";
+import QuickNav, { QuickNavTrigger } from "@/app/components/QuickNav";
+import { LangToggle } from "@/app/components/GoogleTranslate";
 
 const ROUTES = {
   ERP_HOME: "/ERP/home",
@@ -124,7 +126,9 @@ export default function SystemSelectorPage() {
   const [documents, setDocuments] = useState<any[]>([]);
   const [masterDbs, setMasterDbs] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [navOpen, setNavOpen] = useState(false);
   const [inboxTasks, setInboxTasks] = useState<any[]>([]);
   const [sentTasks, setSentTasks] = useState<any[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
@@ -148,7 +152,11 @@ export default function SystemSelectorPage() {
   useEffect(() => {
     if (!session) return;
     fetch("/api/user/modules")
-      .then((r) => r.json())
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+        return data;
+      })
       .then((data) => {
         const hasERP = (data.modules?.length || 0) > 0;
         const hasCRM = data.hasCRM || false;
@@ -186,15 +194,34 @@ export default function SystemSelectorPage() {
           setTimeout(() => setLoaded(true), 100);
         });
       })
-      .catch(() => setLoaded(true));
+      .catch((err: any) => {
+        setLoadError(err.message || "ไม่สามารถโหลดข้อมูลได้");
+        setLoaded(true);
+      });
   }, [session]);
 
   if (status === "loading" || !userData) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4" />
-          <p className="text-slate-600 font-medium">กำลังโหลด...</p>
+          {loadError ? (
+            <>
+              <div className="text-4xl mb-4">⚠️</div>
+              <p className="text-slate-700 font-semibold text-lg mb-1">ไม่สามารถเข้าสู่ระบบได้</p>
+              <p className="text-slate-500 text-sm mb-4">{loadError}</p>
+              <button
+                onClick={() => { setLoadError(null); window.location.reload(); }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+              >
+                ลองใหม่
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4" />
+              <p className="text-slate-600 font-medium">กำลังโหลด...</p>
+            </>
+          )}
         </div>
       </div>
     );
@@ -221,6 +248,8 @@ export default function SystemSelectorPage() {
       className="h-screen flex flex-col overflow-hidden bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50"
       style={{ fontFamily: "var(--font-noto-sans-thai), sans-serif" }}
     >
+      <QuickNav isOpen={navOpen} onClose={() => setNavOpen(false)} />
+
       {/* Animated Background Blobs */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob" />
@@ -232,6 +261,9 @@ export default function SystemSelectorPage() {
       <div className="relative z-20 flex-shrink-0 px-6 py-4 bg-white/80 backdrop-blur-xl border-b border-blue-100">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
+            <div className="md:hidden">
+              <QuickNavTrigger onClick={() => setNavOpen(true)} />
+            </div>
             <Image src="/logo2.png" alt="Fazzfly Logo" width={40} height={40} className="object-contain" />
             <div>
               <h1 className="text-lg font-bold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent leading-none">
@@ -241,6 +273,8 @@ export default function SystemSelectorPage() {
             </div>
           </div>
 
+          <div className="flex items-center gap-3">
+            <LangToggle />
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
             className="flex items-center gap-2 pl-2 pr-4 py-1.5 rounded-full border border-slate-200 bg-white/80 hover:border-red-200 hover:bg-red-50 transition-all duration-200 group"
@@ -260,6 +294,7 @@ export default function SystemSelectorPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
           </button>
+          </div>
         </div>
       </div>
 
@@ -267,7 +302,8 @@ export default function SystemSelectorPage() {
       <div className="relative z-10 flex flex-1 overflow-hidden">
 
         {/* ── Sidebar ─────────────────────────────────────────── */}
-        <aside className={`flex-shrink-0 w-72 bg-white/80 backdrop-blur-xl border-r border-blue-100 flex flex-col transition-all duration-700 ${loaded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4"}`}>
+        <aside className={`hidden md:flex flex-shrink-0 w-72 bg-white/80 backdrop-blur-xl border-r border-blue-100 flex-col transition-all duration-700 ${loaded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4"}`}>
+
 
           {/* System Nav — Accordion */}
           <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
@@ -391,11 +427,11 @@ export default function SystemSelectorPage() {
         </aside>
 
         {/* ── Main Content ────────────────────────────────────── */}
-        <main className="flex-1 overflow-y-auto px-8 py-8">
+        <main className="flex-1 overflow-y-auto px-4 sm:px-8 py-4 sm:py-8">
           <div className={`transition-all duration-700 ${loaded ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
 
-            {/* User Info — center */}
-            <div className="mb-10 text-center">
+            {/* User Info */}
+            <div className="mb-6 sm:mb-10 text-center">
               {/* Role badge */}
               {!roleLoading && role && (
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-4
@@ -414,7 +450,7 @@ export default function SystemSelectorPage() {
                 </div>
               )}
 
-              <h2 className="text-5xl font-bold text-slate-800 mb-2 leading-tight">
+              <h2 className="text-3xl sm:text-5xl font-bold text-slate-800 mb-2 leading-tight">
                 ยินดีต้อนรับ,{" "}
                 <span className="bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">
                   {userData.clientName}
@@ -422,20 +458,20 @@ export default function SystemSelectorPage() {
               </h2>
               <p className="text-slate-400 mb-8">เลือกระบบจากแถบซ้ายเพื่อเริ่มใช้งาน</p>
 
-              <div className="inline-flex items-stretch gap-4 flex-wrap justify-center">
-                <div className="bg-white/90 backdrop-blur-xl rounded-2xl px-8 py-5 border border-blue-100 shadow-lg text-center min-w-[120px]">
-                  <p className="text-xs text-slate-400 font-medium mb-1.5">แพ็คเกจ</p>
-                  <p className="text-xl font-bold text-slate-800">{userData.package}</p>
+              <div className="flex items-stretch gap-2 sm:gap-4 flex-wrap justify-center">
+                <div className="bg-white/90 backdrop-blur-xl rounded-2xl px-4 sm:px-8 py-4 sm:py-5 border border-blue-100 shadow-lg text-center flex-1 min-w-[90px]">
+                  <p className="text-[10px] sm:text-xs text-slate-400 font-medium mb-1.5">แพ็คเกจ</p>
+                  <p className="text-base sm:text-xl font-bold text-slate-800">{userData.package}</p>
                 </div>
-                <div className={`bg-white/90 backdrop-blur-xl rounded-2xl px-8 py-5 border shadow-lg text-center min-w-[120px] ${isExpiringSoon ? "border-amber-200" : "border-green-200"}`}>
-                  <p className="text-xs text-slate-400 font-medium mb-1.5">คงเหลือ</p>
-                  <p className={`text-xl font-bold ${isExpiringSoon ? "text-amber-600" : "text-green-600"}`}>
+                <div className={`bg-white/90 backdrop-blur-xl rounded-2xl px-4 sm:px-8 py-4 sm:py-5 border shadow-lg text-center flex-1 min-w-[90px] ${isExpiringSoon ? "border-amber-200" : "border-green-200"}`}>
+                  <p className="text-[10px] sm:text-xs text-slate-400 font-medium mb-1.5">คงเหลือ</p>
+                  <p className={`text-base sm:text-xl font-bold ${isExpiringSoon ? "text-amber-600" : "text-green-600"}`}>
                     <AnimatedNumber value={userData.daysRemaining} /> วัน
                   </p>
                 </div>
-                <div className="bg-white/90 backdrop-blur-xl rounded-2xl px-8 py-5 border border-blue-100 shadow-lg text-center min-w-[120px]">
-                  <p className="text-xs text-slate-400 font-medium mb-1.5">Client ID</p>
-                  <p className="text-xl font-bold text-blue-600">{userData.clientId}</p>
+                <div className="bg-white/90 backdrop-blur-xl rounded-2xl px-4 sm:px-8 py-4 sm:py-5 border border-blue-100 shadow-lg text-center flex-1 min-w-[90px]">
+                  <p className="text-[10px] sm:text-xs text-slate-400 font-medium mb-1.5">Client ID</p>
+                  <p className="text-base sm:text-xl font-bold text-blue-600">{userData.clientId}</p>
                 </div>
               </div>
             </div>
@@ -445,6 +481,13 @@ export default function SystemSelectorPage() {
                 {/* ── Admin: Overview Dashboard + Task Summary ── */}
                 {isAdmin() && (
                   <div className="space-y-6">
+                    {/* Overview Dashboard — อยู่บนสุด */}
+                    {dashboardItems.length > 0 && (
+                      <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-blue-100 shadow-lg shadow-blue-100/30 p-6">
+                        <OverviewDashboard dashboardItems={dashboardItems} />
+                      </div>
+                    )}
+
                     {/* Task Summary */}
                     <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-violet-100 shadow-lg p-6">
                       <div className="flex items-center justify-between mb-5">
@@ -465,18 +508,18 @@ export default function SystemSelectorPage() {
                           <div className="w-5 h-5 border-2 border-violet-300 border-t-violet-600 rounded-full animate-spin" />
                         </div>
                       ) : (
-                        <div className="grid grid-cols-3 gap-4">
-                          <div className="bg-slate-50 rounded-2xl p-4 text-center">
-                            <p className="text-2xl font-bold text-slate-800">{sentTasks.length}</p>
-                            <p className="text-xs text-slate-400 mt-1">ทั้งหมด</p>
+                        <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                          <div className="bg-slate-50 rounded-2xl p-3 sm:p-4 text-center">
+                            <p className="text-xl sm:text-2xl font-bold text-slate-800">{sentTasks.length}</p>
+                            <p className="text-[11px] sm:text-xs text-slate-400 mt-1">ทั้งหมด</p>
                           </div>
-                          <div className="bg-amber-50 rounded-2xl p-4 text-center border border-amber-100">
-                            <p className="text-2xl font-bold text-amber-600">{sentPending}</p>
-                            <p className="text-xs text-amber-500 mt-1">ยังไม่เสร็จ</p>
+                          <div className="bg-amber-50 rounded-2xl p-3 sm:p-4 text-center border border-amber-100">
+                            <p className="text-xl sm:text-2xl font-bold text-amber-600">{sentPending}</p>
+                            <p className="text-[11px] sm:text-xs text-amber-500 mt-1">ยังไม่เสร็จ</p>
                           </div>
-                          <div className="bg-green-50 rounded-2xl p-4 text-center border border-green-100">
-                            <p className="text-2xl font-bold text-green-600">{sentDone}</p>
-                            <p className="text-xs text-green-500 mt-1">เสร็จแล้ว</p>
+                          <div className="bg-green-50 rounded-2xl p-3 sm:p-4 text-center border border-green-100">
+                            <p className="text-xl sm:text-2xl font-bold text-green-600">{sentDone}</p>
+                            <p className="text-[11px] sm:text-xs text-green-500 mt-1">เสร็จแล้ว</p>
                           </div>
                         </div>
                       )}
@@ -494,13 +537,6 @@ export default function SystemSelectorPage() {
                         </div>
                       )}
                     </div>
-
-                    {/* Overview Dashboard */}
-                    {dashboardItems.length > 0 && (
-                      <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-blue-100 shadow-lg shadow-blue-100/30 p-6">
-                        <OverviewDashboard dashboardItems={dashboardItems} />
-                      </div>
-                    )}
                   </div>
                 )}
 

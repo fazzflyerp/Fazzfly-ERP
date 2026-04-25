@@ -31,7 +31,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
-import { saReadRange, saAppendRow } from "@/lib/google-sa";
+import { saReadRange, saAppendRow, saInvalidateCache } from "@/lib/google-sa";
 
 const MASTER_SHEET_ID = process.env.MASTER_SHEET_ID!;
 
@@ -156,6 +156,7 @@ export async function POST(request: NextRequest) {
     // 6. Append via SA
     const range = sheetName ? `${sheetName}!A:A` : "A:A";
     await saAppendRow(spreadsheetId, range, finalRow);
+    saInvalidateCache(spreadsheetId);
 
     return NextResponse.json({ ok: true });
 

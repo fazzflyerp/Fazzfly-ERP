@@ -1,6 +1,13 @@
 /**
- * Module Config API
- * Location: app/api/module/config/route.ts
+ * Module Config API — ดึง field config ของ module จาก Google Sheets
+ * path: app/api/module/config/route.ts
+ *
+ * GET /api/module/config?spreadsheetId=&configName=
+ *   → อ่านชีท configName (เช่น Sales_Config, OPD_Config) แล้วคืน field definitions
+ *   → ใช้ render form / ตาราง edit ในหน้า ERP
+ *
+ * config sheet columns: A=fieldName | B=label | C=type | D=order | E=required | ...
+ * ✅ ตรวจสิทธิ์ว่า spreadsheet เป็นของ client ก่อนอ่าน (verifySheetAccess)
  */
 
 import { NextRequest, NextResponse } from "next/server";

@@ -186,7 +186,6 @@ export default function HomePage() {
       const data: UserData = await response.json();
       setUserData(data);
     } catch (err: any) {
-      console.error("❌ Error fetching modules:", err);
       setError(err.message || "เกิดข้อผิดพลาด");
     } finally {
       setLoading(false);
@@ -214,8 +213,6 @@ export default function HomePage() {
 
   const fetchArchiveFolderIdFromAPI = async (clientId: string, moduleName: string) => {
     try {
-      console.log("🔄 [fetchArchiveFolderIdFromAPI] Start");
-      console.log(`   clientId: ${clientId}, moduleName: ${moduleName}`);
 
       setLoadingArchiveFolderId(true);
 
@@ -231,16 +228,13 @@ export default function HomePage() {
         },
       });
 
-      console.log(`   Response Status: ${res.status}`);
 
       if (res.status === 404) {
-        console.log("ℹ️ No archive folder configured for this client/module");
         setArchiveFolderId(null);
         return null;
       }
 
       if (!res.ok) {
-        console.log(`ℹ️ Could not fetch archive folder (HTTP ${res.status})`);
         setArchiveFolderId(null);
         return null;
       }
@@ -248,16 +242,13 @@ export default function HomePage() {
       const data = await res.json();
 
       if (!data.archiveFolderId) {
-        console.log("ℹ️ Archive folder ID is empty");
         setArchiveFolderId(null);
         return null;
       }
 
-      console.log("✅ archiveFolderId fetched:", data.archiveFolderId);
       setArchiveFolderId(data.archiveFolderId);
       return data.archiveFolderId;
     } catch (error: any) {
-      console.log("ℹ️ Archive folder fetch skipped:", error.message);
       setArchiveFolderId(null);
       return null;
     } finally {
@@ -276,7 +267,6 @@ export default function HomePage() {
       );
 
       if (!inventoryDash) {
-        console.log("ℹ️ No Inventory Dashboard found");
         setHasInventoryDashboard(false);
         setLowStockCount(0);
         return;
@@ -294,7 +284,6 @@ export default function HomePage() {
       const response = await fetch(`/api/dashboard/data?${params}`);
 
       if (!response.ok) {
-        console.error("❌ Failed to fetch inventory data");
         setLowStockCount(0);
         return;
       }
@@ -308,7 +297,6 @@ export default function HomePage() {
       );
 
       if (!statusField) {
-        console.log("ℹ️ No status field found in config");
         setLowStockCount(0);
         return;
       }
@@ -333,12 +321,10 @@ export default function HomePage() {
         status: String(row[statusField.fieldName] || "").trim(),
       }));
 
-      console.log(`✅ Low stock count: ${items.length}`);
       setLowStockItems(items);
       setLowStockCount(items.length);
 
     } catch (error) {
-      console.error("❌ Error fetching low stock:", error);
       setLowStockCount(0);
     } finally {
       setLoadingLowStock(false);
@@ -348,25 +334,20 @@ export default function HomePage() {
   // ✅ NEW: Fetch user documents from API
   const fetchUserDocuments = async () => {
     try {
-      console.log("📄 Fetching user documents...");
       setLoadingDocuments(true);
 
       const accessToken = (session as any)?.accessToken;
       if (!accessToken) {
-        console.error("❌ No access token for documents");
         setUserDocuments([]);
         return;
       }
 
       // ✅ Get clientId from userData
       if (!userData?.clientId) {
-        console.error("❌ No clientId in userData");
         setUserDocuments([]);
         return;
       }
 
-      console.log("🔑 Access token available, calling API...");
-      console.log("👤 Client ID:", userData.clientId);
 
       // ✅ Pass clientId as query parameter
       const response = await fetch(`/api/user/documents?clientId=${userData.clientId}`, {
@@ -376,21 +357,14 @@ export default function HomePage() {
         },
       });
 
-      console.log(`📡 API Response status: ${response.status}`);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error("❌ Failed to fetch user documents");
-        console.error("Error details:", errorData);
-        console.error("Status:", response.status, response.statusText);
         setUserDocuments([]);
         return;
       }
 
       const data = await response.json();
-      console.log("✅ User documents loaded:", data);
-      console.log("📊 Document count:", data.count);
-      console.log("📋 Documents:", data.documents);
 
       // Transform API response to Module format
       const documents: Module[] = data.documents.map((doc: any) => ({
@@ -402,13 +376,9 @@ export default function HomePage() {
         notes: doc.notes,
       }));
 
-      console.log("✅ Transformed documents:", documents);
       setUserDocuments(documents);
 
     } catch (error: any) {
-      console.error("❌ Error fetching user documents:", error);
-      console.error("Error message:", error.message);
-      console.error("Error stack:", error.stack);
       setUserDocuments([]);
     } finally {
       setLoadingDocuments(false);
@@ -418,12 +388,10 @@ export default function HomePage() {
   // ✅ NEW: Fetch master databases
   const fetchMasterDatabases = async (forceRefresh = false) => {
     try {
-      console.log("📊 Fetching master databases...");
       setLoadingMasterData(true);
 
       const accessToken = (session as any)?.accessToken;
       if (!accessToken) {
-        console.error("❌ No access token for master data");
         setMasterDatabases([]);
         setHasMasterDataAccess(false);
         return;
@@ -437,17 +405,14 @@ export default function HomePage() {
         },
       });
 
-      console.log(`📡 Master Data API Response status: ${response.status}`);
 
       if (!response.ok) {
-        console.log("ℹ️ No master data access");
         setMasterDatabases([]);
         setHasMasterDataAccess(false);
         return;
       }
 
       const data = await response.json();
-      console.log("✅ Master databases loaded:", data);
 
       if (data.totalDatabases > 0) {
         setMasterDatabases(data.databases || []);
@@ -458,7 +423,6 @@ export default function HomePage() {
       }
 
     } catch (error: any) {
-      console.error("❌ Error fetching master databases:", error);
       setMasterDatabases([]);
       setHasMasterDataAccess(false);
     } finally {
@@ -512,7 +476,6 @@ export default function HomePage() {
       setLogs(data.logs || []);
       setLogsTotal(data.total || 0);
     } catch (err: any) {
-      console.error("❌ fetchActivityLogs:", err.message);
     } finally {
       setLoadingLogs(false);
     }
@@ -539,27 +502,22 @@ export default function HomePage() {
       else if (dashboardName.includes("usage")) moduleName = "Usage";
 
       if (moduleName) {
-        console.log(`🔄 Loading config for module: ${moduleName}`);
         setLoadingModuleConfigs(true);
         setArchiveFolderId(null);
 
         fetchModuleConfig(moduleName).then((config) => {
           if (config) {
-            console.log("✅ Module config fetched:", config);
             setModuleConfigs(prev => ({
               ...prev,
               [moduleName]: config,
             }));
 
             if (config.archiveFolderId) {
-              console.log("✅ archiveFolderId found in config:", config.archiveFolderId);
               setArchiveFolderId(config.archiveFolderId);
               setLoadingModuleConfigs(false);
             } else {
-              console.log("⚠️ archiveFolderId not in config, trying API...");
               fetchArchiveFolderIdFromAPI(userData.clientId, moduleName).then((folderId) => {
                 if (!folderId) {
-                  console.log("ℹ️ No archive folder ID - Dashboard will work without year filter");
                 }
                 setLoadingModuleConfigs(false);
               });
@@ -732,55 +690,6 @@ export default function HomePage() {
           <p className="text-base lg:text-lg text-slate-600">
             จัดการข้อมูล ติดตามสถิติ และใช้งานโมดูลต่างๆ
           </p>
-        </div>
-
-        {/* Account Status Card with Low Stock Alert */}
-        <div className={`rounded-2xl lg:rounded-3xl p-4 lg:p-8 mb-6 lg:mb-10 border backdrop-blur-md transition-all duration-300 ${isExpiringSoon
-          ? 'bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-300 shadow-lg shadow-yellow-100'
-          : 'bg-gradient-to-r from-blue-50 via-sky-50 to-cyan-50 border-blue-200 shadow-lg shadow-blue-100/50'
-          }`}>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-6">
-            {userData ? (
-              <>
-                {/* 1. แพ็คเจจ */}
-                <div className="p-3 lg:p-4 rounded-xl lg:rounded-2xl bg-white/60 backdrop-blur-sm border border-blue-100">
-                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1 lg:mb-2">แพ็คเจจ</p>
-                  <p className="text-xl lg:text-2xl font-bold text-slate-800 truncate">{userData.planType}</p>
-                </div>
-                {/* 2. ลูกค้า ID */}
-                <div className="p-3 lg:p-4 rounded-xl lg:rounded-2xl bg-white/60 backdrop-blur-sm border border-blue-100">
-                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1 lg:mb-2">ลูกค้า ID</p>
-                  <p className="text-xl lg:text-2xl font-bold text-blue-600 truncate">{userData.clientId}</p>
-                </div>
-                {/* 3. คงเหลือ */}
-                <div className={`p-3 lg:p-4 rounded-xl lg:rounded-2xl backdrop-blur-sm border ${isExpiringSoon
-                  ? 'bg-yellow-100/50 border-yellow-300'
-                  : 'bg-green-100/50 border-green-300'
-                  }`}>
-                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1 lg:mb-2">คงเหลือ</p>
-                  <p className={`text-xl lg:text-2xl font-bold ${isExpiringSoon ? 'text-yellow-700' : 'text-green-700'}`}>
-                    {daysLeft >= 0 ? daysLeft : 0} วัน
-                  </p>
-                </div>
-              </>
-            ) : (
-              <>
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="p-3 lg:p-4 rounded-xl lg:rounded-2xl bg-white/60 backdrop-blur-sm border border-blue-100">
-                    <div className="h-3 w-16 bg-slate-200 animate-pulse rounded mb-3" />
-                    <div className="h-7 bg-slate-200 animate-pulse rounded w-3/4" />
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
-          {userData?.expiryWarning && (
-            <div className="mt-4 lg:mt-6 pt-4 lg:pt-6 border-t border-yellow-200">
-              <p className="text-xs lg:text-sm text-yellow-800 font-medium">
-                ⚠️ {userData.expiryWarning}
-              </p>
-            </div>
-          )}
         </div>
 
         {/* Tab Navigation - Mobile Optimized */}
@@ -1478,20 +1387,20 @@ export default function HomePage() {
         {/* Tab Content - Activity Log */}
         {activeTab === "logs" && isAdmin() && (
           <div className="animate-fadeIn">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-2xl lg:text-3xl font-bold text-slate-800">Activity Log</h2>
-                <p className="text-slate-500 text-sm mt-1">ประวัติการทำงานของทีม — ทั้งหมด {logsTotal} รายการ</p>
+            <div className="flex items-center justify-between mb-6 gap-3">
+              <div className="min-w-0">
+                <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800">Activity Log</h2>
+                <p className="text-slate-500 text-xs sm:text-sm mt-1">ประวัติการทำงานของทีม — ทั้งหมด {logsTotal} รายการ</p>
               </div>
               <button
                 onClick={fetchActivityLogs}
                 disabled={loadingLogs}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50 flex-shrink-0"
               >
                 <svg className={`w-4 h-4 ${loadingLogs ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-                รีเฟรช
+                <span className="hidden sm:inline">รีเฟรช</span>
               </button>
             </div>
 
@@ -1531,18 +1440,18 @@ export default function HomePage() {
                   const uniqueUsers = new Set(logs.map((l) => l.email)).size;
                   const uniqueActions = [...new Set(logs.map((l) => l.action))];
                   return (
-                    <div className="grid grid-cols-3 gap-3 mb-5">
-                      <div className="bg-white/90 rounded-2xl border border-rose-100 p-4 text-center">
-                        <p className="text-2xl font-bold text-rose-600">{logsTotal}</p>
-                        <p className="text-xs text-slate-500 mt-1">รายการทั้งหมด</p>
+                    <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-5">
+                      <div className="bg-white/90 rounded-2xl border border-rose-100 p-3 sm:p-4 text-center">
+                        <p className="text-xl sm:text-2xl font-bold text-rose-600">{logsTotal}</p>
+                        <p className="text-[10px] sm:text-xs text-slate-500 mt-1">รายการทั้งหมด</p>
                       </div>
-                      <div className="bg-white/90 rounded-2xl border border-rose-100 p-4 text-center">
-                        <p className="text-2xl font-bold text-rose-600">{uniqueUsers}</p>
-                        <p className="text-xs text-slate-500 mt-1">ผู้ใช้งาน</p>
+                      <div className="bg-white/90 rounded-2xl border border-rose-100 p-3 sm:p-4 text-center">
+                        <p className="text-xl sm:text-2xl font-bold text-rose-600">{uniqueUsers}</p>
+                        <p className="text-[10px] sm:text-xs text-slate-500 mt-1">ผู้ใช้งาน</p>
                       </div>
-                      <div className="bg-white/90 rounded-2xl border border-rose-100 p-4 text-center">
-                        <p className="text-2xl font-bold text-rose-600">{uniqueActions.length}</p>
-                        <p className="text-xs text-slate-500 mt-1">ประเภท Action</p>
+                      <div className="bg-white/90 rounded-2xl border border-rose-100 p-3 sm:p-4 text-center">
+                        <p className="text-xl sm:text-2xl font-bold text-rose-600">{uniqueActions.length}</p>
+                        <p className="text-[10px] sm:text-xs text-slate-500 mt-1">ประเภท Action</p>
                       </div>
                     </div>
                   );
@@ -1553,7 +1462,7 @@ export default function HomePage() {
                   <select
                     value={logFilterEmail}
                     onChange={(e) => setLogFilterEmail(e.target.value)}
-                    className="text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-rose-200"
+                    className="text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-200"
                   >
                     <option value="">ทุกคน</option>
                     {[...new Set(logs.map((l) => l.email))].map((e) => (
@@ -1563,7 +1472,7 @@ export default function HomePage() {
                   <select
                     value={logFilterAction}
                     onChange={(e) => setLogFilterAction(e.target.value)}
-                    className="text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-rose-200"
+                    className="text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-200"
                   >
                     <option value="">ทุก Action</option>
                     {[...new Set(logs.map((l) => l.action))].map((a) => (
@@ -1579,71 +1488,113 @@ export default function HomePage() {
                   )}
                 </div>
 
-                {/* Table */}
-                <div className="bg-white/90 rounded-2xl border border-rose-100 overflow-hidden shadow-sm">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-rose-50 border-b border-rose-100">
-                          <th className="text-left px-4 py-3 font-semibold text-rose-700 whitespace-nowrap">เวลา</th>
-                          <th className="text-left px-4 py-3 font-semibold text-rose-700">ผู้ใช้</th>
-                          <th className="text-left px-4 py-3 font-semibold text-rose-700">Action</th>
-                          <th className="text-left px-4 py-3 font-semibold text-rose-700">Module</th>
-                          <th className="text-left px-4 py-3 font-semibold text-rose-700">รายละเอียด</th>
-                          <th className="px-4 py-3"></th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {logs
-                          .filter((l) => (!logFilterEmail || l.email === logFilterEmail) && (!logFilterAction || l.action === logFilterAction))
-                          .map((log, i) => {
-                            const actionMap: Record<string, { label: string; color: string }> = {
-                              submit:     { label: "บันทึก",  color: "bg-green-100 text-green-700" },
-                              update:     { label: "แก้ไข",   color: "bg-yellow-100 text-yellow-700" },
-                              upload_pdf: { label: "อัป PDF", color: "bg-blue-100 text-blue-700" },
-                              delete:     { label: "ลบ",      color: "bg-red-100 text-red-700" },
-                            };
-                            const badge = actionMap[log.action] || { label: log.action, color: "bg-gray-100 text-gray-600" };
-                            // หา module config จาก userData เพื่อสร้าง link
-                            const matchedMod = userData?.modules?.find(
-                              (m: any) => m.sheetName === log.module && m.spreadsheetId === log.spreadsheetId
-                            );
-                            const editUrl = matchedMod
-                              ? `/ERP/transaction/edit?moduleId=${matchedMod.moduleId}&spreadsheetId=${log.spreadsheetId}&sheetName=${encodeURIComponent(log.module)}&configName=${encodeURIComponent(matchedMod.configName)}&moduleName=${encodeURIComponent(matchedMod.moduleName)}&highlight=new`
-                              : null;
+                {/* Log list — card on mobile, table on desktop */}
+                {(() => {
+                  const actionMap: Record<string, { label: string; color: string }> = {
+                    submit:     { label: "บันทึก",  color: "bg-green-100 text-green-700" },
+                    update:     { label: "แก้ไข",   color: "bg-yellow-100 text-yellow-700" },
+                    upload_pdf: { label: "อัป PDF", color: "bg-blue-100 text-blue-700" },
+                    delete:     { label: "ลบ",      color: "bg-red-100 text-red-700" },
+                  };
+                  const filteredLogs = logs.filter(
+                    (l) => (!logFilterEmail || l.email === logFilterEmail) && (!logFilterAction || l.action === logFilterAction)
+                  );
+                  const getEditUrl = (log: any) => {
+                    const matchedMod = userData?.modules?.find(
+                      (m: any) => m.sheetName === log.module && m.spreadsheetId === log.spreadsheetId
+                    );
+                    if (!matchedMod) return null;
+                    const highlightValue = log.rowIndex ? log.rowIndex : "new";
+                    return `/ERP/transaction/edit?moduleId=${matchedMod.moduleId}&spreadsheetId=${log.spreadsheetId}&sheetName=${encodeURIComponent(log.module)}&configName=${encodeURIComponent(matchedMod.configName)}&moduleName=${encodeURIComponent(matchedMod.moduleName)}&highlight=${highlightValue}`;
+                  };
 
-                            return (
-                              <tr key={i} className="hover:bg-rose-50/30 transition-colors">
-                                <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{log.timestamp}</td>
-                                <td className="px-4 py-3 text-gray-700 max-w-[180px] truncate text-xs" title={log.email}>{log.email}</td>
-                                <td className="px-4 py-3">
-                                  <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${badge.color}`}>
-                                    {badge.label}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3 text-gray-600 text-xs">{log.module}</td>
-                                <td className="px-4 py-3 text-gray-400 text-xs">{log.detail}</td>
-                                <td className="px-4 py-3">
-                                  {editUrl && (
-                                    <button
-                                      onClick={() => router.push(editUrl)}
-                                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-600 text-xs font-medium hover:bg-rose-100 transition-colors whitespace-nowrap"
-                                    >
-                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                      </svg>
-                                      ดูข้อมูล
-                                    </button>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                  return (
+                    <div className="bg-white/90 rounded-2xl border border-rose-100 overflow-hidden shadow-sm">
+
+                      {/* Mobile: card list */}
+                      <div className="sm:hidden divide-y divide-rose-50">
+                        {filteredLogs.map((log, i) => {
+                          const badge = actionMap[log.action] || { label: log.action, color: "bg-gray-100 text-gray-600" };
+                          const editUrl = getEditUrl(log);
+                          return (
+                            <div key={i} className="p-3 space-y-1.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${badge.color}`}>{badge.label}</span>
+                                <span className="text-[10px] text-gray-400">{log.timestamp}</span>
+                              </div>
+                              <p className="text-xs font-semibold text-slate-700 truncate">{log.email}</p>
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="text-[11px] text-slate-500 truncate">{log.module}</p>
+                                  {log.detail && <p className="text-[10px] text-slate-400 truncate">{log.detail}</p>}
+                                </div>
+                                {editUrl && (
+                                  <button
+                                    onClick={() => router.push(editUrl)}
+                                    className="flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-600 text-[11px] font-medium"
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                    ดู
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Desktop: table */}
+                      <div className="hidden sm:block overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-rose-50 border-b border-rose-100">
+                              <th className="text-left px-4 py-3 font-semibold text-rose-700 whitespace-nowrap">เวลา</th>
+                              <th className="text-left px-4 py-3 font-semibold text-rose-700">ผู้ใช้</th>
+                              <th className="text-left px-4 py-3 font-semibold text-rose-700">Action</th>
+                              <th className="text-left px-4 py-3 font-semibold text-rose-700">Module</th>
+                              <th className="text-left px-4 py-3 font-semibold text-rose-700">รายละเอียด</th>
+                              <th className="px-4 py-3"></th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-50">
+                            {filteredLogs.map((log, i) => {
+                              const badge = actionMap[log.action] || { label: log.action, color: "bg-gray-100 text-gray-600" };
+                              const editUrl = getEditUrl(log);
+                              return (
+                                <tr key={i} className="hover:bg-rose-50/30 transition-colors">
+                                  <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{log.timestamp}</td>
+                                  <td className="px-4 py-3 text-gray-700 max-w-[180px] truncate text-xs" title={log.email}>{log.email}</td>
+                                  <td className="px-4 py-3">
+                                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${badge.color}`}>{badge.label}</span>
+                                  </td>
+                                  <td className="px-4 py-3 text-gray-600 text-xs">{log.module}</td>
+                                  <td className="px-4 py-3 text-gray-400 text-xs">{log.detail}</td>
+                                  <td className="px-4 py-3">
+                                    {editUrl && (
+                                      <button
+                                        onClick={() => router.push(editUrl)}
+                                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-600 text-xs font-medium hover:bg-rose-100 transition-colors whitespace-nowrap"
+                                      >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        </svg>
+                                        ดูข้อมูล
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })()}
               </>
             )}
           </div>

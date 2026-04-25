@@ -67,6 +67,11 @@ export function UserRoleProvider({ children }: { children: ReactNode }) {
       const data = await res.json();
       setRole((data.role as UserRole) ?? null);
       setClientId(data.clientId ?? null);
+
+      // Auto-sync refresh token ของ Admin ลง sheet (fire & forget)
+      if (data.role === "ADMIN" || data.role === "SUPER_ADMIN") {
+        fetch("/api/auth/sync-drive-token", { method: "POST" }).catch(() => {});
+      }
     } catch (err: any) {
       setError(err.message ?? "Unknown error");
       setRole(null);

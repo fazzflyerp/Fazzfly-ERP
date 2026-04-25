@@ -5,7 +5,7 @@
  *
  * tasks sheet columns (Client's own spreadsheet):
  * A: taskId | B: clientId | C: assignerEmail | D: assigneeEmail
- * E: title  | F: dueDate  | G: status        | H: createdAt | I: isRead
+ * E: title  | F: dueDate  | G: status        | H: createdAt | I: isRead | J: description
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -32,7 +32,7 @@ async function ensureTasksSheet(spreadsheetId: string): Promise<void> {
         range: `${TASKS_SHEET}!A1:I1`,
         valueInputOption: "RAW",
         requestBody: {
-          values: [["taskId","clientId","assignerEmail","assigneeEmail","title","dueDate","status","createdAt","isRead"]],
+          values: [["taskId","clientId","assignerEmail","assigneeEmail","title","dueDate","status","createdAt","isRead","description"]],
         },
       });
     }
@@ -52,6 +52,7 @@ function parseTask(row: any[], idx: number) {
     status:        row[6] ?? "pending",
     createdAt:     row[7] ?? "",
     isRead:        row[8]?.toString().toLowerCase() === "true",
+    description:   row[9] ?? "",
   };
 }
 
@@ -81,7 +82,7 @@ export async function GET(request: NextRequest) {
 
     let rows: any[][] = [];
     try {
-      rows = await saReadRange(spreadsheetId, `${TASKS_SHEET}!A:I`);
+      rows = await saReadRange(spreadsheetId, `${TASKS_SHEET}!A:J`);
     } catch { rows = []; }
 
     const tasks = rows.slice(1)
@@ -123,7 +124,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No spreadsheet configured for this client" }, { status: 404 });
 
     const body = await request.json();
-    const { assigneeEmail, title, dueDate } = body;
+    const { assigneeEmail, title, dueDate, description } = body;
     if (!assigneeEmail || !title)
       return NextResponse.json({ error: "Missing assigneeEmail or title" }, { status: 400 });
 
@@ -132,9 +133,9 @@ export async function POST(request: NextRequest) {
     const taskId   = `T${Date.now()}`;
     const createdAt = new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" });
 
-    await saAppendRow(spreadsheetId, `${TASKS_SHEET}!A:I`, [
+    await saAppendRow(spreadsheetId, `${TASKS_SHEET}!A:J`, [
       taskId, clientId, userEmail, assigneeEmail.toLowerCase(),
-      title, dueDate || "", "pending", createdAt, "false",
+      title, dueDate || "", "pending", createdAt, "false", description || "",
     ]);
 
     return NextResponse.json({ success: true, taskId });

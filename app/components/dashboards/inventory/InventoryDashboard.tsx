@@ -77,12 +77,6 @@ export default function InventoryDashboard({
       setLoading(true);
       setError(null);
 
-      console.log("═".repeat(60));
-      console.log(`📄 Fetching inventory data... (Attempt ${retryCount + 1}/${MAX_RETRIES + 1})`);
-      console.log(`   Spreadsheet ID: ${spreadsheetId}`);
-      console.log(`   Config Sheet: ${configSheetName}`);
-      console.log(`   Data Sheet: ${dataSheetName}`);
-      console.log("═".repeat(60));
 
       const params = new URLSearchParams({
         spreadsheetId,
@@ -91,12 +85,10 @@ export default function InventoryDashboard({
       });
 
       const fullUrl = `/api/dashboard/data?${params}`;
-      console.log("🌐 Full API URL:", fullUrl);
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 45000);
 
-      console.log("📤 Sending request...");
       const res = await fetch(fullUrl, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -107,14 +99,11 @@ export default function InventoryDashboard({
 
       clearTimeout(timeoutId);
 
-      console.log("📡 Response Status:", res.status);
 
       if (!res.ok) {
         const errorText = await res.text();
-        console.error("❌ API Error:", errorText);
         
         if ((res.status === 500 || errorText.includes('timeout')) && retryCount < MAX_RETRIES) {
-          console.log(`🔄 Retrying in 3 seconds... (${retryCount + 1}/${MAX_RETRIES})`);
           await new Promise(resolve => setTimeout(resolve, 3000));
           return fetchData(retryCount + 1);
         }
@@ -132,22 +121,14 @@ export default function InventoryDashboard({
         throw new Error("Invalid API response: missing config or data");
       }
 
-      console.log("✅ Data loaded successfully:");
-      console.log("   Config fields:", data.config.length);
-      console.log("   Data records:", data.data.length);
-      console.log("═".repeat(60));
 
       setConfig(data.config);
       setAllData(data.data);
 
     } catch (err: any) {
-      console.error("═".repeat(60));
-      console.error("❌ Error fetching data:", err);
-      console.error("═".repeat(60));
       
       if (err.name === 'AbortError') {
         if (retryCount < MAX_RETRIES) {
-          console.log(`🔄 Timeout - Retrying... (${retryCount + 1}/${MAX_RETRIES})`);
           await new Promise(resolve => setTimeout(resolve, 3000));
           return fetchData(retryCount + 1);
         }
@@ -164,7 +145,6 @@ export default function InventoryDashboard({
    * Process data to generate KPIs, alerts, and table
    */
   function processData() {
-    console.log("🔄 Processing inventory data...");
 
     try {
       const kpi = generateInventoryKPI(allData, config);
@@ -176,9 +156,7 @@ export default function InventoryDashboard({
       const tableData = generateProductTableData(allData, config);
       setProductTableData(tableData);
 
-      console.log("✅ Data processing complete");
     } catch (err) {
-      console.error("❌ Error processing data:", err);
       setError("เกิดข้อผิดพลาดในการประมวลผลข้อมูล");
     }
   }

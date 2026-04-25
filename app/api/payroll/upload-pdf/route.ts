@@ -1,16 +1,14 @@
 /**
- * =============================================================================
- * FILE PATH: app/api/payroll/upload-pdf/route.ts
- * =============================================================================
- *
- * Upload Payroll Slip PDF to Google Drive via SA
- * ✅ ใช้ SA — ทั้ง Admin และ Staff สามารถ save ได้
- * ✅ ไฟล์ขึ้น Drive ของ Admin (SA มีสิทธิ์อยู่แล้ว)
+ * Upload Payroll Slip PDF to Google Drive
+ * ✅ ใช้ token ของ Admin บริษัทนั้น — ไฟล์ขึ้น Drive ของ Admin เสมอ
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
-import { saFindOrCreateFolder, saUploadFile, saLog } from "@/lib/google-sa";
+import { saReadRange, saLog } from "@/lib/google-sa";
+import { adminFindOrCreateFolder, adminDriveUpload } from "@/lib/admin-drive";
+
+const MASTER_SHEET_ID = process.env.MASTER_SHEET_ID!;
 
 export async function POST(request: NextRequest) {
   const requestId = Math.random().toString(36).substring(7);
@@ -21,22 +19,32 @@ export async function POST(request: NextRequest) {
     if ((token as any).error === "RefreshAccessTokenError")
       return NextResponse.json({ error: "Session expired", code: "TOKEN_EXPIRED" }, { status: 401 });
 
+    const userEmail = ((token as any)?.email as string || "").toLowerCase();
+
+    // หา clientId จาก client_user
+    const userRows = await saReadRange(MASTER_SHEET_ID, "client_user!A:E");
+    const userRow = userRows.slice(1).find(
+      (r) => (r[1] ?? "").toString().toLowerCase().trim() === userEmail
+    );
+    if (!userRow) return NextResponse.json({ error: "User not found" }, { status: 404 });
+    const clientId = (userRow[0] ?? "").toString().trim();
+
     const formData = await request.formData();
-    const pdfFile        = formData.get("file") as File;
-    const employeeId     = formData.get("employeeId") as string;
-    const employeeName   = formData.get("employeeName") as string;
-    const payPeriod      = formData.get("payPeriod") as string; // "มกราคม 2026"
-    const rootFolderId   = formData.get("rootFolderId") as string;
-    const spreadsheetId  = formData.get("spreadsheetId") as string | null;
+    const pdfFile       = formData.get("file") as File;
+    const employeeId    = formData.get("employeeId") as string;
+    const employeeName  = formData.get("employeeName") as string;
+    const payPeriod     = formData.get("payPeriod") as string; // "มกราคม 2026"
+    const rootFolderId  = formData.get("rootFolderId") as string;
+    const spreadsheetId = formData.get("spreadsheetId") as string | null;
 
     if (!pdfFile || !employeeId || !payPeriod || !rootFolderId)
-      return NextResponse.json({ error: "Missing required fields: file, employeeId, payPeriod, rootFolderId" }, { status: 400 });
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
 
-    console.log(`👤 [${requestId}] Employee: ${employeeId} - ${employeeName || "N/A"}, Period: ${payPeriod}`);
+    console.log(`👤 [${requestId}] Employee: ${employeeId}, Client: ${clientId}, Period: ${payPeriod}`);
 
     // Parse period → year + monthNum
     const periodParts = payPeriod.trim().split(/\s+/);
-    const year = periodParts[periodParts.length - 1];
+    const year      = periodParts[periodParts.length - 1];
     const monthName = periodParts[0];
 
     const thaiMonthsFull  = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
@@ -50,16 +58,16 @@ export async function POST(request: NextRequest) {
     if (idx !== -1) monthNum = String(idx + 1).padStart(2, "0");
 
     // Create folder structure: YYYY/MM/
-    const yearFolderId  = await saFindOrCreateFolder(year, rootFolderId);
-    const monthFolderId = await saFindOrCreateFolder(monthNum, yearFolderId);
+    const yearFolderId  = await adminFindOrCreateFolder(clientId, year, rootFolderId);
+    const monthFolderId = await adminFindOrCreateFolder(clientId, monthNum, yearFolderId);
 
-    // Upload PDF
     const fileName = employeeName
       ? `${employeeName}_${year}-${monthNum}.pdf`
       : `${employeeId}_${year}-${monthNum}.pdf`;
     const buffer = Buffer.from(await pdfFile.arrayBuffer());
 
-    const { fileId, webViewLink } = await saUploadFile({
+    const { fileId, webViewLink } = await adminDriveUpload({
+      clientId,
       fileName,
       mimeType: "application/pdf",
       buffer,
@@ -68,26 +76,19 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ [${requestId}] Uploaded: ${fileId}`);
 
-    const userEmail = ((token as any)?.email as string || "").toLowerCase();
     if (spreadsheetId) {
       saLog(spreadsheetId, {
-        email: userEmail,
+        email:  userEmail,
         action: "upload_pdf",
         module: "payroll",
         detail: `${fileName} — ${payPeriod}`,
       });
     }
 
-    return NextResponse.json({
-      success: true,
-      fileId,
-      fileName,
-      webViewLink,
-      folderPath: `${year}/${monthNum}/`,
-    });
+    return NextResponse.json({ success: true, fileId, fileName, webViewLink, folderPath: `${year}/${monthNum}/` });
 
   } catch (error: any) {
-    console.error(`❌ [${requestId}] ERROR:`, error.message);
-    return NextResponse.json({ error: "Failed to upload PDF", details: error.message }, { status: 500 });
+    console.error(`❌ [${requestId}] payroll/upload-pdf:`, error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

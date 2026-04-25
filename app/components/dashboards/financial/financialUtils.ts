@@ -56,11 +56,6 @@ export function generateKPI(
   rows: any[],
   configFields: ConfigField[]
 ): { [key: string]: KPIData } {
-  console.log("━".repeat(60));
-  console.log("📊 [generateKPI] START - Financial");
-  console.log("   Rows:", rows.length);
-  console.log("   Config fields:", configFields.length);
-  console.log("━".repeat(60));
 
   const newKpiData: { [key: string]: KPIData } = {};
   
@@ -69,31 +64,23 @@ export function generateKPI(
     (f) => f.type === "number" || f.type === "percent"
   );
 
-  console.log("🔢 Numeric fields found:", numericFields.length);
   numericFields.forEach((f, i) => {
-    console.log(`   [${i}] ${f.fieldName} (type: ${f.type}, order: ${f.order})`);
   });
 
   numericFields.forEach((field) => {
-    console.log(`\n🔍 Processing field: ${field.fieldName}`);
     
     // Sample first 3 rows
-    console.log("   Sample raw values:");
     rows.slice(0, 3).forEach((r, i) => {
-      console.log(`      Row ${i}: ${field.fieldName} = "${r[field.fieldName]}" (type: ${typeof r[field.fieldName]})`);
     });
 
     const values = rows
       .map((r) => parseNumericValue(r[field.fieldName]))
       .filter((v): v is number => typeof v === "number" && !isNaN(v));
 
-    console.log(`   Parsed values: ${values.length}/${rows.length} successful`);
     if (values.length > 0) {
-      console.log(`   Sample parsed: [${values.slice(0, 5).join(", ")}...]`);
     }
 
     if (values.length === 0) {
-      console.warn(`   ⚠️ No valid numbers found for ${field.fieldName}!`);
       newKpiData[field.fieldName] = { sum: 0, avg: 0, max: 0, count: 0 };
     } else {
       const sum = values.reduce((acc, curr) => acc + curr, 0);
@@ -101,7 +88,6 @@ export function generateKPI(
       const max = Math.max(...values);
       const count = values.length;
 
-      console.log(`   ✅ Results: sum=${sum.toFixed(2)}, avg=${avg.toFixed(2)}, max=${max}, count=${count}`);
 
       newKpiData[field.fieldName] = {
         sum: Number(sum.toFixed(2)),
@@ -112,10 +98,6 @@ export function generateKPI(
     }
   });
 
-  console.log("━".repeat(60));
-  console.log("✅ [generateKPI] DONE");
-  console.log("   Generated KPIs:", Object.keys(newKpiData));
-  console.log("━".repeat(60));
 
   return newKpiData;
 }
@@ -193,7 +175,6 @@ export function generateStackedBarData(
 ): any[] {
   const periodField = configFields.find((f) => f.type === "period");
   if (!periodField) {
-    console.warn("⚠️ No period field found");
     return [];
   }
 
@@ -218,7 +199,6 @@ export function generateStackedBarData(
   });
 
   const result = Object.values(grouped);
-  console.log(`✅ Stacked bar data generated: ${result.length} periods`);
   return result;
 }
 
@@ -232,7 +212,6 @@ export function generateAreaChartData(
 ): any[] {
   const periodField = configFields.find((f) => f.type === "period");
   if (!periodField) {
-    console.warn("⚠️ No period field found");
     return [];
   }
 
@@ -255,7 +234,6 @@ export function generateAreaChartData(
   });
 
   const result = Object.values(grouped);
-  console.log(`✅ Area chart data generated: ${result.length} periods`);
   return result;
 }
 
@@ -272,12 +250,10 @@ export function generateGaugeData(
     .filter((v): v is number => typeof v === "number" && !isNaN(v));
 
   if (values.length === 0) {
-    console.warn("⚠️ No valid percent_net_profit values");
     return 0;
   }
 
   const avg = values.reduce((acc, curr) => acc + curr, 0) / values.length;
-  console.log(`✅ Gauge data: ${avg.toFixed(2)}%`);
   return Number(avg.toFixed(2));
 }
 
@@ -319,7 +295,6 @@ export function generateSummaryTableData(rows: any[]): any[] {
     }))
     .sort((a, b) => a.period.localeCompare(b.period));
 
-  console.log(`✅ Summary table generated: ${result.length} rows`);
   return result;
 }
 
@@ -337,7 +312,6 @@ export function getPeriodOptions(
   let periodField = configFields.find((f) => f.type === "period");
   
   if (!periodField) {
-    console.warn("⚠️ Period field not found by type, using fallback");
     periodField = configFields.find((f) => 
       f.fieldName === "period" ||
       f.fieldName === "Period" ||
@@ -347,8 +321,6 @@ export function getPeriodOptions(
   }
   
   if (!periodField) {
-    console.error("❌ Cannot find period field!");
-    console.log("Available fields:", configFields.map(f => f.fieldName));
     return [];
   }
 
@@ -376,9 +348,6 @@ export function getPeriodOptionsFromData(
   config: ConfigField[],
   selectedYear?: string
 ): string[] {
-  console.log("[PERIOD_OPTIONS] Financial");
-  console.log("   Data rows:", data.length);
-  console.log("   Selected year:", selectedYear || "current");
 
   let filteredData = data;
   
@@ -387,7 +356,6 @@ export function getPeriodOptionsFromData(
   }
 
   const periods = getPeriodOptions(filteredData, config);
-  console.log("   Periods found:", periods);
   
   return periods;
 }

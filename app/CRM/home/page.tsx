@@ -2,7 +2,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import {
   type Appointment, type Customer, type Course, type FollowUp, type TabId,
@@ -24,6 +24,7 @@ import { AptModal, CustModal, FlwModal, AptDetailPanel, CustDetailPanel } from "
 export default function CRMPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [cfg, setCfg] = useState<CRMConfig | null>(null);
   const [aptFields, setAptFields] = useState<FormField[]>([]);
@@ -31,13 +32,14 @@ export default function CRMPage() {
   const [followSid, setFollowSid] = useState("");
   const [custSid, setCustSid] = useState("");
   const [clientId, setClientId] = useState("");
+  const [txMod, setTxMod] = useState<{ spreadsheetId: string; sheetName: string; configName?: string } | null>(null);
   const [apts, setApts] = useState<Appointment[]>([]);
   const [custs, setCusts] = useState<Customer[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [follows, setFollows] = useState<FollowUp[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [tab, setTab] = useState<TabId>("cal");
+  const [tab, setTab] = useState<TabId>(() => (searchParams.get("tab") as TabId) || "cal");
   const now = new Date();
   const [calY, setCalY] = useState(now.getFullYear());
   const [calM, setCalM] = useState(now.getMonth());
@@ -175,6 +177,10 @@ export default function CRMPage() {
       } catch (e) { console.warn("config fetch:", e); }
 
       setFollowSid(modData.followup?.spreadsheetId || spreadsheetId);
+
+      if (modData.transaction?.spreadsheetId) {
+        setTxMod({ spreadsheetId: modData.transaction.spreadsheetId, sheetName: modData.transaction.sheetName || "Sales Transactions", configName: modData.transaction.configName || "Sales_Config" });
+      }
 
       // โหลด Customers_config
       if (modData.Master?.spreadsheetId && modData.Master?.configName) {
@@ -398,7 +404,7 @@ export default function CRMPage() {
       <CustModal open={mCust} onClose={closeMCust} isEdit={!!eCust} loading={sCust} form={fCust} setForm={setFCust} config={cfg} fields={custFields} onSave={saveCust} />
       <FlwModal open={mFollow} onClose={closeMFollow} isEdit={!!eFollow} loading={sFollow} form={fFollow} setForm={setFFollow} customers={custs} config={cfg} onSave={saveFollow} />
       <AptDetailPanel apt={dApt} onClose={() => setDApt(null)} onEdit={editApt} onViewProfile={a => { const c = custs.find(x => x.customer_id === a.customer_id); setDApt(null); if (c) { setDCust(c); setTab("custs"); } }} updAptStatus={updAptStatus} />
-      <CustDetailPanel cust={dCust} onClose={() => setDCust(null)} onEdit={editCust} onFollow={openFollow} courses={courses} apts={apts} onBookApt={c => { openApt(undefined, { customer_id: c.customer_id, customer_name: c.full_name, customer_phone: c.phone_number }); setTab("cal"); }} />
+      <CustDetailPanel cust={dCust} onClose={() => setDCust(null)} onEdit={editCust} onFollow={openFollow} courses={courses} apts={apts} clientId={clientId} txMod={txMod} onBookApt={c => { openApt(undefined, { customer_id: c.customer_id, customer_name: c.full_name, customer_phone: c.phone_number }); setTab("cal"); }} />
 
       <style jsx>{`
         @keyframes blob { 0%,100%{transform:translate(0,0) scale(1)} 33%{transform:translate(30px,-50px) scale(1.1)} 66%{transform:translate(-20px,20px) scale(0.9)} }

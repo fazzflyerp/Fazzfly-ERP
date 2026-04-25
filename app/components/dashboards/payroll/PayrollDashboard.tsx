@@ -91,12 +91,6 @@ export default function PayrollDashboard({
   // EFFECT: Validate props on mount
   // ============================================================
   useEffect(() => {
-    console.log("🎯 Payroll Dashboard Props:");
-    console.log("   spreadsheetId:", spreadsheetId ? `${spreadsheetId.substring(0, 20)}...` : "❌ MISSING");
-    console.log("   configSheetName:", configSheetName || "❌ MISSING");
-    console.log("   dataSheetName:", dataSheetName || "❌ MISSING");
-    console.log("   moduleName:", moduleName);
-    console.log("   archiveFolderId:", archiveFolderId || "(not provided)");
 
     if (!spreadsheetId || !configSheetName || !dataSheetName || !accessToken) {
       setError("❌ Missing required props");
@@ -108,10 +102,8 @@ export default function PayrollDashboard({
   // ============================================================
   useEffect(() => {
     if (archiveFolderId) {
-      console.log("📁 archiveFolderId is set:", archiveFolderId);
       fetchAvailableYears();
     } else {
-      console.log("ℹ️  No archiveFolderId - year filter disabled");
     }
   }, [archiveFolderId]);
 
@@ -119,16 +111,10 @@ export default function PayrollDashboard({
   // EFFECT: Fetch data when year changes
   // ============================================================
   useEffect(() => {
-    console.log("━".repeat(60));
-    console.log("🔄 [Data Fetch Effect] Triggered");
 
     // ✅ Normalize: "" or null = "Current"
     const normalizedYear = selectedYear?.trim() || null;
 
-    console.log("   selectedYear (raw):", selectedYear);
-    console.log("   selectedYear (normalized):", normalizedYear || "Current");
-    console.log("   availableYears.length:", availableYears.length);
-    console.log("━".repeat(60));
 
     // ✅ Fetch data every time selectedYear changes
     fetchDashboardData();
@@ -138,8 +124,6 @@ export default function PayrollDashboard({
   // EFFECT: Filter visualizations when periods change (NO API CALL)
   // ============================================================
   useEffect(() => {
-    console.log("🔄 Filters changed - regenerating visualizations");
-    console.log("   Periods:", selectedPeriods.length > 0 ? selectedPeriods : "all");
 
     if (allData.length > 0 && config.length > 0) {
       generateVisualizations(allData, selectedPeriods, config);
@@ -151,48 +135,28 @@ export default function PayrollDashboard({
   // ============================================================
   const fetchAvailableYears = async () => {
     try {
-      console.log("━".repeat(60));
-      console.log("📅 [fetchAvailableYears] START - Payroll");
-      console.log("━".repeat(60));
 
       setLoadingYears(true);
       
       // ✅ Debug: Check if archiveFolderId exists
-      console.log("🔍 [DEBUG] Initial checks:");
-      console.log("   archiveFolderId prop:", archiveFolderId || "❌ EMPTY/NULL");
-      console.log("   archiveFolderId type:", typeof archiveFolderId);
-      console.log("   archiveFolderId length:", archiveFolderId?.length || 0);
       
       if (!archiveFolderId) {
-        console.warn("⚠️ archiveFolderId is empty - Year filter will not work");
-        console.log("   This usually means:");
-        console.log("   1. Parent component didn't fetch archiveFolderId");
-        console.log("   2. API /api/dashboard/archive-folder-id returned empty");
-        console.log("   3. Google Sheet column J is empty");
         setLoadingYears(false);
         return;
       }
 
       let folderId = archiveFolderId.trim();
 
-      console.log("📁 Processing archiveFolderId:");
-      console.log("   Raw value:", folderId);
-      console.log("   Is URL?", folderId.includes("drive.google.com") || folderId.includes("https://"));
 
       if (folderId.includes("drive.google.com") || folderId.includes("https://")) {
-        console.log("🔗 Detected URL format, extracting ID...");
         const match = folderId.match(/folders\/([a-zA-Z0-9_-]+)/);
         if (match && match[1]) {
           folderId = match[1];
-          console.log("✅ Extracted Folder ID:", folderId);
         } else {
-          console.error("❌ Cannot extract Folder ID from URL");
-          console.error("   URL format invalid:", folderId);
           setLoadingYears(false);
           return;
         }
       } else {
-        console.log("🆔 Already in ID format:", folderId);
       }
 
       const params = new URLSearchParams({
@@ -201,12 +165,7 @@ export default function PayrollDashboard({
       });
 
       const fullUrl = `/api/dashboard/archive/years?${params}`;
-      console.log("🌐 Full API URL:", fullUrl);
-      console.log("   Params breakdown:");
-      console.log("      archiveFolderId:", folderId);
-      console.log("      moduleName:", moduleName || "(none)");
 
-      console.log("📤 Sending request...");
       const res = await fetch(fullUrl, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -214,43 +173,22 @@ export default function PayrollDashboard({
         },
       });
 
-      console.log("📡 Response received:");
-      console.log("   Status:", res.status);
-      console.log("   Status Text:", res.statusText);
-      console.log("   OK?", res.ok);
 
       if (!res.ok) {
         const errorText = await res.text();
-        console.error("❌ API Error Response:");
-        console.error("   Status:", res.status);
-        console.error("   Body:", errorText);
         throw new Error(`HTTP ${res.status}: ${errorText}`);
       }
 
       const data = await res.json();
 
-      console.log("✅ [fetchAvailableYears] Success:");
-      console.log("   Raw response:", data);
-      console.log("   Years found:", data.years?.length || 0);
       if (data.years && data.years.length > 0) {
-        console.log("   Years list:", data.years.map((y: any) => y.year).join(", "));
-        console.log("   Year details:");
         data.years.forEach((y: any, i: number) => {
-          console.log(`      [${i}] Year: ${y.year}, File: ${y.fileName}, ID: ${y.spreadsheetId}`);
         });
       } else {
-        console.warn("⚠️ No years returned from API");
-        console.log("   This means archive folder is empty or has no matching files");
       }
-      console.log("━".repeat(60));
 
       setAvailableYears(data.years || []);
     } catch (err: any) {
-      console.error("━".repeat(60));
-      console.error("❌ [fetchAvailableYears] FAILED");
-      console.error("   Error message:", err.message);
-      console.error("   Error stack:", err.stack);
-      console.error("━".repeat(60));
     } finally {
       setLoadingYears(false);
     }
@@ -264,9 +202,6 @@ export default function PayrollDashboard({
       setLoading(true);
       setError(null);
 
-      console.log("━".repeat(60));
-      console.log("📊 [fetchDashboardData] START");
-      console.log("━".repeat(60));
 
       const params = new URLSearchParams({
         spreadsheetId,
@@ -274,44 +209,25 @@ export default function PayrollDashboard({
         dataSheetName,
       });
 
-      console.log("📋 Initial params:");
-      console.log("   spreadsheetId:", spreadsheetId);
-      console.log("   configSheetName:", configSheetName);
-      console.log("   dataSheetName:", dataSheetName);
 
       // ✅ Normalize: treat "" as null
       const normalizedYear = selectedYear?.trim() || null;
 
-      console.log("🔍 Year filter check:");
-      console.log("   selectedYear (raw):", selectedYear);
-      console.log("   normalizedYear:", normalizedYear || "Current");
-      console.log("   availableYears.length:", availableYears.length);
 
       if (normalizedYear && availableYears.length > 0) {
-        console.log("🔎 Looking for archive spreadsheet...");
         const found = availableYears.find((y) => y.year === normalizedYear);
 
         if (found) {
-          console.log("✅ Found archive spreadsheet:");
-          console.log("   Year:", found.year);
-          console.log("   SpreadsheetId:", found.spreadsheetId);
-          console.log("   FileName:", found.fileName);
 
           params.append("year", normalizedYear);
           params.append("archiveSpreadsheetId", found.spreadsheetId);
 
-          console.log("📦 Added to params:");
-          console.log("   year:", normalizedYear);
-          console.log("   archiveSpreadsheetId:", found.spreadsheetId);
         } else {
-          console.warn("⚠️ Archive not found for year:", normalizedYear);
         }
       } else {
-        console.log("ℹ️  No year filter (will use main spreadsheet)");
       }
 
       const fullUrl = `/api/dashboard/data?${params.toString()}`;
-      console.log("🌐 API URL:", fullUrl);
 
       const res = await fetch(fullUrl, {
         method: "GET",
@@ -321,11 +237,9 @@ export default function PayrollDashboard({
         },
       });
 
-      console.log("📡 Response status:", res.status);
 
       if (!res.ok) {
         const errorText = await res.text();
-        console.error("❌ API Error:", errorText);
         throw new Error(`HTTP ${res.status}: ${errorText}`);
       }
 
@@ -339,11 +253,6 @@ export default function PayrollDashboard({
         throw new Error("Invalid API response: missing config or data");
       }
 
-      console.log("✅ [fetchDashboardData] Success:");
-      console.log("   Config fields:", data.config.length);
-      console.log("   Data records:", data.data.length);
-      console.log("   Metadata:", data.metadata);
-      console.log("━".repeat(60));
 
       setConfig(data.config);
       setAllData(data.data);
@@ -354,13 +263,9 @@ export default function PayrollDashboard({
       // Generate visualizations
       generateVisualizations(data.data, [], data.config);
     } catch (err: any) {
-      console.error("━".repeat(60));
-      console.error("❌ [fetchDashboardData] Error:", err.message);
-      console.error("━".repeat(60));
       setError(err.message || "โหลดข้อมูลไม่สำเร็จ");
     } finally {
       // ✅ CRITICAL: Always set loading to false
-      console.log("✅ Setting loading = false");
       setLoading(false);
     }
   };
@@ -373,8 +278,6 @@ export default function PayrollDashboard({
     periods: string[],
     configData: ConfigField[] = config
   ) => {
-    console.log("📊 Generating Payroll visualizations");
-    console.log(`   Periods: ${periods.length > 0 ? periods.join(",") : "all"}`);
 
     let filteredRows = rows;
 
@@ -386,7 +289,6 @@ export default function PayrollDashboard({
         filteredRows = filteredRows.filter((row) =>
           periods.includes(String(row[periodField.fieldName]).trim())
         );
-        console.log(`   📍 Period: ${beforePeriod} → ${filteredRows.length} records`);
       }
     }
 
@@ -402,21 +304,14 @@ export default function PayrollDashboard({
   // HANDLERS: Filter actions
   // ============================================================
   const handleYearChange = (year: string | null) => {
-    console.log("━".repeat(60));
-    console.log("📅 [onYearChange] Year filter changed:");
-    console.log("   From:", selectedYear);
-    console.log("   To:", year);
-    console.log("━".repeat(60));
     setSelectedYear(year);
   };
 
   const handlePeriodToggle = (period: string) => {
-    console.log("🔘 Period toggle clicked:", period);
     setSelectedPeriods((prev) => {
       const newSelection = prev.includes(period)
         ? prev.filter((p) => p !== period)
         : [...prev, period];
-      console.log("   📊 New selection:", newSelection);
       return newSelection;
     });
   };
@@ -428,7 +323,6 @@ export default function PayrollDashboard({
   };
 
   const handleClearFilters = () => {
-    console.log("🔄 Clearing all filters");
     setSelectedYear(null);
     setSelectedPeriods([]);
   };

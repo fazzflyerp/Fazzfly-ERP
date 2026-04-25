@@ -135,42 +135,29 @@ export function generateKPI(
   rows: any[],
   configFields: ConfigField[]
 ): { [key: string]: KPIData } {
-  console.log("=".repeat(60));
-  console.log(" [generateKPI] START - Payroll");
-  console.log("   Rows:", rows.length);
-  console.log("   Config fields:", configFields.length);
-  console.log("=".repeat(60));
 
   const newKpiData: { [key: string]: KPIData } = {};
   
   //  Get all number fields
   const numericFields = configFields.filter((f) => f.type === "number");
 
-  console.log(" Numeric fields found:", numericFields.length);
   numericFields.forEach((f, i) => {
-    console.log(`   [${i}] ${f.fieldName} (type: ${f.type}, order: ${f.order})`);
   });
 
   numericFields.forEach((field) => {
-    console.log(`\n Processing field: ${field.fieldName}`);
     
     // Sample first 3 rows
-    console.log("   Sample raw values:");
     rows.slice(0, 3).forEach((r, i) => {
-      console.log(`      Row ${i}: ${field.fieldName} = "${r[field.fieldName]}" (type: ${typeof r[field.fieldName]})`);
     });
 
     const values = rows
       .map((r) => parseNumericValue(r[field.fieldName]))
       .filter((v): v is number => typeof v === "number" && !isNaN(v));
 
-    console.log(`   Parsed values: ${values.length}/${rows.length} successful`);
     if (values.length > 0) {
-      console.log(`   Sample parsed: [${values.slice(0, 5).join(", ")}...]`);
     }
 
     if (values.length === 0) {
-      console.warn(`    No valid numbers found for ${field.fieldName}!`);
       newKpiData[field.fieldName] = { sum: 0, avg: 0, max: 0, count: 0 };
     } else {
       const sum = values.reduce((acc, curr) => acc + curr, 0);
@@ -178,7 +165,6 @@ export function generateKPI(
       const max = Math.max(...values);
       const count = values.length;
 
-      console.log(`    Results: sum=${sum.toFixed(2)}, avg=${avg.toFixed(2)}, max=${max}, count=${count}`);
 
       newKpiData[field.fieldName] = {
         sum: Number(sum.toFixed(2)),
@@ -189,10 +175,6 @@ export function generateKPI(
     }
   });
 
-  console.log("=".repeat(60));
-  console.log(" [generateKPI] DONE");
-  console.log("   Generated KPIs:", Object.keys(newKpiData));
-  console.log("=".repeat(60));
 
   return newKpiData;
 }
@@ -276,7 +258,6 @@ export function generatePerformanceDistribution(
   rows: any[],
   configFields: ConfigField[]
 ): any[] {
-  console.log(" Generating Performance Distribution...");
 
   // Group by employee
   const employeeData = groupByEmployee(rows, configFields);
@@ -302,7 +283,6 @@ export function generatePerformanceDistribution(
     percentage: total > 0 ? (count / total) * 100 : 0,
   }));
 
-  console.log(" Performance distribution:", result);
   return result;
 }
 
@@ -314,7 +294,6 @@ export function generateTopPerformers(
   rows: any[],
   configFields: ConfigField[]
 ): any[] {
-  console.log(" Generating Top Performers...");
 
   const employeeData = groupByEmployee(rows, configFields);
 
@@ -327,7 +306,6 @@ export function generateTopPerformers(
     score: emp.totalScore,
   }));
 
-  console.log(" Top performers:", result.length);
   return result;
 }
 
@@ -339,7 +317,6 @@ export function generateOTLeaders(
   rows: any[],
   configFields: ConfigField[]
 ): any[] {
-  console.log(" Generating OT Leaders...");
 
   const employeeData = groupByEmployee(rows, configFields);
 
@@ -352,7 +329,6 @@ export function generateOTLeaders(
     ot: emp.ot,
   }));
 
-  console.log(" OT leaders:", result.length);
   return result;
 }
 
@@ -364,7 +340,6 @@ export function generateAttendanceData(
   rows: any[],
   configFields: ConfigField[]
 ): any[] {
-  console.log(" Generating Attendance Data...");
 
   const employeeData = groupByEmployee(rows, configFields);
 
@@ -383,7 +358,6 @@ export function generateAttendanceData(
     leave: emp.leave,
   }));
 
-  console.log(" Attendance data:", result.length);
   return result;
 }
 
@@ -395,7 +369,6 @@ export function generatePerformanceTable(
   rows: any[],
   configFields: ConfigField[]
 ): any[] {
-  console.log(" Generating Performance Table...");
 
   const employeeData = groupByEmployee(rows, configFields);
 
@@ -420,7 +393,6 @@ export function generatePerformanceTable(
     };
   });
 
-  console.log(" Performance table:", result.length, "employees");
   return result;
 }
 
@@ -437,7 +409,6 @@ function groupByEmployee(rows: any[], configFields: ConfigField[]): any[] {
   );
 
   if (!nameField) {
-    console.error(" Cannot find employee name field!");
     return [];
   }
 
@@ -498,7 +469,6 @@ export function getPeriodOptions(
   let periodField = configFields.find((f) => f.type === "period");
   
   if (!periodField) {
-    console.warn(" Period field not found by type, using fallback");
     periodField = configFields.find((f) => 
       f.fieldName === "period" ||
       f.fieldName === "Period" ||
@@ -508,8 +478,6 @@ export function getPeriodOptions(
   }
   
   if (!periodField) {
-    console.error(" Cannot find period field!");
-    console.log("Available fields:", configFields.map(f => f.fieldName));
     return [];
   }
 
@@ -537,9 +505,6 @@ export function getPeriodOptionsFromData(
   config: ConfigField[],
   selectedYear?: string
 ): string[] {
-  console.log("[PERIOD_OPTIONS] Payroll");
-  console.log("   Data rows:", data.length);
-  console.log("   Selected year:", selectedYear || "current");
 
   let filteredData = data;
   
@@ -548,7 +513,6 @@ export function getPeriodOptionsFromData(
   }
 
   const periods = getPeriodOptions(filteredData, config);
-  console.log("   Periods found:", periods);
   
   return periods;
 }

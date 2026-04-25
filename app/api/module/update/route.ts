@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { withLogger } from "@/lib/with-logger";
-import { saBatchUpdate, saAppendRows, saLog } from "@/lib/google-sa";
+import { saBatchUpdate, saAppendRows, saLog, saInvalidateCache } from "@/lib/google-sa";
 import { verifySheetAccess } from "@/lib/verify-sheet-access";
 
 async function _POST(request: NextRequest) {
@@ -44,11 +44,15 @@ async function _POST(request: NextRequest) {
       await saAppendRows(spreadsheetId, `${sheetName}!A:A`, newRows.map((u: any) => u.data));
     }
 
+    if (batchData.length > 0 || newRows.length > 0) saInvalidateCache(spreadsheetId);
+
+    const firstUpdatedRowIndex = updates.find((u: any) => !u.isNew)?.rowIndex;
     await saLog(spreadsheetId, {
       email: userEmail,
       action: "update",
       module: sheetName,
       detail: `แก้ไข ${totalUpdated} แถว, เพิ่ม ${newRows.length} แถว`,
+      rowIndex: typeof firstUpdatedRowIndex === "number" ? firstUpdatedRowIndex : undefined,
     });
 
     return NextResponse.json({ success: true, updated: totalUpdated, appended: newRows.length });

@@ -1,3 +1,14 @@
+/**
+ * Payroll Config API — ดึง field config ของ slip เงินเดือน
+ * path: app/api/payroll/config/route.ts
+ *
+ * GET /api/payroll/config?spreadsheetId=&configName=
+ *   → อ่าน config sheet แล้วคืน fields[] สำหรับแสดงใน Payroll Slip
+ *   → type2: "P" = รายการรับ (บวก) | "N" = รายการหัก (ลบ)
+ *
+ * ⚠️ ใช้ accessToken ของ user (OAuth) ไม่ใช่ SA
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 

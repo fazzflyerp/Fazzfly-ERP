@@ -61,11 +61,16 @@ export async function generatePdf(html: string): Promise<Buffer> {
   try {
     const page = await browser.newPage();
 
-    // ใช้ networkidle0 บน dev (รอ Google Fonts), timeout ปกติบน serverless
     await page.setContent(html, {
-      waitUntil: isServerless ? "domcontentloaded" : "networkidle0",
+      waitUntil: "domcontentloaded",
       timeout: 30000,
     });
+    // รอ fonts โหลดครบก่อน render PDF (สำคัญสำหรับภาษาไทย)
+    // fallback 6s กรณี Google Fonts ช้า/timeout บน serverless
+    await Promise.race([
+      page.evaluate(() => document.fonts.ready),
+      new Promise((resolve) => setTimeout(resolve, 6000)),
+    ]);
 
     const pdfBuffer = await page.pdf({
       format: "A4",

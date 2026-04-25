@@ -9,6 +9,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import PDFDocument from "pdfkit";
+import { adminDriveUpload } from "@/lib/admin-drive";
+import { saReadRange } from "@/lib/google-sa";
+
+const MASTER_SHEET_ID = process.env.MASTER_SHEET_ID!;
 
 interface ReceiptData {
   // Company Info
@@ -67,13 +71,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const accessToken = (token as any).accessToken as string;
-
     // ✅ GET REQUEST BODY
     const body = await request.json();
     const receiptData: ReceiptData = body.receiptData;
     const saveToGoogleDrive = body.saveToGoogleDrive || false;
     const driveFolderId = body.driveFolderId || null;
+
+    // ✅ LOOKUP clientId from user email
+    let clientId = "";
+    if (saveToGoogleDrive) {
+      const userEmail = (token as any).email as string;
+      const rows = await saReadRange(MASTER_SHEET_ID, "client_user");
+      if (rows.length > 1) {
+        const headers = rows[0].map((h: string) => h.toLowerCase().trim());
+        const emailCol = headers.indexOf("email");
+        const cidCol   = headers.indexOf("client_id");
+        const found    = rows.slice(1).find((r: string[]) => (r[emailCol] || "").toLowerCase() === userEmail?.toLowerCase());
+        if (found) clientId = (found[cidCol] || "").toString().trim();
+      }
+      if (!clientId) {
+        return NextResponse.json({ error: "ไม่พบ clientId สำหรับผู้ใช้นี้" }, { status: 400 });
+      }
+    }
 
     if (!receiptData) {
       console.error(`❌ [${requestId}] Missing receiptData`);
@@ -295,44 +314,23 @@ export async function POST(request: NextRequest) {
       console.log(`⏳ [${requestId}] Saving to Google Drive...`);
 
       const fileName = `Receipt_${receiptData.receiptNo}_${Date.now()}.pdf`;
-      const metadata = {
-        name: fileName,
+
+      const { fileId, webViewLink } = await adminDriveUpload({
+        clientId,
+        fileName,
         mimeType: "application/pdf",
-        parents: [driveFolderId],
-      };
+        buffer: pdfBuffer,
+        parentFolderId: driveFolderId,
+      });
 
-      const form = new FormData();
-      form.append(
-        "metadata",
-        new Blob([JSON.stringify(metadata)], { type: "application/json" })
-      );
-      // ✅ แก้เป็น
-      form.append("file", new Blob([new Uint8Array(pdfBuffer)], { type: "application/pdf" }));
+      console.log(`✅ [${requestId}] Saved to Drive: ${fileId}`);
 
-      const driveResponse = await fetch(
-        "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: form,
-        }
-      );
-
-      if (driveResponse.ok) {
-        const driveData = await driveResponse.json();
-        console.log(`✅ [${requestId}] Saved to Drive: ${driveData.id}`);
-
-        return NextResponse.json({
-          success: true,
-          message: "PDF generated and saved to Google Drive",
-          driveFileId: driveData.id,
-          driveFileUrl: `https://drive.google.com/file/d/${driveData.id}/view`,
-        });
-      } else {
-        console.warn(`⚠️ [${requestId}] Failed to save to Drive`);
-      }
+      return NextResponse.json({
+        success: true,
+        message: "PDF generated and saved to Google Drive",
+        driveFileId: fileId,
+        driveFileUrl: webViewLink,
+      });
     }
 
     // ✅ RETURN PDF

@@ -1,6 +1,14 @@
 /**
- * Module Data API
- * Location: app/api/module/data/route.ts
+ * Module Data API — ดึงข้อมูลทั้งหมดจาก sheet ของ module
+ * path: app/api/module/data/route.ts
+ *
+ * GET /api/module/data?spreadsheetId=&sheetName=&includeHeader=true|false
+ *   → คืน rows[] ทุกแถวใน sheet (ข้าม header แถวแรก)
+ *   → ถ้า includeHeader=true คืน allRows[] รวม header ด้วย
+ *   → ใช้ใน edit page เพื่อแสดงข้อมูลในตาราง
+ *
+ * ✅ ตรวจสิทธิ์ verifySheetAccess ก่อนอ่าน
+ * ✅ Cache 60 วิ (stale-while-revalidate 30 วิ)
  */
 
 import { NextRequest, NextResponse } from "next/server";

@@ -155,14 +155,12 @@ export function getAvailableDatesFromData(
 ): string[] {
   if (!selectedPeriod || !periodFieldName || !dateFieldName) return [];
 
-  console.log(`🔍 Getting available dates for period: ${selectedPeriod}`);
 
   const filteredRows = data.filter((row) => {
     const rowPeriod = String(row[periodFieldName] || "").trim();
     return rowPeriod === String(selectedPeriod).trim();
   });
 
-  console.log(`   Found ${filteredRows.length} rows for this period`);
 
   const rawDates = filteredRows
     .map((r) => {
@@ -171,13 +169,11 @@ export function getAvailableDatesFromData(
     })
     .filter((v) => v !== "");
 
-  console.log(`   Found ${rawDates.length} dates (before normalization)`);
 
   const normalizedDates = rawDates
     .map((val) => normalizeDate(val))
     .filter((d): d is string => !!d);
 
-  console.log(`   Normalized to ${normalizedDates.length} dates`);
 
   const uniqueSorted = Array.from(new Set(normalizedDates)).sort();
 
@@ -224,18 +220,12 @@ export function generateKPI(
   rows: any[],
   configFields: ConfigField[]
 ): { [key: string]: KPIData } {
-  console.log("━".repeat(60));
-  console.log("📊 [generateKPI] START");
-  console.log(`   Total rows: ${rows.length}`);
-  console.log(`   Config fields: ${configFields.length}`);
   
   const newKpiData: { [key: string]: KPIData } = {};
   const numberFields = configFields.filter((f) => f.type === "number");
   
-  console.log(`   Number fields found: ${numberFields.map(f => f.fieldName).join(", ")}`);
 
   numberFields.forEach((field) => {
-    console.log(`\n   📈 Processing field: ${field.fieldName}`);
     
     const values = rows
       .map((r, idx) => {
@@ -243,17 +233,14 @@ export function generateKPI(
         const parsed = parseNumericValue(raw);
         
         if (idx < 3) {
-          console.log(`      Row ${idx}: raw="${raw}" → parsed=${parsed}`);
         }
         
         return parsed;
       })
       .filter((v): v is number => typeof v === "number" && !isNaN(v));
 
-    console.log(`      Valid values: ${values.length}/${rows.length}`);
 
     if (values.length === 0) {
-      console.log(`      ⚠️ NO VALUES FOUND!`);
       newKpiData[field.fieldName] = { sum: 0, avg: 0, max: 0, count: 0 };
     } else {
       const sum = values.reduce((acc, curr) => acc + curr, 0);
@@ -261,7 +248,6 @@ export function generateKPI(
       const max = Math.max(...values);
       const count = values.length;
 
-      console.log(`      ✅ sum=${sum.toFixed(2)}, avg=${avg.toFixed(2)}, max=${max.toFixed(2)}, count=${count}`);
 
       newKpiData[field.fieldName] = {
         sum: Number(sum.toFixed(2)),
@@ -272,7 +258,6 @@ export function generateKPI(
     }
   });
 
-  console.log("━".repeat(60));
   return newKpiData;
 }
 
@@ -349,7 +334,6 @@ export function generateLineChartData(
 ): any[] {
   const dateField = configFields.find((f) => f.type === "date");
   if (!dateField) {
-    console.warn("⚠️ No date field found in config");
     return [];
   }
 
@@ -379,7 +363,6 @@ export function generateLineChartData(
       new Date(a.date).getTime() - new Date(b.date).getTime()
   );
 
-  console.log(`✅ Line chart generated (${sorted.length} daily records)`);
   return sorted;
 }
 
@@ -402,7 +385,6 @@ export function generatePieChartData(rows: any[]): any[] {
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value);
 
-  console.log(`✅ Pie chart generated: ${result.length} products`);
   return result;
 }
 
@@ -411,17 +393,10 @@ export function generatePieChartData(rows: any[]): any[] {
  * ✅ Show: ผู้ขายที่จ่ายมากสุด
  */
 export function generateRankingTableData(rows: any[]): any[] {
-  console.log("━".repeat(60));
-  console.log("📊 [generateRankingTableData] START");
-  console.log(`   Total rows: ${rows.length}`);
   
   // ✅ DEBUG: Show first row structure
   if (rows.length > 0) {
-    console.log("   First row structure:");
     const firstRow = rows[0];
-    console.log(`     Keys: ${Object.keys(firstRow).join(", ")}`);
-    console.log(`     Full row:`, firstRow);
-    console.log(`     suppliers field: "${firstRow.suppliers}"`);
   }
   
   const grouped: {
@@ -436,7 +411,6 @@ export function generateRankingTableData(rows: any[]): any[] {
     
     // Log first 5 rows to see what's in suppliers field
     if (idx < 5) {
-      console.log(`   Row ${idx}: suppliers="${supplier}" (raw: ${JSON.stringify(row.suppliers)})`);
     }
     
     if (!supplier) {
@@ -454,11 +428,8 @@ export function generateRankingTableData(rows: any[]): any[] {
     grouped[supplier].total_cost += costValue;
   });
 
-  console.log(`   ✅ Suppliers found: ${suppliersFound}, empty: ${suppliersEmpty}`);
-  console.log(`   ✅ Unique suppliers: ${Object.keys(grouped).length}`);
   
   if (Object.keys(grouped).length > 0) {
-    console.log(`   ✅ Top suppliers: ${Object.keys(grouped).slice(0, 5).join(", ")}`);
   }
 
   const tableData = Object.entries(grouped)
@@ -470,8 +441,6 @@ export function generateRankingTableData(rows: any[]): any[] {
     .sort((a, b) => b.total_cost - a.total_cost)
     .slice(0, 10);
 
-  console.log(`✅ Ranking table generated: ${tableData.length} rows`);
-  console.log("━".repeat(60));
   return tableData;
 }
 
@@ -540,7 +509,6 @@ export function generatePendingItems(rows: any[]): any[] {
     }))
     .sort((a, b) => b.pending_count - a.pending_count);
 
-  console.log(`✅ Pending items generated: ${result.length} products`);
   return result;
 }
 
@@ -559,12 +527,9 @@ export function getPeriodOptions(
   // ✅ Try finding by type first
   let periodField = configFields.find((f) => f.type === "period");
   
-  console.log("🔍 Looking for period field...");
-  console.log("   Type 'period':", periodField?.fieldName);
   
   // ✅ Fallback: use known field names
   if (!periodField) {
-    console.warn("⚠️ Period field not found by type, trying fallbacks...");
     periodField = configFields.find((f) => 
       f.fieldName === "period" ||
       f.fieldName === "Period" ||
@@ -574,18 +539,14 @@ export function getPeriodOptions(
     );
     
     if (periodField) {
-      console.log(`   ✅ Found by fallback: ${periodField.fieldName}`);
     }
   }
   
   // ✅ If STILL no period field, return empty (don't error out)
   if (!periodField) {
-    console.warn("⚠️ No period field found - period filter will be disabled");
-    console.log("   Available fields:", configFields.map(f => `${f.fieldName}(type:${f.type})`).join(", "));
     return [];
   }
 
-  console.log(`✅ Using period field: ${periodField.fieldName}`);
   
   const periods = Array.from(
     new Set(
@@ -601,6 +562,5 @@ export function getPeriodOptions(
     )
   ).sort();
 
-  console.log(`   Found ${periods.length} unique periods: ${periods.join(", ")}`);
   return periods;
 }

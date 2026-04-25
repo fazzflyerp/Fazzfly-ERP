@@ -71,7 +71,6 @@ export default function MasterDataFormPage() {
     try {
       const accessToken = (session as any)?.accessToken;
       if (!accessToken) {
-        console.error("No access token");
         router.push("/ERP/home");
         return;
       }
@@ -84,21 +83,18 @@ export default function MasterDataFormPage() {
       });
 
       if (!accessResponse.ok) {
-        console.log("No master data access - redirecting");
         router.push("/ERP/home");
         return;
       }
 
       const accessData = await accessResponse.json();
       if (accessData.totalDatabases === 0) {
-        console.log("No databases available - redirecting");
         router.push("/ERP/home");
         return;
       }
 
       fetchFormConfig();
     } catch (err) {
-      console.error("Access check failed:", err);
       router.push("/ERP/home");
     }
   };
@@ -168,7 +164,6 @@ export default function MasterDataFormPage() {
 
       setLoading(false);
     } catch (err: any) {
-      console.error("Error loading form config:", err);
       setError(err.message || "Failed to load form");
       setLoading(false);
     }
@@ -202,7 +197,6 @@ export default function MasterDataFormPage() {
         setHelperOptions(helperData.helpers || {});
       }
     } catch (err) {
-      console.error("Failed to fetch helpers:", err);
     }
   };
 
@@ -345,7 +339,6 @@ export default function MasterDataFormPage() {
       setSuccess(true);
       setTimeout(resetForm, 2000);
     } catch (err: any) {
-      console.error("Submit error:", err);
       setError(err.message || "เกิดข้อผิดพลาดในการบันทึก");
     } finally {
       setSubmitting(false);

@@ -66,6 +66,8 @@ export async function saFindFolder(folderName: string, parentId: string): Promis
     q: `name='${folderName}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
     fields: "files(id)",
     spaces: "drive",
+    includeItemsFromAllDrives: true,
+    supportsAllDrives: true,
   });
   return res.data.files?.[0]?.id ?? null;
 }
@@ -77,6 +79,7 @@ export async function saFindOrCreateFolder(folderName: string, parentId: string)
 
   const drive = getDriveClient();
   const res = await drive.files.create({
+    supportsAllDrives: true,
     requestBody: { name: folderName, mimeType: "application/vnd.google-apps.folder", parents: [parentId] },
     fields: "id",
   });
@@ -94,6 +97,7 @@ export async function saUploadFile(params: {
   const { Readable } = require("stream");
 
   const res = await drive.files.create({
+    supportsAllDrives: true,
     requestBody: { name: params.fileName, parents: [params.parentFolderId] },
     media: { mimeType: params.mimeType, body: Readable.from(params.buffer) },
     fields: "id, webViewLink",
@@ -102,23 +106,52 @@ export async function saUploadFile(params: {
   return { fileId: res.data.id!, webViewLink: res.data.webViewLink! };
 }
 
-// ─── Helper: Read range (retry with exponential backoff) ─────────────────────
+// ─── In-memory read cache ─────────────────────────────────────────────────────
+// Persists for lifetime of warm serverless instance (~10-30 min on Vercel)
+// Key: `${spreadsheetId}::${range}`
+interface CacheEntry { data: any[][]; ts: number }
+const _readCache = new Map<string, CacheEntry>();
+const DEFAULT_TTL = 60_000; // 60 วินาที
+
+function _cacheKey(spreadsheetId: string, range: string) {
+  return `${spreadsheetId}::${range}`;
+}
+
+/** ลบ cache ของ spreadsheet นั้นทั้งหมด (เรียกหลัง write เพื่อไม่ให้ได้ข้อมูลเก่า) */
+export function saInvalidateCache(spreadsheetId: string): void {
+  for (const key of _readCache.keys()) {
+    if (key.startsWith(`${spreadsheetId}::`)) _readCache.delete(key);
+  }
+}
+
+// ─── Helper: Read range (retry + cache) ──────────────────────────────────────
 const RETRYABLE = new Set([401, 403, 429, 500, 502, 503, 504]);
 const MAX_RETRIES = 4;
 
 export async function saReadRange(
   spreadsheetId: string,
-  range: string
+  range: string,
+  ttl = DEFAULT_TTL   // ttl=0 → bypass cache (ใช้หลัง write)
 ): Promise<any[][]> {
+  const key = _cacheKey(spreadsheetId, range);
+
+  // ── cache hit ──
+  if (ttl > 0) {
+    const cached = _readCache.get(key);
+    if (cached && Date.now() - cached.ts < ttl) return cached.data;
+  }
+
+  // ── fetch with retry ──
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const sheets = getSheetsClient();
       const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
-      return res.data.values || [];
+      const data = res.data.values || [];
+      if (ttl > 0) _readCache.set(key, { data, ts: Date.now() });
+      return data;
     } catch (err: any) {
       const status = err?.response?.status ?? err?.code;
 
-      // auth error → reset client ก่อน retry
       if (status === 401 || status === 403) resetSheetsClient();
 
       const isRetryable =
@@ -128,7 +161,6 @@ export async function saReadRange(
         status === "ENOTFOUND";
 
       if (isRetryable && attempt < MAX_RETRIES - 1) {
-        // exponential backoff + jitter: 300ms, 900ms, 2700ms
         const delay = Math.min(300 * Math.pow(3, attempt) + Math.random() * 200, 10000);
         await new Promise((r) => setTimeout(r, delay));
         continue;
@@ -137,6 +169,53 @@ export async function saReadRange(
     }
   }
   return [];
+}
+
+// ─── Helper: Batch read หลาย range ใน 1 API call ────────────────────────────
+// คืน array ลำดับตรงกับ ranges ที่ส่งเข้า
+// ranges ที่ cache hit → ไม่โดน quota เลย
+export async function saBatchGetRanges(
+  spreadsheetId: string,
+  ranges: string[],
+  ttl = DEFAULT_TTL
+): Promise<any[][][]> {
+  const now = Date.now();
+  const results: (any[][] | null)[] = ranges.map((r) => {
+    if (ttl <= 0) return null;
+    const cached = _readCache.get(_cacheKey(spreadsheetId, r));
+    return cached && now - cached.ts < ttl ? cached.data : null;
+  });
+
+  const missing = results.map((v, i) => (v === null ? i : -1)).filter((i) => i !== -1);
+
+  if (missing.length > 0) {
+    const missingRanges = missing.map((i) => ranges[i]);
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        const sheets = getSheetsClient();
+        const res = await sheets.spreadsheets.values.batchGet({ spreadsheetId, ranges: missingRanges });
+        const valueRanges = res.data.valueRanges || [];
+        missing.forEach((origIdx, batchIdx) => {
+          const data = valueRanges[batchIdx]?.values || [];
+          results[origIdx] = data;
+          if (ttl > 0) _readCache.set(_cacheKey(spreadsheetId, ranges[origIdx]), { data, ts: now });
+        });
+        break;
+      } catch (err: any) {
+        const status = err?.response?.status ?? err?.code;
+        if (status === 401 || status === 403) resetSheetsClient();
+        const isRetryable = RETRYABLE.has(status) || status === "ECONNRESET" || status === "ETIMEDOUT";
+        if (isRetryable && attempt < MAX_RETRIES - 1) {
+          const delay = Math.min(300 * Math.pow(3, attempt) + Math.random() * 200, 10000);
+          await new Promise((r) => setTimeout(r, delay));
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
+
+  return results.map((v) => v ?? []);
 }
 
 // ─── Helper: Append row ──────────────────────────────────────────────────────
@@ -232,11 +311,11 @@ export async function saStructuralBatchUpdate(
 
 // ─── Helper: Activity Log ─────────────────────────────────────────────────────
 const LOG_SHEET = "activity_log";
-const LOG_HEADERS = ["timestamp", "email", "action", "module", "detail"];
+const LOG_HEADERS = ["timestamp", "email", "action", "module", "detail", "rowIndex"];
 
 export async function saLog(
   spreadsheetId: string,
-  entry: { email: string; action: string; module: string; detail?: string }
+  entry: { email: string; action: string; module: string; detail?: string; rowIndex?: number }
 ): Promise<void> {
   try {
     const sheets = getSheetsClient();
@@ -253,7 +332,7 @@ export async function saLog(
       });
       await sheets.spreadsheets.values.update({
         spreadsheetId,
-        range: `${LOG_SHEET}!A1:E1`,
+        range: `${LOG_SHEET}!A1:F1`,
         valueInputOption: "RAW",
         requestBody: { values: [LOG_HEADERS] },
       });
@@ -265,11 +344,12 @@ export async function saLog(
       entry.action,
       entry.module,
       entry.detail || "",
+      entry.rowIndex != null ? entry.rowIndex : "",
     ];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: `${LOG_SHEET}!A:E`,
+      range: `${LOG_SHEET}!A:F`,
       valueInputOption: "USER_ENTERED",
       insertDataOption: "INSERT_ROWS",
       requestBody: { values: [row] },

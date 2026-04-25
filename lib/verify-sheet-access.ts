@@ -37,10 +37,11 @@ async function getAccessEntry(userEmail: string): Promise<AccessEntry | null> {
   if (cached && now < cached.expiry) return cached;
 
   try {
-    const [userRows, dbRows, modRows] = await Promise.all([
+    const [userRows, dbRows, modRows, crmRows] = await Promise.all([
       saReadRange(MASTER_SHEET_ID, "client_user!A:E"),
       saReadRange(MASTER_SHEET_ID, "client_db!A:E").catch(() => [] as any[][]),
       saReadRange(MASTER_SHEET_ID, "client_modules!A:H").catch(() => [] as any[][]),
+      saReadRange(MASTER_SHEET_ID, "client_crm!A:H").catch(() => [] as any[][]),
     ]);
 
     const userRow = userRows.slice(1).find(
@@ -65,6 +66,19 @@ async function getAccessEntry(userEmail: string): Promise<AccessEntry | null> {
       const raw = (r[3] ?? "").toString().trim();
       if (raw) ownedSheetIds.add(extractSheetId(raw));
     });
+
+    // จาก client_crm: ใช้ header-based (crm_id, client_id, module_name, spreadsheet_id, ...)
+    if (crmRows.length > 1) {
+      const crmHeaders = crmRows[0].map((h: string) => (h ?? "").toString().toLowerCase().trim());
+      const crmClientCol = crmHeaders.indexOf("client_id");
+      const crmSheetCol  = crmHeaders.indexOf("spreadsheet_id");
+      crmRows.slice(1).forEach((r) => {
+        if (crmClientCol === -1 || crmSheetCol === -1) return;
+        if ((r[crmClientCol] ?? "").toString().trim() !== clientId) return;
+        const raw = (r[crmSheetCol] ?? "").toString().trim();
+        if (raw) ownedSheetIds.add(extractSheetId(raw));
+      });
+    }
 
     const entry: AccessEntry = { clientId, ownedSheetIds, expiry: now + ACCESS_TTL };
     evictOldest();
@@ -110,6 +124,18 @@ export async function verifySheetAccess(
 export async function getClientId(userEmail: string): Promise<string | null> {
   const entry = await getAccessEntry(userEmail);
   return entry?.clientId ?? null;
+}
+
+/**
+ * ดึง clientId + spreadsheetIds ทั้งหมดที่ client เป็นเจ้าของ
+ * รวม client_db, client_modules, client_crm
+ */
+export async function getOwnedSheetIds(
+  userEmail: string
+): Promise<{ clientId: string; sheetIds: string[] } | null> {
+  const entry = await getAccessEntry(userEmail);
+  if (!entry) return null;
+  return { clientId: entry.clientId, sheetIds: [...entry.ownedSheetIds] };
 }
 
 /**

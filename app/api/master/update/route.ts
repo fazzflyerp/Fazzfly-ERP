@@ -1,5 +1,15 @@
 /**
- * FILE PATH: app/api/master/update/route.ts
+ * Master Data Update API — อัปเดต/เพิ่มแถวใน master sheet ผ่าน user OAuth token
+ * path: app/api/master/update/route.ts
+ *
+ * POST /api/master/update
+ *   body: { spreadsheetId, sheetName, updates[], config[] }
+ *   → updates[].isNew=false → แก้ไข row ที่มีอยู่ (batch update)
+ *   → updates[].isNew=true  → เพิ่มแถวใหม่ (append)
+ *
+ * ⚠️ ใช้ accessToken ของ user (OAuth) ไม่ใช่ SA
+ *    → ไฟล์ต้องอยู่ใน Drive ของ user นั้น
+ *    → ต่างจาก /api/module/update ที่ใช้ SA
  */
 
 import { NextRequest, NextResponse } from "next/server";

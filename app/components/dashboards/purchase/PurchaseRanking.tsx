@@ -20,13 +20,8 @@ interface PurchaseRankingProps {
 export default function PurchaseRanking({
   rankingTableData,
 }: PurchaseRankingProps) {
-  console.log("📊 [PurchaseRanking] Rendering with data:", {
-    length: rankingTableData.length,
-    firstItem: rankingTableData[0],
-  });
 
   if (!rankingTableData || rankingTableData.length === 0) {
-    console.log("⚠️ No ranking data to display");
     return null;
   }
 

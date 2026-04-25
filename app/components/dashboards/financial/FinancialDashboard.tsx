@@ -91,12 +91,6 @@ export default function FinancialDashboard({
   // EFFECT: Validate props on mount
   // ============================================================
   useEffect(() => {
-    console.log("🎯 Financial Dashboard Props:");
-    console.log("   spreadsheetId:", spreadsheetId ? `${spreadsheetId.substring(0, 20)}...` : "❌ MISSING");
-    console.log("   configSheetName:", configSheetName || "❌ MISSING");
-    console.log("   dataSheetName:", dataSheetName || "❌ MISSING");
-    console.log("   moduleName:", moduleName);
-    console.log("   archiveFolderId:", archiveFolderId || "(not provided)");
 
     if (!spreadsheetId || !configSheetName || !dataSheetName || !accessToken) {
       setError("❌ Missing required props");
@@ -108,10 +102,8 @@ export default function FinancialDashboard({
   // ============================================================
   useEffect(() => {
     if (archiveFolderId) {
-      console.log("📁 archiveFolderId is set:", archiveFolderId);
       fetchAvailableYears();
     } else {
-      console.log("ℹ️  No archiveFolderId - year filter disabled");
     }
   }, [archiveFolderId]);
 
@@ -119,16 +111,10 @@ export default function FinancialDashboard({
   // EFFECT: Fetch data when year changes
   // ============================================================
   useEffect(() => {
-    console.log("━".repeat(60));
-    console.log("🔄 [Data Fetch Effect] Triggered");
 
     // ✅ Normalize: "" or null = "Current"
     const normalizedYear = selectedYear?.trim() || null;
 
-    console.log("   selectedYear (raw):", selectedYear);
-    console.log("   selectedYear (normalized):", normalizedYear || "Current");
-    console.log("   availableYears.length:", availableYears.length);
-    console.log("━".repeat(60));
 
     // ✅ Fetch data every time selectedYear changes
     fetchDashboardData();
@@ -138,8 +124,6 @@ export default function FinancialDashboard({
   // EFFECT: Filter visualizations when periods change (NO API CALL)
   // ============================================================
   useEffect(() => {
-    console.log("🔄 Filters changed - regenerating visualizations");
-    console.log("   Periods:", selectedPeriods.length > 0 ? selectedPeriods : "all");
 
     if (allData.length > 0 && config.length > 0) {
       generateVisualizations(allData, selectedPeriods, config);
@@ -151,48 +135,28 @@ export default function FinancialDashboard({
   // ============================================================
   const fetchAvailableYears = async () => {
     try {
-      console.log("━".repeat(60));
-      console.log("📅 [fetchAvailableYears] START - Financial");
-      console.log("━".repeat(60));
 
       setLoadingYears(true);
       
       // ✅ Debug: Check if archiveFolderId exists
-      console.log("🔍 [DEBUG] Initial checks:");
-      console.log("   archiveFolderId prop:", archiveFolderId || "❌ EMPTY/NULL");
-      console.log("   archiveFolderId type:", typeof archiveFolderId);
-      console.log("   archiveFolderId length:", archiveFolderId?.length || 0);
       
       if (!archiveFolderId) {
-        console.warn("⚠️ archiveFolderId is empty - Year filter will not work");
-        console.log("   This usually means:");
-        console.log("   1. Parent component didn't fetch archiveFolderId");
-        console.log("   2. API /api/dashboard/archive-folder-id returned empty");
-        console.log("   3. Google Sheet column J is empty");
         setLoadingYears(false);
         return;
       }
 
       let folderId = archiveFolderId.trim();
 
-      console.log("📁 Processing archiveFolderId:");
-      console.log("   Raw value:", folderId);
-      console.log("   Is URL?", folderId.includes("drive.google.com") || folderId.includes("https://"));
 
       if (folderId.includes("drive.google.com") || folderId.includes("https://")) {
-        console.log("🔗 Detected URL format, extracting ID...");
         const match = folderId.match(/folders\/([a-zA-Z0-9_-]+)/);
         if (match && match[1]) {
           folderId = match[1];
-          console.log("✅ Extracted Folder ID:", folderId);
         } else {
-          console.error("❌ Cannot extract Folder ID from URL");
-          console.error("   URL format invalid:", folderId);
           setLoadingYears(false);
           return;
         }
       } else {
-        console.log("🆔 Already in ID format:", folderId);
       }
 
       const params = new URLSearchParams({
@@ -201,12 +165,7 @@ export default function FinancialDashboard({
       });
 
       const fullUrl = `/api/dashboard/archive/years?${params}`;
-      console.log("🌐 Full API URL:", fullUrl);
-      console.log("   Params breakdown:");
-      console.log("      archiveFolderId:", folderId);
-      console.log("      moduleName:", moduleName || "(none)");
 
-      console.log("📤 Sending request...");
       const res = await fetch(fullUrl, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -214,28 +173,19 @@ export default function FinancialDashboard({
         },
       });
 
-      console.log("🔡 Response Status:", res.status);
 
       if (!res.ok) {
         const errorText = await res.text();
-        console.error("❌ API Error:", errorText);
         throw new Error(`HTTP ${res.status}: ${errorText}`);
       }
 
       const yearData = await res.json();
 
-      console.log("✅ [fetchAvailableYears] Success:");
-      console.log("   Available years:", yearData.years?.length || 0);
       if (yearData.years) {
-        console.log("   Years:", yearData.years.map((y: any) => y.year).join(", "));
       }
-      console.log("━".repeat(60));
 
       setAvailableYears(yearData.years || []);
     } catch (err: any) {
-      console.error("━".repeat(60));
-      console.error("❌ [fetchAvailableYears] Error:", err.message);
-      console.error("━".repeat(60));
       setAvailableYears([]);
     } finally {
       setLoadingYears(false);
@@ -247,10 +197,6 @@ export default function FinancialDashboard({
   // ============================================================
   const fetchDashboardData = async () => {
     try {
-      console.log("━".repeat(60));
-      console.log("📊 [fetchDashboardData] START - Financial");
-      console.log("   selectedYear:", selectedYear || "Current");
-      console.log("━".repeat(60));
 
       setLoading(true);
       setError(null);
@@ -263,9 +209,7 @@ export default function FinancialDashboard({
       });
 
       const fullUrl = `/api/dashboard/data?${params}`;
-      console.log("🌐 Full API URL:", fullUrl);
 
-      console.log("📤 Sending request...");
       const res = await fetch(fullUrl, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -273,11 +217,9 @@ export default function FinancialDashboard({
         },
       });
 
-      console.log("🔡 Response Status:", res.status);
 
       if (!res.ok) {
         const errorText = await res.text();
-        console.error("❌ API Error:", errorText);
         throw new Error(`HTTP ${res.status}: ${errorText}`);
       }
 
@@ -291,11 +233,6 @@ export default function FinancialDashboard({
         throw new Error("Invalid API response: missing config or data");
       }
 
-      console.log("✅ [fetchDashboardData] Success:");
-      console.log("   Config fields:", data.config.length);
-      console.log("   Data records:", data.data.length);
-      console.log("   Metadata:", data.metadata);
-      console.log("━".repeat(60));
 
       setConfig(data.config);
       setAllData(data.data);
@@ -306,13 +243,9 @@ export default function FinancialDashboard({
       // Generate visualizations
       generateVisualizations(data.data, [], data.config);
     } catch (err: any) {
-      console.error("━".repeat(60));
-      console.error("❌ [fetchDashboardData] Error:", err.message);
-      console.error("━".repeat(60));
       setError(err.message || "โหลดข้อมูลไม่สำเร็จ");
     } finally {
       // ✅ CRITICAL: Always set loading to false
-      console.log("✅ Setting loading = false");
       setLoading(false);
     }
   };
@@ -325,8 +258,6 @@ export default function FinancialDashboard({
     periods: string[],
     configData: ConfigField[] = config
   ) => {
-    console.log("📊 Generating Financial visualizations");
-    console.log(`   Periods: ${periods.length > 0 ? periods.join(",") : "all"}`);
 
     let filteredRows = rows;
 
@@ -338,7 +269,6 @@ export default function FinancialDashboard({
         filteredRows = filteredRows.filter((row) =>
           periods.includes(String(row[periodField.fieldName]).trim())
         );
-        console.log(`   📍 Period: ${beforePeriod} → ${filteredRows.length} records`);
       }
     }
 
@@ -354,21 +284,14 @@ export default function FinancialDashboard({
   // HANDLERS: Filter actions
   // ============================================================
   const handleYearChange = (year: string | null) => {
-    console.log("━".repeat(60));
-    console.log("📅 [onYearChange] Year filter changed:");
-    console.log("   From:", selectedYear);
-    console.log("   To:", year);
-    console.log("━".repeat(60));
     setSelectedYear(year);
   };
 
   const handlePeriodToggle = (period: string) => {
-    console.log("🔘 Period toggle clicked:", period);
     setSelectedPeriods((prev) => {
       const newSelection = prev.includes(period)
         ? prev.filter((p) => p !== period)
         : [...prev, period];
-      console.log("   📊 New selection:", newSelection);
       return newSelection;
     });
   };
@@ -380,7 +303,6 @@ export default function FinancialDashboard({
   };
 
   const handleClearFilters = () => {
-    console.log("🔄 Clearing all filters");
     setSelectedYear(null);
     setSelectedPeriods([]);
   };

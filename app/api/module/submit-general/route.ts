@@ -15,6 +15,7 @@ import {
   saStructuralBatchUpdate,
   saWriteRange,
   saLog,
+  saInvalidateCache,
 } from "@/lib/google-sa";
 import { verifySheetAccess } from "@/lib/verify-sheet-access";
 
@@ -146,6 +147,7 @@ async function insertRowsWithDateSort(params: {
     // Write data
     const endCol = getColumnLetter(headerRow.length);
     await saWriteRange(spreadsheetId, `${sheetName}!A${insertIndex}:${endCol}${insertIndex}`, [row]);
+    saInvalidateCache(spreadsheetId);
 
     console.log(`✅ [${requestId}] Row ${i + 1} inserted at ${insertIndex}`);
 
@@ -231,6 +233,7 @@ export async function POST(request: NextRequest) {
       action: "submit",
       module: sheetName,
       detail: `บันทึก ${results.length} แถว`,
+      rowIndex: results[0]?.rowIndex,
     });
 
     return NextResponse.json({

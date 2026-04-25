@@ -169,7 +169,6 @@ export function getAvailableDatesFromData(
 ): string[] {
   if (!selectedPeriod || !periodFieldName || !dateFieldName) return [];
 
-  console.log(`🔍 Getting available dates for period: ${selectedPeriod}`);
 
   // Filter by period
   const filteredRows = data.filter((row) => {
@@ -177,7 +176,6 @@ export function getAvailableDatesFromData(
     return rowPeriod === String(selectedPeriod).trim();
   });
 
-  console.log(`   Found ${filteredRows.length} rows for this period`);
 
   // Get raw dates
   const rawDates = filteredRows
@@ -187,14 +185,12 @@ export function getAvailableDatesFromData(
     })
     .filter((v) => v !== "");
 
-  console.log(`   Found ${rawDates.length} dates (before normalization)`);
 
   // Normalize dates
   const normalizedDates = rawDates
     .map((val) => normalizeDate(val))
     .filter((d): d is string => !!d);
 
-  console.log(`   Normalized to ${normalizedDates.length} dates`);
 
   // Remove duplicates and sort
   const uniqueSorted = Array.from(new Set(normalizedDates)).sort();
@@ -328,7 +324,6 @@ export function generateLineChartData(
 ): any[] {
   const dateField = configFields.find((f) => f.type === "date");
   if (!dateField) {
-    console.warn("⚠️ No date field found in config");
     return [];
   }
 
@@ -358,7 +353,6 @@ export function generateLineChartData(
       new Date(a.date).getTime() - new Date(b.date).getTime()
   );
 
-  console.log(`✅ Line chart generated (${sorted.length} daily records)`);
   return sorted;
 }
 
@@ -382,7 +376,6 @@ export function generatePieChartData(rows: any[]): any[] {
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value);
 
-  console.log(`✅ Pie chart generated: ${result.length} categories`);
   return result;
 }
 
@@ -418,7 +411,6 @@ export function generateRankingTableData(rows: any[]): any[] {
     .sort((a, b) => b.total_amount - a.total_amount)
     .slice(0, 10);
 
-  console.log(`✅ Ranking table generated: ${tableData.length} rows`);
   return tableData;
 }
 
@@ -438,7 +430,6 @@ export function getPeriodOptions(
   
   // ✅ Fallback: use known field name
   if (!periodField) {
-    console.warn("⚠️ Period field not found by type, using fallback");
     periodField = configFields.find((f) => 
       f.fieldName === "period" ||
       f.fieldName === "Period" ||
@@ -448,8 +439,6 @@ export function getPeriodOptions(
   }
   
   if (!periodField) {
-    console.error("❌ Cannot find period field!");
-    console.log("Available fields:", configFields.map(f => f.fieldName));
     return [];
   }
 

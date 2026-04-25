@@ -1,9 +1,14 @@
 /**
- * Master Databases API
- * Location: app/api/master/databases/route.ts
+ * Master Databases API — ดึงรายการ spreadsheets ทั้งหมดของ client
+ * path: app/api/master/databases/route.ts
  *
  * GET /api/master/databases
+ *   → อ่าน client_db จาก Master sheet แล้วคืน spreadsheets[] ของ client นั้น
+ *   → ใช้ใน Admin หน้า Master Data เพื่อเลือก spreadsheet ที่จะจัดการ
+ *
  * ✅ ใช้ SA — ไม่พึ่ง OAuth token ของ user
+ * ✅ Cache 5 นาที (ลด quota)
+ * ✅ รองรับ ?refresh=true เพื่อ bypass cache
  */
 
 import { NextRequest, NextResponse } from "next/server";

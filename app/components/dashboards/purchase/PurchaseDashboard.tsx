@@ -55,11 +55,9 @@ function transformArrayDataToObject(data: any[], config: ConfigField[]): any[] {
   // Check if first row is array or object
   const firstRow = data[0];
   if (!Array.isArray(firstRow)) {
-    console.log("ℹ️ Data already in object format");
 
     // ✅ But check if field names need normalization
     if (firstRow && typeof firstRow === 'object') {
-      console.log("🔧 Normalizing field names (case-insensitive)");
 
       // Create mapping: lowercase -> actual key in object
       const actualKeys = Object.keys(firstRow);
@@ -68,7 +66,6 @@ function transformArrayDataToObject(data: any[], config: ConfigField[]): any[] {
         lowerToActual[key.toLowerCase()] = key;
       });
 
-      console.log("   Actual keys in data:", actualKeys.join(", "));
 
       // Create normalized config mapping
       const normalized = config.map(field => {
@@ -76,7 +73,6 @@ function transformArrayDataToObject(data: any[], config: ConfigField[]): any[] {
         const actualKey = lowerToActual[lowerFieldName];
 
         if (actualKey && actualKey !== field.fieldName) {
-          console.log(`   ✅ Mapped: ${field.fieldName} → ${actualKey}`);
           return { ...field, fieldName: actualKey };
         }
         return field;
@@ -95,9 +91,6 @@ function transformArrayDataToObject(data: any[], config: ConfigField[]): any[] {
     return data;
   }
 
-  console.log("━".repeat(60));
-  console.log("🔄 [transformArrayDataToObject] START");
-  console.log(`   Total rows: ${data.length}`);
 
   // Create fieldName -> index mapping based on order
   const fieldMap: Record<string, number> = {};
@@ -105,9 +98,7 @@ function transformArrayDataToObject(data: any[], config: ConfigField[]): any[] {
     fieldMap[field.fieldName] = field.order - 1; // order starts at 1, array index starts at 0
   });
 
-  console.log("📋 Field mapping:");
   config.forEach((field) => {
-    console.log(`   ${field.fieldName} (order ${field.order}) → index ${fieldMap[field.fieldName]}`);
   });
 
   // Transform each row
@@ -123,15 +114,11 @@ function transformArrayDataToObject(data: any[], config: ConfigField[]): any[] {
     });
 
     if (rowIdx < 3) {
-      console.log(`\n   Row ${rowIdx} (original): [${row.slice(0, 8).map(v => `"${v}"`).join(", ")}...]`);
-      console.log(`   Row ${rowIdx} (transformed):`, obj);
     }
 
     return obj;
   });
 
-  console.log(`\n✅ Transformed ${transformed.length} rows`);
-  console.log("━".repeat(60));
   return transformed;
 }
 
@@ -179,15 +166,6 @@ export default function PurchaseDashboard({
   // EFFECT: Validate props on mount
   // ============================================================
   useEffect(() => {
-    console.log("🎯 Purchase Dashboard Props:");
-    console.log(
-      "   spreadsheetId:",
-      spreadsheetId ? `${spreadsheetId.substring(0, 20)}...` : "❌ MISSING"
-    );
-    console.log("   configSheetName:", configSheetName || "❌ MISSING");
-    console.log("   dataSheetName:", dataSheetName || "❌ MISSING");
-    console.log("   moduleName:", moduleName);
-    console.log("   archiveFolderId:", archiveFolderId || "(not provided)");
 
     if (!spreadsheetId || !configSheetName || !dataSheetName) {
       setError("❌ Missing required props: spreadsheetId, configSheetName, or dataSheetName");
@@ -199,10 +177,8 @@ export default function PurchaseDashboard({
   // ============================================================
   useEffect(() => {
     if (archiveFolderId) {
-      console.log("📁 archiveFolderId is set:", archiveFolderId);
       fetchAvailableYears();
     } else {
-      console.log("ℹ️  No archiveFolderId - year filter disabled");
     }
   }, [archiveFolderId]);
 
@@ -210,10 +186,6 @@ export default function PurchaseDashboard({
   // EFFECT: Fetch data when year changes
   // ============================================================
   useEffect(() => {
-    console.log("━".repeat(60));
-    console.log("🔄 [Data Fetch Effect] Triggered");
-    console.log("   selectedYear:", selectedYear || "Current");
-    console.log("━".repeat(60));
 
     fetchDashboardData();
   }, [selectedYear]);
@@ -229,9 +201,6 @@ export default function PurchaseDashboard({
   // EFFECT: Filter visualizations when periods/date change (NO API CALL)
   // ============================================================
   useEffect(() => {
-    console.log("🔄 Filters changed - regenerating visualizations");
-    console.log("   Periods:", selectedPeriods.length > 0 ? selectedPeriods : "all");
-    console.log("   Date:", selectedDate || "all");
 
     if (allData.length > 0 && config.length > 0) {
       generateVisualizations(allData, selectedPeriods, config);
@@ -242,11 +211,7 @@ export default function PurchaseDashboard({
   // EFFECT: Log ranking data for debugging
   // ============================================================
   useEffect(() => {
-    console.log("📊 Ranking data updated:");
-    console.log(`   Count: ${rankingTableData.length}`);
     if (rankingTableData.length > 0) {
-      console.log(`   Top supplier: ${rankingTableData[0].supplier_name}`);
-      console.log(`   Data:`, rankingTableData);
     }
   }, [rankingTableData]);
 
@@ -255,9 +220,6 @@ export default function PurchaseDashboard({
   // ============================================================
   const fetchAvailableYears = async () => {
     try {
-      console.log("━".repeat(60));
-      console.log("📅 [fetchAvailableYears] START");
-      console.log("━".repeat(60));
 
       setLoadingYears(true);
       let folderId = (archiveFolderId || "").trim();
@@ -280,16 +242,13 @@ export default function PurchaseDashboard({
       const res = await fetch(`/api/dashboard/archive/years?${params}`);
 
       if (!res.ok) {
-        console.log(`ℹ️ Could not fetch years (HTTP ${res.status})`);
         setLoadingYears(false);
         return;
       }
 
       const years = await res.json();
-      console.log("✅ Years fetched:", years.map((y: any) => y.year).join(", "));
       setAvailableYears(years);
     } catch (err: any) {
-      console.log("ℹ️ Year fetch skipped:", err.message);
     } finally {
       setLoadingYears(false);
     }
@@ -316,7 +275,6 @@ export default function PurchaseDashboard({
         return;
       }
 
-      console.log("📡 Fetching dashboard data...");
       const params = new URLSearchParams({
         spreadsheetId: targetSpreadsheetId,
         configSheetName,
@@ -333,7 +291,6 @@ export default function PurchaseDashboard({
 
       if (data.config) {
         setConfig(data.config);
-        console.log(`📋 Config loaded: ${data.config.length} fields`);
       }
 
       if (data.data) {
@@ -344,9 +301,7 @@ export default function PurchaseDashboard({
         generateVisualizations(transformedData, [], data.config || []);
       }
 
-      console.log("✅ Dashboard data loaded");
     } catch (err: any) {
-      console.error("❌ Error fetching dashboard data:", err.message);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -361,8 +316,6 @@ export default function PurchaseDashboard({
     periods: string[],
     configFields: ConfigField[]
   ) => {
-    console.log("📊 Generating visualizations (CLIENT-SIDE ONLY)");
-    console.log(`   Periods: ${periods.length > 0 ? periods.join(", ") : "(none/disabled)"}`);
 
     // Filter by periods (only if periods exist)
     let workingData = data;
@@ -387,7 +340,6 @@ export default function PurchaseDashboard({
       }
     }
 
-    console.log(`   Working data rows: ${workingData.length}`);
 
     setFilteredData(workingData);
 
@@ -396,19 +348,13 @@ export default function PurchaseDashboard({
     setKpiData(kpi);
 
     // Generate charts
-    console.log("📊 Generating line chart...");
     const lineData = generateLineChartData(workingData, configFields);
-    console.log(`   Line chart: ${lineData.length} records`);
     setLineChartData(lineData);
 
-    console.log("📊 Generating pie chart...");
     const pieData = generatePieChartData(workingData);
-    console.log(`   Pie chart: ${pieData.length} items`);
     setPieChartData(pieData);
 
-    console.log("📊 Generating ranking table...");
     const rankingData = generateRankingTableData(workingData);
-    console.log(`   Ranking data: ${rankingData.length} suppliers`);
     setRankingTableData(rankingData);
   };
 
@@ -456,7 +402,6 @@ export default function PurchaseDashboard({
   const periodOptions = getPeriodOptions(allData, config);
 
   if (!loading && config.length > 0 && periodOptions.length === 0 && allData.length > 0) {
-    console.log("ℹ️ No period field found - showing dashboard without period filter");
   }
 
   return (

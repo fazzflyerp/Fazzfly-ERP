@@ -45,15 +45,19 @@ const archivoBlack = Archivo_Black({
 export const metadata: Metadata = {
   title: "Fazzfly ERP",
   description: "Next-Gen Enterprise Resource Planning System",
+  other: {
+    google: "notranslate", // ป้องกัน Chrome auto-translate popup
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="th"
+      suppressHydrationWarning
       className={`${notoSansThai.variable} ${notoSansThai.className} ${archivoBlack.variable} ${archivoBlack.className}`}
     >
-      <body>
+      <body suppressHydrationWarning>
         <Providers>{children}</Providers>
         <GoogleTranslate />
       </body>

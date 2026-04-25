@@ -1,3 +1,14 @@
+/**
+ * Debug Session API — ตรวจสอบ session / token สำหรับ debug เท่านั้น
+ * path: app/api/debug/session/route.ts
+ *
+ * GET /api/debug/session
+ *   → คืนข้อมูล session ปัจจุบัน: email, token status, expiresAt
+ *   → ใช้ตรวจว่า accessToken / refreshToken ยังใช้งานได้อยู่มั้ย
+ *
+ * ⚠️ ไม่ควร expose ใน production — ใช้ debug เฉพาะ dev
+ */
+
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/auth-options";

@@ -155,14 +155,12 @@ export function getAvailableDatesFromData(
 ): string[] {
   if (!selectedPeriod || !periodFieldName || !dateFieldName) return [];
 
-  console.log(`🔍 Getting available dates for period: ${selectedPeriod}`);
 
   const filteredRows = data.filter((row) => {
     const rowPeriod = String(row[periodFieldName] || "").trim();
     return rowPeriod === String(selectedPeriod).trim();
   });
 
-  console.log(`   Found ${filteredRows.length} rows for this period`);
 
   const rawDates = filteredRows
     .map((r) => {
@@ -171,13 +169,11 @@ export function getAvailableDatesFromData(
     })
     .filter((v) => v !== "");
 
-  console.log(`   Found ${rawDates.length} dates (before normalization)`);
 
   const normalizedDates = rawDates
     .map((val) => normalizeDate(val))
     .filter((d): d is string => !!d);
 
-  console.log(`   Normalized to ${normalizedDates.length} dates`);
 
   const uniqueSorted = Array.from(new Set(normalizedDates)).sort();
 
@@ -211,18 +207,12 @@ export function generateKPI(
   rows: any[],
   configFields: ConfigField[]
 ): { [key: string]: KPIData } {
-  console.log("━".repeat(60));
-  console.log("📊 [generateKPI] START");
-  console.log(`   Total rows: ${rows.length}`);
-  console.log(`   Config fields: ${configFields.length}`);
   
   const newKpiData: { [key: string]: KPIData } = {};
   const numberFields = configFields.filter((f) => f.type === "number");
   
-  console.log(`   Number fields found: ${numberFields.map(f => f.fieldName).join(", ")}`);
 
   numberFields.forEach((field) => {
-    console.log(`\n   📈 Processing field: ${field.fieldName}`);
     
     const values = rows
       .map((r, idx) => {
@@ -230,17 +220,14 @@ export function generateKPI(
         const parsed = parseNumericValue(raw);
         
         if (idx < 3) {  // Log first 3 rows
-          console.log(`      Row ${idx}: raw="${raw}" → parsed=${parsed}`);
         }
         
         return parsed;
       })
       .filter((v): v is number => typeof v === "number" && !isNaN(v));
 
-    console.log(`      Valid values: ${values.length}/${rows.length}`);
 
     if (values.length === 0) {
-      console.log(`      ⚠️ NO VALUES FOUND!`);
       newKpiData[field.fieldName] = { sum: 0, avg: 0, max: 0, count: 0 };
     } else {
       const sum = values.reduce((acc, curr) => acc + curr, 0);
@@ -248,7 +235,6 @@ export function generateKPI(
       const max = Math.max(...values);
       const count = values.length;
 
-      console.log(`      ✅ sum=${sum.toFixed(2)}, avg=${avg.toFixed(2)}, max=${max.toFixed(2)}, count=${count}`);
 
       newKpiData[field.fieldName] = {
         sum: Number(sum.toFixed(2)),
@@ -259,7 +245,6 @@ export function generateKPI(
     }
   });
 
-  console.log("━".repeat(60));
   return newKpiData;
 }
 
@@ -336,7 +321,6 @@ export function generateLineChartData(
 ): any[] {
   const dateField = configFields.find((f) => f.type === "date");
   if (!dateField) {
-    console.warn("⚠️ No date field found in config");
     return [];
   }
 
@@ -363,7 +347,6 @@ export function generateLineChartData(
       new Date(a.date).getTime() - new Date(b.date).getTime()
   );
 
-  console.log(`✅ Line chart generated (${sorted.length} daily records, cost only)`);
   return sorted;
 }
 /**
@@ -387,7 +370,6 @@ export function generatePieChartData(rows: any[]): any[] {
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value);
 
-  console.log(`✅ Pie chart generated: ${result.length} products`);
   return result;
 }
 
@@ -447,7 +429,6 @@ export function getPeriodOptions(
   let periodField = configFields.find((f) => f.type === "period");
   
   if (!periodField) {
-    console.warn("⚠️ Period field not found by type, using fallback");
     periodField = configFields.find((f) => 
       f.fieldName === "period" ||
       f.fieldName === "Period" ||
@@ -456,8 +437,6 @@ export function getPeriodOptions(
   }
   
   if (!periodField) {
-    console.error("❌ Cannot find period field!");
-    console.log("Available fields:", configFields.map(f => f.fieldName));
     return [];
   }
 
