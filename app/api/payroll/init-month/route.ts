@@ -80,13 +80,16 @@ export async function POST(request: NextRequest) {
 
     // พนักงานที่มีแถวอยู่แล้วในเดือนนี้
     const alreadyInited = new Set<string>();
-    if (empColIdx >= 0 && periodColIdx >= 0) {
-      for (const row of dataRows) {
-        const rowEmp    = (row[empColIdx] || "").toString().trim();
-        const rowPeriod = (row[periodColIdx] || "").toString().trim();
-        if (rowEmp && monthKey(rowPeriod) === curMonth) {
-          alreadyInited.add(rowEmp);
-        }
+
+    // ถ้า config ไม่มี order → colIdx = -1 → ไม่สามารถ detect ซ้ำได้ → abort init แทน duplicate
+    if (empColIdx < 0 || periodColIdx < 0)
+      return NextResponse.json({ skipped: true, reason: "Cannot detect duplicates: employee or period field has no order in config" });
+
+    for (const row of dataRows) {
+      const rowEmp    = (row[empColIdx] || "").toString().trim();
+      const rowPeriod = (row[periodColIdx] || "").toString().trim();
+      if (rowEmp && monthKey(rowPeriod) === curMonth) {
+        alreadyInited.add(rowEmp);
       }
     }
 
