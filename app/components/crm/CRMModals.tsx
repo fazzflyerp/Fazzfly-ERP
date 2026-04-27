@@ -105,10 +105,10 @@ export function AptModal({ open, onClose, isEdit, loading, form, setForm, custom
   return (
     <Modal onClose={onClose}>
       <MHead title={isEdit ? "แก้ไขนัดหมาย" : "นัดหมายใหม่"} onClose={onClose}/>
-      <div className="px-6 py-4 grid grid-cols-2 gap-3">
+      <div className="px-4 sm:px-6 py-3 sm:py-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
         {sorted.map(renderField)}
       </div>
-      <div className="flex gap-3 px-6 pb-6">
+      <div className="sticky bottom-0 bg-white border-t border-pink-100 flex gap-3 px-4 sm:px-6 py-4">
         <BtnSecondary onClick={onClose} className="flex-1 py-2.5">ยกเลิก</BtnSecondary>
         <BtnPrimary loading={loading} onClick={onSave} className="flex-1 py-2.5">บันทึกนัดหมาย</BtnPrimary>
       </div>
@@ -185,10 +185,10 @@ export function CustModal({ open, onClose, isEdit, loading, form, setForm, confi
   return (
     <Modal onClose={onClose}>
       <MHead title={isEdit ? "แก้ไขลูกค้า" : "เพิ่มลูกค้าใหม่"} onClose={onClose}/>
-      <div className="px-6 py-4 grid grid-cols-2 gap-3">
+      <div className="px-4 sm:px-6 py-3 sm:py-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
         {sorted.map(renderField)}
       </div>
-      <div className="flex gap-3 px-6 pb-6">
+      <div className="sticky bottom-0 bg-white border-t border-pink-100 flex gap-3 px-4 sm:px-6 py-4">
         <BtnSecondary onClick={onClose} className="flex-1 py-2.5">ยกเลิก</BtnSecondary>
         <BtnPrimary loading={loading} onClick={onSave} className="flex-1 py-2.5">บันทึกลูกค้า</BtnPrimary>
       </div>
@@ -210,7 +210,7 @@ export function FlwModal({ open, onClose, isEdit, loading, form, setForm, custom
   return (
     <Modal onClose={onClose}>
       <MHead title={isEdit ? "แก้ไขงานติดตาม" : "เพิ่มงานติดตาม"} onClose={onClose}/>
-      <div className="px-6 py-4 grid grid-cols-2 gap-3">
+      <div className="px-4 sm:px-6 py-3 sm:py-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
         <FL label="รหัสลูกค้า *" full>
           <Sel value={form.customer_id||""} onChange={e => {
             const opts = config.helperOptions[config.helperMap.customers] || [];
@@ -241,7 +241,7 @@ export function FlwModal({ open, onClose, isEdit, loading, form, setForm, custom
         <FL label="รายละเอียด" full><Txt value={form.description||""} onChange={e=>setForm(f=>({...f,description:e.target.value}))} rows={3} placeholder="สิ่งที่ต้องทำ..."/></FL>
         <FL label="หมายเหตุ" full><Txt value={form.notes||""} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} rows={2} placeholder="บันทึกเพิ่มเติม..."/></FL>
       </div>
-      <div className="flex gap-3 px-6 pb-6">
+      <div className="sticky bottom-0 bg-white border-t border-pink-100 flex gap-3 px-4 sm:px-6 py-4">
         <BtnSecondary onClick={onClose} className="flex-1 py-2.5">ยกเลิก</BtnSecondary>
         <BtnPrimary loading={loading} onClick={onSave} className="flex-1 py-2.5">บันทึกงาน</BtnPrimary>
       </div>
@@ -260,13 +260,18 @@ export function AptDetailPanel({ apt, onClose, onEdit, onViewProfile, updAptStat
   if (!apt) return null;
   return (
     <Modal onClose={onClose}>
-      <div className="flex items-center justify-between px-6 py-4 border-b border-pink-200">
-        <Badge label={S_CFG[apt.status].l} bg={S_CFG[apt.status].bg} text={S_CFG[apt.status].text}/>
-        <button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
-        </button>
+      <div className="sticky top-0 bg-white z-10 border-b border-pink-200 rounded-t-3xl">
+        <div className="flex sm:hidden justify-center pt-2.5 pb-1">
+          <div className="w-10 h-1 rounded-full bg-pink-200"/>
+        </div>
+        <div className="flex items-center justify-between px-5 sm:px-6 py-3 sm:py-4">
+          <Badge label={S_CFG[apt.status].l} bg={S_CFG[apt.status].bg} text={S_CFG[apt.status].text}/>
+          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
       </div>
-      <div className="px-6 py-4 space-y-4">
+      <div className="px-4 sm:px-6 py-3 sm:py-4 space-y-4">
         <div>
           <p className="text-xl font-bold text-slate-800">{apt.customer_name}</p>
           <p className="text-sm text-slate-600 mt-0.5">{apt.customer_phone}</p>
@@ -304,7 +309,7 @@ export function AptDetailPanel({ apt, onClose, onEdit, onViewProfile, updAptStat
           </div>
         </div>
       </div>
-      <div className="flex gap-3 px-6 pb-6">
+      <div className="sticky bottom-0 bg-white border-t border-pink-100 flex gap-3 px-4 sm:px-6 py-4">
         <BtnSecondary onClick={() => { onEdit(apt); onClose(); }} className="flex-1 py-2.5 gap-2">
           <Ic d={IC.edit} cls="w-4 h-4"/>แก้ไข
         </BtnSecondary>
@@ -516,8 +521,12 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
         className="relative bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[88vh]"
         onClick={e => e.stopPropagation()}
       >
+        {/* Drag handle – mobile only */}
+        <div className="flex sm:hidden justify-center pt-2.5 pb-1 flex-shrink-0">
+          <div className="w-10 h-1 rounded-full bg-pink-200"/>
+        </div>
         {/* Header */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-pink-100 flex-shrink-0">
+        <div className="flex items-center gap-3 px-5 py-3 sm:py-4 border-b border-pink-100 flex-shrink-0">
           <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${mcf.grad} flex items-center justify-center text-white font-bold text-lg flex-shrink-0 shadow`}>
             {cust.full_name.charAt(0)}
           </div>

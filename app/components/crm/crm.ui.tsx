@@ -29,22 +29,27 @@ export const Badge = ({ label, bg, text }: { label: string; bg: string; text: st
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
 export const Modal = ({ onClose, children }: { onClose: () => void; children: React.ReactNode }) => (
-  <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+  <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
     <div className="absolute inset-0 backdrop-blur-sm" style={{ background: "rgba(253,242,248,0.75)" }} onClick={onClose}/>
-    <div className="relative w-full max-w-lg max-h-[92vh] overflow-y-auto bg-white rounded-3xl shadow-2xl shadow-pink-100 border border-pink-200 z-10">
+    <div className="relative w-full sm:max-w-lg max-h-[92vh] overflow-y-auto bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl shadow-pink-100 border-t border-x border-pink-200 sm:border z-10">
       {children}
     </div>
   </div>
 );
 
 export const MHead = ({ title, onClose }: { title: string; onClose: () => void }) => (
-  <div className="flex items-center justify-between px-6 py-4 border-b border-pink-200">
-    <p className="text-base font-bold text-slate-800">{title}</p>
-    <button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors">
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
-      </svg>
-    </button>
+  <div className="sticky top-0 bg-white z-10 border-b border-pink-200 rounded-t-3xl">
+    <div className="flex sm:hidden justify-center pt-2.5 pb-1">
+      <div className="w-10 h-1 rounded-full bg-pink-200"/>
+    </div>
+    <div className="flex items-center justify-between px-5 sm:px-6 py-3 sm:py-4">
+      <p className="text-base font-bold text-slate-800">{title}</p>
+      <button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
   </div>
 );
 

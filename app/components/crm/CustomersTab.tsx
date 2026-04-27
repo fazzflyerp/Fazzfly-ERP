@@ -17,7 +17,7 @@ interface Props {
 
 export default function CustomersTab({ customers, courses, follows, custQ, setCustQ, config, openCust, setDCust }: Props) {
   const filtered = customers.filter(c =>
-    `${c.full_name}${c.nickname}${c.phone_number}`.toLowerCase().includes(custQ.toLowerCase())
+    `${c.full_name}${c.nickname}${c.phone_number}${c.customer_id}`.toLowerCase().includes(custQ.toLowerCase())
   );
 
   return (
@@ -35,7 +35,7 @@ export default function CustomersTab({ customers, courses, follows, custQ, setCu
 
       <div className="relative mb-6">
         <Ic d={IC.search} cls="w-4 h-4 text-pink-500 absolute left-3.5 top-1/2 -translate-y-1/2"/>
-        <input value={custQ} onChange={e => setCustQ(e.target.value)} placeholder="ค้นหาชื่อ, เบอร์, ชื่อเล่น..."
+        <input value={custQ} onChange={e => setCustQ(e.target.value)} placeholder="ค้นหาชื่อ, เบอร์, ชื่อเล่น, รหัสลูกค้า..."
           className="w-full pl-10 pr-4 py-3 rounded-2xl border border-pink-200 bg-white/90 backdrop-blur-xl shadow-sm text-sm placeholder-pink-300 text-slate-700 focus:outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-100 transition-all"/>
       </div>
 
