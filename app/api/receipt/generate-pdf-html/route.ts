@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { generatePdf } from "@/lib/pdf-browser";
+import { getEmbeddedFontStyle } from "@/lib/pdf-fonts";
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,12 +36,14 @@ export async function POST(request: NextRequest) {
       itemCount > 8 ? 11 :
         itemCount > 5 ? 12 : 13;
 
+    const sarabunCss = await getEmbeddedFontStyle("Sarabun", ["400", "600", "700"]);
+
     const html = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>${sarabunCss}</style>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     

@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { generatePdf } from "@/lib/pdf-browser";
+import { getEmbeddedFontStyle } from "@/lib/pdf-fonts";
 
 export async function POST(request: NextRequest) {
   try {
@@ -90,12 +91,14 @@ export async function POST(request: NextRequest) {
       "    (3) กำไรเฉพาะส่วนที่ได้รับยกเว้นเงินได้นำมาคำนวณมาจนมีการจ่ายให้แก่ผู้ถือหุ้น ซึ่งได้รับเงินปันผลไม่ได้รับผลประโยชน์ภาษี",
     ];
 
+    const sarabunCss = await getEmbeddedFontStyle("Sarabun", ["400", "600", "700"]);
+
     const html = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>${sarabunCss}</style>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Sarabun', sans-serif; color: #000; font-size: 12px; line-height: 1.5; }

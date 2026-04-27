@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { generatePdf } from "@/lib/pdf-browser";
+import { getEmbeddedFontStyle } from "@/lib/pdf-fonts";
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,12 +36,14 @@ export async function POST(request: NextRequest) {
     const activeEarnings = earnings.filter((item: any) => item.amount > 0);
     const activeDeductions = deductions.filter((item: any) => item.amount > 0);
 
+    const notoThaiCss = await getEmbeddedFontStyle("Noto+Sans+Thai", ["400", "600", "700"]);
+
     const html = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>${notoThaiCss}</style>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
