@@ -258,7 +258,7 @@ export default function SystemSelectorPage() {
       </div>
 
       {/* Top Header */}
-      <div className="relative z-20 flex-shrink-0 px-6 py-4 bg-white/80 backdrop-blur-xl border-b border-blue-100">
+      <div className="relative z-20 flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 bg-white/80 backdrop-blur-xl border-b border-blue-100">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="md:hidden">
@@ -456,7 +456,7 @@ export default function SystemSelectorPage() {
                   {userData.clientName}
                 </span>
               </h2>
-              <p className="text-slate-400 mb-8">เลือกระบบจากแถบซ้ายเพื่อเริ่มใช้งาน</p>
+              <p className="text-slate-400 mb-4 sm:mb-8">เลือกระบบจากแถบซ้ายเพื่อเริ่มใช้งาน</p>
 
               <div className="flex items-stretch gap-2 sm:gap-4 flex-wrap justify-center">
                 <div className="bg-white/90 backdrop-blur-xl rounded-2xl px-4 sm:px-8 py-4 sm:py-5 border border-blue-100 shadow-lg text-center flex-1 min-w-[90px]">
@@ -483,13 +483,13 @@ export default function SystemSelectorPage() {
                   <div className="space-y-6">
                     {/* Overview Dashboard — อยู่บนสุด */}
                     {dashboardItems.length > 0 && (
-                      <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-blue-100 shadow-lg shadow-blue-100/30 p-6">
+                      <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-blue-100 shadow-lg shadow-blue-100/30 p-4 sm:p-6">
                         <OverviewDashboard dashboardItems={dashboardItems} />
                       </div>
                     )}
 
                     {/* Task Summary */}
-                    <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-violet-100 shadow-lg p-6">
+                    <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-violet-100 shadow-lg p-4 sm:p-6">
                       <div className="flex items-center justify-between mb-5">
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-md">
@@ -542,7 +542,7 @@ export default function SystemSelectorPage() {
 
                 {/* ── Staff: Today's Tasks ── */}
                 {!isAdmin() && (
-                  <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-violet-100 shadow-lg p-6">
+                  <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-violet-100 shadow-lg p-4 sm:p-6">
                     <div className="flex items-center justify-between mb-5">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-md">

@@ -55,6 +55,7 @@ export default function FormPage() {
     const sheetName = searchParams.get("sheetName");
 
     const isPayroll = !!(configName?.toLowerCase().includes("payroll"));
+    const isSales   = !!(configName?.toLowerCase().includes("sales"));
 
     useEffect(() => {
         if (status === "unauthenticated") {
@@ -225,6 +226,34 @@ export default function FormPage() {
         setHelperInfo({});
     };
 
+    // Sales-specific validation: ถ้ากรอกเงินแล้ว และสถานะไม่ใช่ "ตัด Member"
+    // → ต้องเลือก ประเภทของราคา และ ช่องทางชำระ เสมอ
+    const isPriceTypeFn = (fn: string) => /^price_type_/i.test(fn);
+    const isPaymentFn   = (fn: string) => /^payment_/i.test(fn);
+
+    const validateSalesRow = (row: Record<string, string>, allF: FormField[], rowLabel: string): string | null => {
+        const status = (row["program_status"] || "").trim();
+        if (status.includes("ตัด Member")) return null; // ยกเว้น ตัด Member
+
+        const priceField = allF.find(f => !isPriceTypeFn(f.fieldName) && !isPaymentFn(f.fieldName) && f.type === "number");
+        const amount = priceField ? (row[priceField.fieldName] || "").trim() : "";
+        if (!amount) return null; // ยังไม่กรอกเงิน → ไม่บังคับ
+
+        const priceTypeFields = allF.filter(f => isPriceTypeFn(f.fieldName));
+        if (priceTypeFields.length > 0) {
+            const hasPriceType = priceTypeFields.some(f => row[f.fieldName] && row[f.fieldName] !== "");
+            if (!hasPriceType) return `${rowLabel} - โปรดเลือกประเภทของราคา`;
+        }
+
+        const paymentFields = allF.filter(f => isPaymentFn(f.fieldName));
+        if (paymentFields.length > 0) {
+            const hasPayment = paymentFields.some(f => row[f.fieldName] && row[f.fieldName] !== "");
+            if (!hasPayment) return `${rowLabel} - โปรดเลือกช่องทางชำระ`;
+        }
+
+        return null;
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -259,6 +288,11 @@ export default function FormPage() {
                     setError(`สินค้าที่ ${i + 1} - โปรดกรอก: ${missing}`);
                     return;
                 }
+
+                if (isSales) {
+                    const salesErr = validateSalesRow(row, lineItemFields, `สินค้าที่ ${i + 1}`);
+                    if (salesErr) { setError(salesErr); return; }
+                }
             }
         } else {
             const filledRows = lineItems.filter((row) =>
@@ -280,6 +314,11 @@ export default function FormPage() {
                 if (missing) {
                     setError(`รายการที่ ${i + 1} - โปรดกรอก: ${missing}`);
                     return;
+                }
+
+                if (isSales) {
+                    const salesErr = validateSalesRow(row, formFields, `รายการที่ ${i + 1}`);
+                    if (salesErr) { setError(salesErr); return; }
                 }
             }
         }
@@ -785,14 +824,14 @@ export default function FormPage() {
                 <form onSubmit={handleSubmit}>
                     {/* ✅ Customer Section - ถ้ามี */}
                     {hasSection && customerFields.length > 0 && (
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-6">
-                            <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-4 sm:mb-6">
+                            <div className="px-4 py-3 sm:px-6 sm:py-4 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
                                 <div className="flex items-center gap-2">
                                     <div className="w-1 h-6 bg-indigo-600 rounded-full"></div>
-                                    <h2 className="text-base font-bold text-slate-900">ข้อมูลทั่วไป</h2>
+                                    <h2 className="text-sm sm:text-base font-bold text-slate-900">ข้อมูลทั่วไป</h2>
                                 </div>
                             </div>
-                            <div className="p-6 space-y-5">
+                            <div className="p-4 sm:p-6 space-y-4">
                                 {/* ── Regular fields ── */}
                                 {(() => {
                                     const isBottomField = (fn: string) => fn === "staff" || fn === "doctor";
@@ -831,27 +870,24 @@ export default function FormPage() {
                         <div className="space-y-4">
                             {lineItems.map((row, idx) => (
                                 <div key={idx} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                                    <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200 flex justify-between items-center">
+                                    <div className="px-4 py-3 sm:px-6 sm:py-4 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200 flex justify-between items-center">
                                         <div className="flex items-center gap-2">
                                             <div className="w-1 h-6 bg-indigo-600 rounded-full"></div>
-                                            <h2 className="text-base font-bold text-slate-900">รายการที่ {idx + 1}</h2>
+                                            <h2 className="text-sm sm:text-base font-bold text-slate-900">รายการที่ {idx + 1}</h2>
                                         </div>
                                         {lineItems.length > 1 && (
                                             <button
                                                 type="button"
                                                 onClick={() => deleteLineItem(idx)}
-                                                className="px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                                             >
-                                                <div className="flex items-center gap-1.5">
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                    </svg>
-                                                    <span>ลบ</span>
-                                                </div>
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
                                             </button>
                                         )}
                                     </div>
-                                    <div className="p-6 space-y-5">
+                                    <div className="p-4 sm:p-6 space-y-4">
                                         {/* ── Regular fields ── */}
                                         {(() => {
                                             const allF = lineItemFields.length > 0 ? lineItemFields : formFields;
@@ -917,34 +953,32 @@ export default function FormPage() {
                     )}
 
                     {/* ✅ Action Buttons - เหมือน Master Form */}
-                    <div className="mt-6 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200">
-                            <div className="flex items-center justify-between">
+                    <div className="mt-4 sm:mt-6 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div className="px-4 py-3 sm:px-6 sm:py-4 bg-slate-50 border-t border-slate-200">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                 <p className="text-xs text-slate-500 flex items-center gap-1">
                                     <span className="text-red-500">*</span>
                                     <span>ฟิลด์ที่จำเป็นต้องกรอก</span>
                                 </p>
-                                <div className="flex gap-3">
+                                <div className="flex gap-2 sm:gap-3">
                                     <button
                                         type="button"
                                         onClick={clearAll}
-                                        className="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-all"
+                                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-all"
                                     >
-                                        <div className="flex items-center gap-2">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                            </svg>
-                                            <span>ล้างข้อมูล</span>
-                                        </div>
+                                        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        </svg>
+                                        <span>ล้าง</span>
                                     </button>
                                     <button
                                         type="submit"
                                         disabled={submitting}
-                                        className="px-6 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-lg hover:from-indigo-700 hover:to-indigo-800 shadow-lg shadow-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all"
+                                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-lg hover:from-indigo-700 hover:to-indigo-800 shadow-lg shadow-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                                     >
                                         {submitting ? (
                                             <>
-                                                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                                <svg className="animate-spin h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24">
                                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                                                 </svg>
@@ -952,7 +986,7 @@ export default function FormPage() {
                                             </>
                                         ) : (
                                             <>
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                                 </svg>
                                                 <span>บันทึก</span>
