@@ -327,8 +327,12 @@ import { useState as _useState, useEffect as _useEffect, useRef as _useRef, useC
 interface DriveFolder { id: string; name: string }
 interface DriveImage  { id: string; name: string; mimeType: string; thumbnailLink: string | null; webViewLink: string | null; createdTime: string | null; size: string | null }
 
+function photoSrc(img: DriveImage, clientId: string) {
+  return `/api/crm/photos/file?clientId=${encodeURIComponent(clientId)}&fileId=${img.id}&mimeType=${encodeURIComponent(img.mimeType || "image/jpeg")}`;
+}
+
 function PhotoCard({ img, clientId, onClick }: { img: DriveImage; clientId: string; onClick: () => void }) {
-  const src = `/api/crm/photos/file?clientId=${encodeURIComponent(clientId)}&fileId=${img.id}`;
+  const src = photoSrc(img, clientId);
   return (
     <button onClick={onClick}
       className="relative aspect-square rounded-xl overflow-hidden bg-slate-100 hover:opacity-90 transition-opacity">
@@ -864,7 +868,7 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
                 </a>
               )}
               <img
-                src={`/api/crm/photos/file?clientId=${encodeURIComponent(clientId)}&fileId=${lightbox.id}`}
+                src={photoSrc(lightbox, clientId)}
                 alt={lightbox.name}
                 className="max-w-full max-h-full rounded-xl shadow-2xl object-contain"
                 onClick={e => e.stopPropagation()}
