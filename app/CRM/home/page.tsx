@@ -381,12 +381,13 @@ export default function CRMPage() {
           </div>
         </div>
 
-        <div className="flex gap-2 mb-6 lg:mb-8 overflow-x-auto scrollbar-hide bg-white/50 backdrop-blur-md rounded-xl lg:rounded-2xl p-2 border border-pink-200">
+        {/* Desktop tab bar — hidden on mobile */}
+        <div className="hidden lg:flex gap-2 mb-8 overflow-x-auto scrollbar-hide bg-white/50 backdrop-blur-md rounded-2xl p-2 border border-pink-200">
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
-              className={`px-4 lg:px-6 py-2.5 lg:py-3 font-semibold transition-all relative whitespace-nowrap text-sm lg:text-base ${tab === t.id ? "text-pink-600 font-bold" : "text-slate-600 hover:text-slate-800"}`}>
-              <span className="flex items-center gap-1 lg:gap-2">
-                <svg className="w-4 lg:w-5 h-4 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d={t.icon} /></svg>
+              className={`px-6 py-3 font-semibold transition-all relative whitespace-nowrap text-base ${tab === t.id ? "text-pink-600 font-bold" : "text-slate-600 hover:text-slate-800"}`}>
+              <span className="flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d={t.icon} /></svg>
                 {t.label}
                 {t.badge > 0 && <span className={`ml-1 px-1.5 py-0.5 rounded-full text-xs font-bold ${tab === t.id ? "bg-pink-100 text-pink-600" : "bg-slate-100 text-slate-500"}`}>{t.badge}</span>}
               </span>
@@ -398,6 +399,27 @@ export default function CRMPage() {
         {tab === "cal" && <CalendarTab apts={apts} calY={calY} calM={calM} calDays={calDays} selDate={selDate} selApts={selApts} setSelDate={setSelDate} setCalY={setCalY} setCalM={setCalM} cntDate={cntDate} isTodayC={isTodayC} isSelC={isSelC} openApt={openApt} setDApt={setDApt} />}
         {tab === "custs" && <CustomersTab customers={custs} courses={courses} follows={follows} custQ={custQ} setCustQ={setCustQ} config={cfg} openCust={openCust} setDCust={setDCust} />}
         {tab === "follows" && <FollowsTab follows={follows} followQ={followQ} setFollowQ={setFollowQ} followF={followF} setFollowF={setFollowF} openFollow={() => openFollow()} updFollowStatus={updFollowStatus} onEditFollow={f => { setEFollow(f); setFFollow({ ...f }); setMFollow(true); }} />}
+      </div>
+
+      {/* Mobile bottom navigation */}
+      <div className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur-xl border-t border-pink-200 shadow-lg shadow-pink-100/50">
+        <div className="flex">
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={`flex-1 flex flex-col items-center gap-1 py-3 relative transition-colors ${tab === t.id ? "text-rose-500" : "text-slate-400"}`}>
+              <div className="relative">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d={t.icon} /></svg>
+                {t.badge > 0 && (
+                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center">
+                    {t.badge > 99 ? "99+" : t.badge}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] font-semibold">{t.label}</span>
+              {tab === t.id && <div className="absolute top-0 left-4 right-4 h-0.5 bg-rose-500 rounded-full" />}
+            </button>
+          ))}
+        </div>
       </div>
 
       <AptModal open={mApt} onClose={closeMApt} isEdit={!!eApt} loading={sApt} form={fApt} setForm={setFApt} customers={custs} config={cfg} fields={aptFields} onSave={saveApt} />

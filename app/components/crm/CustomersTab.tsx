@@ -16,8 +16,14 @@ interface Props {
 }
 
 export default function CustomersTab({ customers, courses, follows, custQ, setCustQ, config, openCust, setDCust }: Props) {
-  const filtered = customers.filter(c =>
-    `${c.full_name}${c.nickname}${c.phone_number}${c.customer_id}`.toLowerCase().includes(custQ.toLowerCase())
+  // DEBUG: log customer IDs to see actual format
+  console.log("[CRM] customers sample:", customers.slice(0, 3).map(c => ({ id: c.customer_id, name: c.full_name })));
+
+  const q = custQ.toLowerCase().trim();
+  const filtered = q === "" ? customers : customers.filter(c =>
+    [c.full_name, c.nickname, c.customer_id].some(
+      field => (field || "").toLowerCase().trim().includes(q)
+    )
   );
 
   return (
@@ -35,7 +41,7 @@ export default function CustomersTab({ customers, courses, follows, custQ, setCu
 
       <div className="relative mb-6">
         <Ic d={IC.search} cls="w-4 h-4 text-pink-500 absolute left-3.5 top-1/2 -translate-y-1/2"/>
-        <input value={custQ} onChange={e => setCustQ(e.target.value)} placeholder="ค้นหาชื่อ, เบอร์, ชื่อเล่น, รหัสลูกค้า..."
+        <input value={custQ} onChange={e => setCustQ(e.target.value)} placeholder="ค้นหารหัสลูกค้า, ชื่อ, ชื่อเล่น..."
           className="w-full pl-10 pr-4 py-3 rounded-2xl border border-pink-200 bg-white/90 backdrop-blur-xl shadow-sm text-sm placeholder-pink-300 text-slate-700 focus:outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-100 transition-all"/>
       </div>
 
@@ -54,15 +60,22 @@ export default function CustomersTab({ customers, courses, follows, custQ, setCu
             return (
               <button key={c.customer_id} onClick={() => setDCust(c)}
                 className="text-left bg-white/90 backdrop-blur-xl rounded-2xl shadow-lg shadow-pink-50 p-5 border border-pink-200 hover:shadow-2xl hover:shadow-pink-100 hover:-translate-y-2 transition-all duration-300 group h-full">
-                <div className="flex items-center justify-between mb-4">
-                  <div className={`p-3 rounded-xl bg-gradient-to-br ${mcf.grad} text-white text-xl font-bold group-hover:scale-110 transition-transform`}>
-                    {c.full_name.charAt(0)}
-                  </div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[11px] font-mono font-semibold text-pink-400 bg-pink-50 px-2 py-0.5 rounded-lg border border-pink-100">
+                    {c.customer_id || "—"}
+                  </span>
                   <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${mcf.bg} ${mcf.text} ${mcf.border}`}>{ml}</span>
                 </div>
 
-                <h3 className="text-lg font-bold text-slate-800 mb-1 group-hover:text-rose-500 transition-colors">{c.full_name}</h3>
-                {c.nickname && <p className="text-sm text-slate-600 mb-2">({c.nickname})</p>}
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={`p-2.5 rounded-xl bg-gradient-to-br ${mcf.grad} text-white text-base font-bold group-hover:scale-110 transition-transform flex-shrink-0`}>
+                    {c.full_name.charAt(0)}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-base font-bold text-slate-800 group-hover:text-rose-500 transition-colors truncate">{c.full_name}</h3>
+                    {c.nickname && <p className="text-xs text-slate-500 truncate">({c.nickname})</p>}
+                  </div>
+                </div>
 
                 <div className="flex items-center gap-1.5 text-sm text-slate-500 mb-2">
                   <Ic d={IC.phone} cls="w-3.5 h-3.5 text-pink-500"/>
