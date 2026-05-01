@@ -32,6 +32,12 @@ export interface FollowUp {
   appointment_id: string; notes: string; reminded_at: string; created_by: string;
 }
 
+export interface OffDay {
+  rowIndex?: number;
+  id: string; date: string; employee_name: string; reason: string;
+  created_at: string; created_by: string;
+}
+
 export type TabId = "cal" | "custs" | "follows";
 
 // ─── Helper option — เหมือนที่ ERP form ใช้ ──────────────────────────────────
@@ -78,6 +84,7 @@ export interface CRMConfig {
 
 // ─── API Paths ────────────────────────────────────────────────────────────────
 export const APT_API = "/api/crm/appointments";
+export const OFFDAY_API = "/api/crm/offdays";
 export const CUST_API = "/api/crm/customers";
 export const COURSE_API = "/api/crm/courses";
 export const FOLLOW_API = "/api/crm/followups";

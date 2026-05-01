@@ -14,6 +14,7 @@ import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
 import { useUserRole } from "@/app/context/UserRoleContext";
 import OverviewDashboard from "@/app/components/dashboards/overview/OverviewDashboard";
+import StaffCalendar from "@/app/components/StaffCalendar";
 import QuickNav, { QuickNavTrigger } from "@/app/components/QuickNav";
 import { LangToggle } from "@/app/components/GoogleTranslate";
 
@@ -475,6 +476,13 @@ export default function SystemSelectorPage() {
                 </div>
               </div>
             </div>
+
+            {/* Staff Calendar — แสดงเสมอเมื่อโหลดข้อมูลแล้ว */}
+            {!roleLoading && userData && (
+              <div className="mb-6">
+                <StaffCalendar clientId={userData.clientId}/>
+              </div>
+            )}
 
             {!roleLoading && (
               <>

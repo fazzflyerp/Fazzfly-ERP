@@ -17,6 +17,7 @@ import { IC } from "@/app/components/crm/crm.ui";
 import CRMNavBar from "@/app/components/crm/CRMNavBar";
 import QuickNav from "@/app/components/QuickNav";
 import CalendarTab from "@/app/components/crm/CalendarTab";
+import type { Employee as StaffEmployee } from "@/app/components/StaffCalendar";
 import CustomersTab from "@/app/components/crm/CustomersTab";
 import FollowsTab from "@/app/components/crm/FollowsTab";
 import { AptModal, CustModal, FlwModal, AptDetailPanel, CustDetailPanel } from "@/app/components/crm/CRMModals";
@@ -37,6 +38,8 @@ export default function CRMPage() {
   const [custs, setCusts] = useState<Customer[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [follows, setFollows] = useState<FollowUp[]>([]);
+  const [employees, setEmployees] = useState<StaffEmployee[]>([]);
+  const [schedule, setSchedule] = useState<{ id: string; date: string; employee_name: string; type: string; rowIndex?: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [tab, setTab] = useState<TabId>(() => (searchParams.get("tab") as TabId) || "cal");
@@ -197,6 +200,8 @@ export default function CRMPage() {
         fCusts(modData.Master?.spreadsheetId, modData.Master?.sheetName),
         fCourses(modData.courses?.spreadsheetId),
         fFollows(modData.followup?.spreadsheetId),
+        fEmployees(),
+        fSchedule(),
       ]);
     } catch (e) {
       console.error("CRM boot:", e);
@@ -218,7 +223,9 @@ export default function CRMPage() {
     } catch { }
   };
   const fCourses = async (id?: string) => { if (!id) return; try { const r = await fetch(`${COURSE_API}?spreadsheetId=${id}`); const d = await r.json(); setCourses(d.courses || []); } catch { } };
-  const fFollows = async (id?: string) => { if (!id) return; try { const r = await fetch(`${FOLLOW_API}?spreadsheetId=${id}`); const d = await r.json(); setFollows(d.tasks || []); } catch { } };
+  const fFollows   = async (id?: string) => { if (!id) return; try { const r = await fetch(`${FOLLOW_API}?spreadsheetId=${id}`); const d = await r.json(); setFollows(d.tasks || []); } catch { } };
+  const fEmployees = async () => { try { const r = await fetch("/api/crm/employees"); const d = await r.json(); setEmployees(d.employees || []); } catch { } };
+  const fSchedule  = async () => { try { const r = await fetch("/api/crm/schedule"); const d = await r.json(); setSchedule(d.schedule || []); } catch { } };
 
   const saveApt = async () => {
     if (!cfg) return;
@@ -238,6 +245,8 @@ export default function CRMPage() {
         .then(() => fApts(cfg.spreadsheetId));
     } catch (e: any) { alert(e.message); } finally { setSApt(false); }
   };
+
+  const refreshSchedule = () => fSchedule();
 
   const updAptStatus = async (apt: Appointment, s: Appointment["status"]) => {
     if (!cfg) return;
@@ -396,7 +405,7 @@ export default function CRMPage() {
           ))}
         </div>
 
-        {tab === "cal" && <CalendarTab apts={apts} calY={calY} calM={calM} calDays={calDays} selDate={selDate} selApts={selApts} setSelDate={setSelDate} setCalY={setCalY} setCalM={setCalM} cntDate={cntDate} isTodayC={isTodayC} isSelC={isSelC} openApt={openApt} setDApt={setDApt} />}
+        {tab === "cal" && <CalendarTab apts={apts} calY={calY} calM={calM} calDays={calDays} selDate={selDate} selApts={selApts} setSelDate={setSelDate} setCalY={setCalY} setCalM={setCalM} cntDate={cntDate} isTodayC={isTodayC} isSelC={isSelC} openApt={openApt} setDApt={setDApt} employees={employees} schedule={schedule} spreadsheetId={cfg?.spreadsheetId || ""} onScheduleChange={refreshSchedule} />}
         {tab === "custs" && <CustomersTab customers={custs} courses={courses} follows={follows} custQ={custQ} setCustQ={setCustQ} config={cfg} openCust={openCust} setDCust={setDCust} />}
         {tab === "follows" && <FollowsTab follows={follows} followQ={followQ} setFollowQ={setFollowQ} followF={followF} setFollowF={setFollowF} openFollow={() => openFollow()} updFollowStatus={updFollowStatus} onEditFollow={f => { setEFollow(f); setFFollow({ ...f }); setMFollow(true); }} />}
       </div>

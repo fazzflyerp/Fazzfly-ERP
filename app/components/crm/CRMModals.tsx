@@ -82,7 +82,7 @@ export function AptModal({ open, onClose, isEdit, loading, form, setForm, custom
         <FL key={key} label={lbl}>
           <Sel value={val} onChange={e=>set(e.target.value)}>
             <option value="">เลือก</option>
-            {opts.map(o => <option key={o.value} value={o.value}>{o.label || o.value}</option>)}
+            {opts.map((o, i) => <option key={`${o.value}-${i}`} value={o.value}>{o.label || o.value}</option>)}
           </Sel>
         </FL>
       );
@@ -419,9 +419,10 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
   }, [cust?.customer_id]);
 
   // ── Photo browser state ───────────────────────────────────────────────────
-  const [rootFolderId, setRootFolderId]   = _useState<string | null>(null);
-  const [breadcrumb,   setBreadcrumb]     = _useState<DriveFolder[]>([]);
-  const [currentId,    setCurrentId]      = _useState<string | null>(null);
+  const [rootFolderId,       setRootFolderId]       = _useState<string | null>(null);
+  const [breadcrumb,         setBreadcrumb]         = _useState<DriveFolder[]>([]);
+  const [currentId,          setCurrentId]          = _useState<string | null>(null);
+  const [currentFolderName,  setCurrentFolderName]  = _useState<string>("หน้าหลัก");
   const [folders,      setFolders]        = _useState<DriveFolder[]>([]);
   const [images,       setImages]         = _useState<DriveImage[]>([]);
   const [photoLoading, setPhotoLoading]   = _useState(false);
@@ -436,6 +437,7 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
     setRootFolderId(null);
     setCurrentId(null);
     setBreadcrumb([]);
+    setCurrentFolderName("หน้าหลัก");
     setFolders([]);
     setImages([]);
     setLightbox(null);
@@ -453,6 +455,7 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
           setRootFolderId(d.folderId);
           setCurrentId(d.folderId);
           setBreadcrumb([]);
+          setCurrentFolderName("หน้าหลัก");
         }
       })
       .catch(console.error)
@@ -475,17 +478,21 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
 
   const enterFolder = _useCallback((folder: DriveFolder) => {
     if (!currentId) return;
-    setBreadcrumb(prev => [...prev, { id: currentId, name: breadcrumb.length === 0 ? "หน้าหลัก" : breadcrumb[breadcrumb.length - 1].name }]);
+    setBreadcrumb(prev => [...prev, { id: currentId, name: currentFolderName }]);
+    setCurrentFolderName(folder.name);
     setCurrentId(folder.id);
     setFolders([]);
     setImages([]);
-  }, [currentId, breadcrumb]);
+  }, [currentId, currentFolderName]);
 
   const goBack = _useCallback(() => {
     setBreadcrumb(prev => {
       const next = [...prev];
       const parent = next.pop();
-      if (parent) setCurrentId(parent.id);
+      if (parent) {
+        setCurrentId(parent.id);
+        setCurrentFolderName(parent.name);
+      }
       return next;
     });
     setFolders([]);
@@ -768,7 +775,7 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
               {/* Breadcrumb */}
               {breadcrumb.length > 0 && (
                 <div className="px-4 py-2 flex items-center gap-1 text-xs text-slate-500 flex-shrink-0 border-b border-pink-50">
-                  <button onClick={() => { setCurrentId(rootFolderId); setBreadcrumb([]); setFolders([]); setImages([]); }}
+                  <button onClick={() => { setCurrentId(rootFolderId); setBreadcrumb([]); setCurrentFolderName("หน้าหลัก"); setFolders([]); setImages([]); }}
                     className="text-rose-400 hover:underline font-semibold">หน้าหลัก</button>
                   {breadcrumb.slice(1).map((b, i) => (
                     <span key={b.id} className="flex items-center gap-1">
@@ -778,12 +785,13 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
                         const target = breadcrumb[idx];
                         setBreadcrumb(prev => prev.slice(0, idx));
                         setCurrentId(target.id);
+                        setCurrentFolderName(target.name);
                         setFolders([]); setImages([]);
-                      }} className="hover:underline">{b.name}</button>
+                      }} className="hover:underline">{fmtFolderName(b.name, i)}</button>
                     </span>
                   ))}
                   <span className="text-slate-300">/</span>
-                  <span className="font-semibold text-slate-600">{depth === 0 ? "ทั้งหมด" : depth === 1 ? "ปี" : depth === 2 ? "เดือน" : "วัน"}</span>
+                  <span className="font-semibold text-slate-600">{fmtFolderName(currentFolderName, depth - 1)}</span>
                 </div>
               )}
 

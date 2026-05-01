@@ -16,9 +16,6 @@ interface Props {
 }
 
 export default function CustomersTab({ customers, courses, follows, custQ, setCustQ, config, openCust, setDCust }: Props) {
-  // DEBUG: log customer IDs to see actual format
-  console.log("[CRM] customers sample:", customers.slice(0, 3).map(c => ({ id: c.customer_id, name: c.full_name })));
-
   const q = custQ.toLowerCase().trim();
   const filtered = q === "" ? customers : customers.filter(c =>
     [c.full_name, c.nickname, c.customer_id].some(
