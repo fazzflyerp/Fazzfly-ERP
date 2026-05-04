@@ -535,22 +535,16 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
     return name;
   };
 
-  if (!cust) return null;
-
-  const ml  = cust.member_level || "ทั่วไป";
-  const mcf = MEMBER_CFG[ml] || MEMBER_CFG["ทั่วไป"];
-
-  // ── คำนวณ Member balance และ Course balance จาก txList ───────────────────
+  // ── คำนวณ Member balance และ Course balance จาก txList (ต้องอยู่ก่อน early return) ─
   const memberBalance = _useMemo(() => {
     let bal = 0;
     for (const tx of txList) {
-      if (tx.program === "เปิดMember") bal += tx.quantity;
-      if (tx.program_status === "ตัด Member") bal -= tx.price;
+      if (tx.program === "เปิดMember") bal += tx.price;       // เปิด Member → ใช้ราคา (บาท)
+      if (tx.program_status === "ตัด Member") bal -= tx.price; // ตัด Member → หักราคา
     }
     return bal;
   }, [txList]);
 
-  // course balance: { [program]: { bought, used, history[] } }
   const courseMap = _useMemo(() => {
     const map: Record<string, { bought: number; used: number; history: TxRecord[] }> = {};
     for (const tx of txList) {
@@ -566,11 +560,15 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
     return map;
   }, [txList]);
 
-  // Member history
   const memberHistory = _useMemo(() =>
     txList.filter(tx => tx.program === "เปิดMember" || tx.program_status === "ตัด Member")
           .sort((a, b) => b.date.localeCompare(a.date))
   , [txList]);
+
+  if (!cust) return null;
+
+  const ml  = cust.member_level || "ทั่วไป";
+  const mcf = MEMBER_CFG[ml] || MEMBER_CFG["ทั่วไป"];
   const custApts   = apts.filter(a => a.customer_id === cust.customer_id)
     .sort((a, b) => b.appointment_date.localeCompare(a.appointment_date));
 
@@ -753,6 +751,12 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
                 <div className="py-8 text-center text-sm text-slate-400">ไม่ได้ตั้งค่า Sales Transactions module</div>
               ) : (
                 <>
+                  {/* debug: จำนวน tx ที่โหลดได้ */}
+                  {txList.length === 0 && (
+                    <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
+                      ⚠ ไม่พบรายการของลูกค้านี้ใน Sales Transactions (ID: {cust?.customer_id})
+                    </div>
+                  )}
                   {/* ── Member card ── */}
                   <div className="rounded-2xl border border-pink-200 bg-gradient-to-br from-pink-50 to-rose-50 p-4">
                     <div className="flex items-center justify-between mb-3">
@@ -779,7 +783,7 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
                           ? <p className="text-xs text-slate-400 text-center py-2">ไม่มีรายการ</p>
                           : memberHistory.map((tx, i) => {
                               const isAdd = tx.program === "เปิดMember";
-                              const amt   = isAdd ? tx.quantity : tx.price;
+                              const amt   = tx.price;
                               return (
                                 <div key={i} className="flex items-center justify-between text-xs">
                                   <div className="flex items-center gap-1.5">
@@ -788,7 +792,7 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
                                     </span>
                                     <span className="text-slate-600">{fmtDate(tx.date)}</span>
                                     <span className="text-slate-400">·</span>
-                                    <span className="text-slate-600">{isAdd ? "เปิด Member" : "ตัด Member"}</span>
+                                    <span className="text-slate-600">{isAdd ? "เปิด Member" : `ตัด · ${tx.program}`}</span>
                                   </div>
                                   <span className={`font-bold ${isAdd ? "text-emerald-600" : "text-rose-500"}`}>
                                     {isAdd ? "+" : "−"}฿{amt.toLocaleString()}

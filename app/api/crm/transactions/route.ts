@@ -50,22 +50,17 @@ export async function GET(request: NextRequest) {
     // ── map tx headers (lowercase) ───────────────────────────────────────────
     const txHeaders = txRows[0].map((h: string) => (h || "").toString().toLowerCase().trim());
 
-    // หา column index โดย: ลอง field_name ก่อน → ลอง label จาก config → ลอง aliases
+    // หา column index: exact field_name → exact label → exact aliases → ห้าม partial match เพื่อป้องกัน false positive
     const findCol = (fieldName: string, aliases: string[] = []): number => {
-      // 1. ตรงกับ field_name โดยตรง
-      let idx = txHeaders.indexOf(fieldName.toLowerCase());
-      if (idx !== -1) return idx;
-      // 2. ตรงกับ label จาก config
-      const lbl = (fieldLabelMap[fieldName] || "").toLowerCase().trim();
-      if (lbl) { idx = txHeaders.indexOf(lbl); if (idx !== -1) return idx; }
-      // 3. aliases fallback
-      for (const a of aliases) {
-        idx = txHeaders.indexOf(a.toLowerCase());
+      const allTerms = [fieldName.toLowerCase(), (fieldLabelMap[fieldName] || "").toLowerCase().trim(), ...aliases.map(a => a.toLowerCase())].filter(Boolean);
+      for (const term of allTerms) {
+        const idx = txHeaders.indexOf(term);
         if (idx !== -1) return idx;
       }
-      // 4. partial match กับ label
-      if (lbl) {
-        idx = txHeaders.findIndex(h => h.includes(lbl) || lbl.includes(h));
+      // partial match เฉพาะ label ที่ยาวพอ (≥3 chars) เพื่อลด false positive
+      const lbl = (fieldLabelMap[fieldName] || "").toLowerCase().trim();
+      if (lbl.length >= 3) {
+        const idx = txHeaders.findIndex(h => h === lbl || (h.length >= 3 && (h.startsWith(lbl) || lbl.startsWith(h))));
         if (idx !== -1) return idx;
       }
       return -1;
@@ -74,14 +69,23 @@ export async function GET(request: NextRequest) {
     const custCol    = findCol("cust_id",        ["opd", "hn", "patient_id", "customer_id"]);
     const dateCol    = findCol("date",            ["วันที่", "date"]);
     const statusCol  = findCol("program_status",  ["สถานะ"]);
-    const programCol = findCol("program",         ["ชื่อโปรแกรม", "โปรแกรม"]);
+    const programCol = findCol("program",         ["ชื่อโปรแกรม (เลือก)", "ชื่อโปรแกรม", "โปรแกรม"]);
     const qtyCol     = findCol("quantity",        ["จำนวน"]);
-    const priceCol   = findCol("price",           ["ราคา"]);
+    const priceCol   = findCol("price",           ["จำนวนเงิน", "ราคา", "amount"]);
     const doctorCol  = findCol("doctor",          ["แพทย์", "เเพทย์", "หมอ"]);
     const staffCol   = findCol("staff",           ["พนักงาน bt", "bt", "บิวตี้"]);
     const usageCol   = findCol("program_usage",   ["ยังไม่ใช้", "ใช้คอร์ส"]);
 
     // cust_id ใน transactions เก็บ value จาก Helper_OPD col A ซึ่ง = customer_id ตรงๆ
+    const parseNum = (v: any) => {
+      const s = (v ?? "").toString().replace(/,/g, "").trim();
+      const n = parseFloat(s);
+      return isNaN(n) ? 0 : n;
+    };
+
+    console.log(`📋 cols → cust:${custCol} date:${dateCol} status:${statusCol} prog:${programCol} qty:${qtyCol} price:${priceCol} staff:${staffCol} doctor:${doctorCol}`);
+    console.log(`📋 headers:`, txHeaders.slice(0, 25));
+
     const transactions = txRows.slice(1)
       .filter(row => {
         if (custCol === -1) return false;
@@ -93,8 +97,8 @@ export async function GET(request: NextRequest) {
         date:           dateCol    !== -1 ? (row[dateCol]    || "").toString().trim() : "",
         program_status: statusCol  !== -1 ? (row[statusCol]  || "").toString().trim() : "",
         program:        programCol !== -1 ? (row[programCol] || "").toString().trim() : "",
-        quantity:       qtyCol     !== -1 ? Number(row[qtyCol])  || 0 : 0,
-        price:          priceCol   !== -1 ? Number(row[priceCol]) || 0 : 0,
+        quantity:       parseNum(qtyCol   !== -1 ? row[qtyCol]   : 0),
+        price:          parseNum(priceCol !== -1 ? row[priceCol] : 0),
         doctor:         doctorCol  !== -1 ? (row[doctorCol]  || "").toString().trim() : "",
         staff:          staffCol   !== -1 ? (row[staffCol]   || "").toString().trim() : "",
         usedCourse: !(["true","1","✓","yes","TRUE"].includes((row[usageCol] || "").toString().trim())),
@@ -102,8 +106,14 @@ export async function GET(request: NextRequest) {
       .filter(t => t.date || t.program)
       .sort((a, b) => b.date.localeCompare(a.date));
 
-    console.log(`✅ found ${transactions.length} tx for customerId="${customerId}" (custCol=${custCol})`);
-    return NextResponse.json({ success: true, count: transactions.length, transactions });
+    return NextResponse.json({
+      success: true, count: transactions.length, transactions,
+      _debug: {
+        cols: { cust: custCol, date: dateCol, status: statusCol, prog: programCol, qty: qtyCol, price: priceCol, staff: staffCol, doctor: doctorCol },
+        headers: txHeaders.slice(0, 30),
+        sampleRaw: transactions[0] ? { price: transactions[0].price, qty: transactions[0].quantity, prog: transactions[0].program, status: transactions[0].program_status } : null,
+      },
+    });
 
   } catch (err: any) {
     console.error("❌ crm/transactions:", err.message);

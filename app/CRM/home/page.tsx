@@ -92,7 +92,7 @@ export default function CRMPage() {
   const boot = async () => {
     setLoading(true);
     try {
-      // 1) ดึง clientId + hasCRM จาก /api/user/modules
+      // 1) ดึง clientId + hasCRM
       const userRes = await fetch("/api/user/modules");
       if (userRes.status === 401) {
         const { signOut } = await import("next-auth/react");
@@ -103,9 +103,9 @@ export default function CRMPage() {
       if (!userData.hasCRM) { router.push("/pricing"); return; }
 
       const clientId: string = userData.clientId;
-      setClientId(userData.clientId);
+      setClientId(clientId);
 
-      // 2) ดึง CRM module config จาก client_crm sheet
+      // 2) ดึง CRM module config
       const modRes = await fetch(`${CRM_MODULES_API}?clientId=${clientId}`);
       if (!modRes.ok) throw new Error(`crm/modules: ${modRes.status}`);
       const modData = await modRes.json();
@@ -114,9 +114,13 @@ export default function CRMPage() {
       const spreadsheetId: string = modData.appointments?.spreadsheetId || "";
       const helperMap: CRMConfig["helperMap"] = DEFAULT_HELPER_MAP;
 
-      // 2) fetch helpers — เหมือน ERP form loop แต่ยิง parallel
-      //    สังเกต: ใช้ /api/module/helpers?spreadsheetId=xxx&helperName=yyy
-      //    response: { options: [{value, label}] }
+      // set cfg ทันทีด้วย helperOptions ว่างเพื่อให้ page render ได้
+      setCfg({ spreadsheetId, helperMap, helperOptions: {} });
+      setFollowSid(modData.followup?.spreadsheetId || spreadsheetId);
+      if (modData.transaction?.spreadsheetId) {
+        setTxMod({ spreadsheetId: modData.transaction.spreadsheetId, sheetName: modData.transaction.sheetName || "Sales Transactions", configName: modData.transaction.configName || "Sales_Config" });
+      }
+
       const fetchHelper = async (helperName: string): Promise<HelperOption[]> => {
         try {
           const url = new URL(`${window.location.origin}/${HELPER_API}`);
@@ -126,83 +130,61 @@ export default function CRMPage() {
           if (!res.ok) return [];
           const json = await res.json();
           return (json.options || []) as HelperOption[];
-        } catch {
-          return [];
-        }
+        } catch { return []; }
       };
 
-      // ยิง parallel ทุก helper พร้อมกัน
-      const keys = Object.keys(helperMap) as (keyof typeof helperMap)[];  // รวม customers: Helpers_C
-      const results = await Promise.all(keys.map(k => fetchHelper(helperMap[k])));
+      const keys = Object.keys(helperMap) as (keyof typeof helperMap)[];
 
-      // สร้าง helperOptions: { [helperName]: HelperOption[] }
-      // เหมือน ERP form: helperOptions[field.helper] || []
-      const helperOptions: { [helperName: string]: HelperOption[] } = {};
-      keys.forEach((k, i) => {
-        const helperName = helperMap[k];
-        helperOptions[helperName] = results[i].length > 0
-          ? results[i]
-          : FALLBACK_OPTIONS[k];  // fallback ถ้า sheet ว่าง
-      });
-
-      setCfg({ spreadsheetId, helperMap, helperOptions });
-
-      // 3) ดึง apt config fields จาก Config_appointments sheet
-      try {
-        const cfgUrl = new URL(`${window.location.origin}/${CONFIG_API}`);
-        cfgUrl.searchParams.set("spreadsheetId", spreadsheetId);
-        cfgUrl.searchParams.set("configName", modData.appointments?.configName || "Config_appointments");
-        const cfgRes = await fetch(cfgUrl.toString());
-        if (cfgRes.ok) {
-          const cfgData = await cfgRes.json();
-          setAptFields(cfgData.fields || []);
-
-          // ดึง helper ใหม่ที่อยู่ใน config แต่ยังไม่มีใน helperOptions
-          const newHelpers: { [k: string]: HelperOption[] } = {};
-          for (const field of (cfgData.fields || [])) {
-            if (field.helper && !helperOptions[field.helper]) {
-              try {
-                const hUrl = new URL(`${window.location.origin}/${HELPER_API}`);
-                hUrl.searchParams.set("spreadsheetId", spreadsheetId);
-                hUrl.searchParams.set("helperName", field.helper);
-                const hRes = await fetch(hUrl.toString());
-                if (hRes.ok) {
-                  const hJson = await hRes.json();
-                  newHelpers[field.helper] = hJson.options || [];
-                }
-              } catch { }
-            }
-          }
-          if (Object.keys(newHelpers).length > 0) {
-            setCfg(c => c ? { ...c, helperOptions: { ...c.helperOptions, ...newHelpers } } : c);
-          }
-        }
-      } catch (e) { console.warn("config fetch:", e); }
-
-      setFollowSid(modData.followup?.spreadsheetId || spreadsheetId);
-
-      if (modData.transaction?.spreadsheetId) {
-        setTxMod({ spreadsheetId: modData.transaction.spreadsheetId, sheetName: modData.transaction.sheetName || "Sales Transactions", configName: modData.transaction.configName || "Sales_Config" });
-      }
-
-      // โหลด Customers_config
-      if (modData.Master?.spreadsheetId && modData.Master?.configName) {
-        try {
-          const custCfgRes = await fetch(`/api/module/config?spreadsheetId=${modData.Master.spreadsheetId}&configName=${modData.Master.configName}`);
-          const custCfgData = await custCfgRes.json();
-          setCustFields(custCfgData.fields || []);
-        } catch { }
-      }
-
-      // 4) load ข้อมูล — แต่ละ module ใช้ spreadsheetId ของตัวเอง
+      // 3) ยิงทุกอย่างพร้อมกัน: helpers + configs + data
+      //    data ไม่ต้องรอ helpers (helpers ใช้แค่ตอนเปิด modal)
       await Promise.all([
-        fApts(modData.appointments?.spreadsheetId),
-        fCusts(modData.Master?.spreadsheetId, modData.Master?.sheetName),
-        fCourses(modData.courses?.spreadsheetId),
-        fFollows(modData.followup?.spreadsheetId),
-        fEmployees(),
-        fSchedule(),
+        // data — await เพื่อ setLoading(false) หลังได้ข้อมูล
+        Promise.all([
+          fApts(modData.appointments?.spreadsheetId),
+          fCusts(modData.Master?.spreadsheetId, modData.Master?.sheetName),
+          fCourses(modData.courses?.spreadsheetId),
+          fFollows(modData.followup?.spreadsheetId),
+          fEmployees(),
+          fSchedule(),
+        ]),
+
+        // helpers — โหลด background ไม่ block data
+        Promise.all(keys.map(k => fetchHelper(helperMap[k]))).then(results => {
+          const helperOptions: { [helperName: string]: HelperOption[] } = {};
+          keys.forEach((k, i) => {
+            helperOptions[helperMap[k]] = results[i].length > 0 ? results[i] : FALLBACK_OPTIONS[k];
+          });
+          setCfg(c => c ? { ...c, helperOptions } : c);
+        }),
+
+        // apt config fields
+        (async () => {
+          try {
+            const cfgUrl = new URL(`${window.location.origin}/${CONFIG_API}`);
+            cfgUrl.searchParams.set("spreadsheetId", spreadsheetId);
+            cfgUrl.searchParams.set("configName", modData.appointments?.configName || "Config_appointments");
+            const cfgRes = await fetch(cfgUrl.toString());
+            if (!cfgRes.ok) return;
+            const cfgData = await cfgRes.json();
+            setAptFields(cfgData.fields || []);
+            // extra helpers referenced in config
+            const extraKeys = (cfgData.fields || []).filter((f: any) => f.helper).map((f: any) => f.helper as string);
+            if (extraKeys.length > 0) {
+              const extraResults = await Promise.all(extraKeys.map((h: string) => fetchHelper(h)));
+              const newHelpers: { [k: string]: HelperOption[] } = {};
+              extraKeys.forEach((h: string, i: number) => { if (extraResults[i].length > 0) newHelpers[h] = extraResults[i]; });
+              if (Object.keys(newHelpers).length > 0) setCfg(c => c ? { ...c, helperOptions: { ...c.helperOptions, ...newHelpers } } : c);
+            }
+          } catch (e) { console.warn("apt config:", e); }
+        })(),
+
+        // customer config fields
+        modData.Master?.spreadsheetId && modData.Master?.configName
+          ? fetch(`/api/module/config?spreadsheetId=${modData.Master.spreadsheetId}&configName=${modData.Master.configName}`)
+              .then(r => r.json()).then(d => setCustFields(d.fields || [])).catch(() => {})
+          : Promise.resolve(),
       ]);
+
     } catch (e) {
       console.error("CRM boot:", e);
     } finally {

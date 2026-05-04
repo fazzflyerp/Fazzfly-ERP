@@ -1,5 +1,6 @@
 // app/components/crm/CustomersTab.tsx
 "use client";
+import { useMemo } from "react";
 import { Ic, IC } from "@/app/components/crm/crm.ui";
 import { MEMBER_CFG } from "@/app/components/crm/crm.types";
 import type { Customer, Course, FollowUp, CRMConfig } from "@/app/components/crm/crm.types";
@@ -16,12 +17,35 @@ interface Props {
 }
 
 export default function CustomersTab({ customers, courses, follows, custQ, setCustQ, config, openCust, setDCust }: Props) {
-  const q = custQ.toLowerCase().trim();
-  const filtered = q === "" ? customers : customers.filter(c =>
-    [c.full_name, c.nickname, c.customer_id].some(
-      field => (field || "").toLowerCase().trim().includes(q)
-    )
-  );
+  // pre-compute maps once — O(M+P) instead of O(N×M + N×P) per render
+  const actMap = useMemo(() => {
+    const m: Record<string, Course[]> = {};
+    for (const co of courses) {
+      if (co.status !== "active") continue;
+      if (!m[co.customer_id]) m[co.customer_id] = [];
+      m[co.customer_id].push(co);
+    }
+    return m;
+  }, [courses]);
+
+  const pflMap = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const f of follows) {
+      if (f.status !== "pending") continue;
+      m[f.customer_id] = (m[f.customer_id] || 0) + 1;
+    }
+    return m;
+  }, [follows]);
+
+  const filtered = useMemo(() => {
+    const q = custQ.toLowerCase().trim();
+    if (!q) return customers;
+    return customers.filter(c =>
+      [c.full_name, c.nickname, c.customer_id].some(
+        field => (field || "").toLowerCase().includes(q)
+      )
+    );
+  }, [customers, custQ]);
 
   return (
     <div className="animate-fadeIn">
@@ -39,7 +63,7 @@ export default function CustomersTab({ customers, courses, follows, custQ, setCu
       <div className="relative mb-6">
         <Ic d={IC.search} cls="w-4 h-4 text-pink-500 absolute left-3.5 top-1/2 -translate-y-1/2"/>
         <input value={custQ} onChange={e => setCustQ(e.target.value)} placeholder="ค้นหารหัสลูกค้า, ชื่อ, ชื่อเล่น..."
-          className="w-full pl-10 pr-4 py-3 rounded-2xl border border-pink-200 bg-white/90 backdrop-blur-xl shadow-sm text-sm placeholder-pink-300 text-slate-700 focus:outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-100 transition-all"/>
+          className="w-full pl-10 pr-4 py-3 rounded-2xl border border-pink-200 bg-white shadow-sm text-sm placeholder-pink-300 text-slate-700 focus:outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-100 transition-all"/>
       </div>
 
       {filtered.length === 0 ? (
@@ -52,11 +76,11 @@ export default function CustomersTab({ customers, courses, follows, custQ, setCu
           {filtered.map(c => {
             const ml  = c.member_level || "ทั่วไป";
             const mcf = MEMBER_CFG[ml] || MEMBER_CFG["ทั่วไป"];
-            const act = courses.filter(co => co.customer_id === c.customer_id && co.status === "active");
-            const pfl = follows.filter(f => f.customer_id === c.customer_id && f.status === "pending");
+            const act = actMap[c.customer_id] || [];
+            const pflCount = pflMap[c.customer_id] || 0;
             return (
               <button key={c.customer_id} onClick={() => setDCust(c)}
-                className="text-left bg-white/90 backdrop-blur-xl rounded-2xl shadow-lg shadow-pink-50 p-5 border border-pink-200 hover:shadow-2xl hover:shadow-pink-100 hover:-translate-y-2 transition-all duration-300 group h-full">
+                className="text-left bg-white rounded-2xl shadow-md p-5 border border-pink-200 hover:shadow-xl hover:shadow-pink-100 hover:-translate-y-1 transition-all duration-200 group h-full">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[11px] font-mono font-semibold text-pink-400 bg-pink-50 px-2 py-0.5 rounded-lg border border-pink-100">
                     {c.customer_id || "—"}
@@ -65,7 +89,7 @@ export default function CustomersTab({ customers, courses, follows, custQ, setCu
                 </div>
 
                 <div className="flex items-center gap-3 mb-3">
-                  <div className={`p-2.5 rounded-xl bg-gradient-to-br ${mcf.grad} text-white text-base font-bold group-hover:scale-110 transition-transform flex-shrink-0`}>
+                  <div className={`p-2.5 rounded-xl bg-gradient-to-br ${mcf.grad} text-white text-base font-bold group-hover:scale-105 transition-transform flex-shrink-0`}>
                     {c.full_name.charAt(0)}
                   </div>
                   <div className="min-w-0">
@@ -77,8 +101,8 @@ export default function CustomersTab({ customers, courses, follows, custQ, setCu
                 <div className="flex items-center gap-1.5 text-sm text-slate-500 mb-2">
                   <Ic d={IC.phone} cls="w-3.5 h-3.5 text-pink-500"/>
                   {c.phone_number || "—"}
-                  {pfl.length > 0 && (
-                    <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-500">ติดตาม {pfl.length}</span>
+                  {pflCount > 0 && (
+                    <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-500">ติดตาม {pflCount}</span>
                   )}
                 </div>
 
