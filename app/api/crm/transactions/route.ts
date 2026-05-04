@@ -71,16 +71,15 @@ export async function GET(request: NextRequest) {
       return -1;
     };
 
-    const custCol    = findCol("cust_id",       ["opd", "hn", "patient_id", "customer_id"]);
-    const dateCol    = findCol("date",           ["วันที่", "date"]);
-    const programCol = findCol("program",        ["ชื่อโปรแกรม", "โปรแกรม"]);
-    const qtyCol     = findCol("quantity",       ["จำนวน"]);
-    const doctorCol  = findCol("doctor",         ["แพทย์", "เเพทย์", "หมอ"]);
-    const staffCol   = findCol("staff",          ["พนักงาน bt", "bt", "บิวตี้"]);
-    const usageCol   = findCol("program_usage",  ["ยังไม่ใช้", "ใช้คอร์ส"]);
-
-    console.log(`📋 col map → cust:${custCol} date:${dateCol} prog:${programCol} qty:${qtyCol} doctor:${doctorCol} staff:${staffCol} usage:${usageCol}`);
-    console.log(`📋 fieldLabelMap:`, fieldLabelMap);
+    const custCol    = findCol("cust_id",        ["opd", "hn", "patient_id", "customer_id"]);
+    const dateCol    = findCol("date",            ["วันที่", "date"]);
+    const statusCol  = findCol("program_status",  ["สถานะ"]);
+    const programCol = findCol("program",         ["ชื่อโปรแกรม", "โปรแกรม"]);
+    const qtyCol     = findCol("quantity",        ["จำนวน"]);
+    const priceCol   = findCol("price",           ["ราคา"]);
+    const doctorCol  = findCol("doctor",          ["แพทย์", "เเพทย์", "หมอ"]);
+    const staffCol   = findCol("staff",           ["พนักงาน bt", "bt", "บิวตี้"]);
+    const usageCol   = findCol("program_usage",   ["ยังไม่ใช้", "ใช้คอร์ส"]);
 
     // cust_id ใน transactions เก็บ value จาก Helper_OPD col A ซึ่ง = customer_id ตรงๆ
     const transactions = txRows.slice(1)
@@ -90,13 +89,14 @@ export async function GET(request: NextRequest) {
         return rowCustId === customerId;
       })
       .map((row, i) => ({
-        rowIndex:   i + 2,
-        date:       dateCol    !== -1 ? (row[dateCol]    || "").toString().trim() : "",
-        program:    programCol !== -1 ? (row[programCol] || "").toString().trim() : "",
-        quantity:   qtyCol     !== -1 ? (row[qtyCol]     || "").toString().trim() : "",
-        doctor:     doctorCol  !== -1 ? (row[doctorCol]  || "").toString().trim() : "",
-        staff:      staffCol   !== -1 ? (row[staffCol]   || "").toString().trim() : "",
-        // ยังไม่ใช้ = TRUE/✓ → ยังไม่ใช้คอร์ส, FALSE/"" → ใช้คอร์สแล้ว
+        rowIndex:       i + 2,
+        date:           dateCol    !== -1 ? (row[dateCol]    || "").toString().trim() : "",
+        program_status: statusCol  !== -1 ? (row[statusCol]  || "").toString().trim() : "",
+        program:        programCol !== -1 ? (row[programCol] || "").toString().trim() : "",
+        quantity:       qtyCol     !== -1 ? Number(row[qtyCol])  || 0 : 0,
+        price:          priceCol   !== -1 ? Number(row[priceCol]) || 0 : 0,
+        doctor:         doctorCol  !== -1 ? (row[doctorCol]  || "").toString().trim() : "",
+        staff:          staffCol   !== -1 ? (row[staffCol]   || "").toString().trim() : "",
         usedCourse: !(["true","1","✓","yes","TRUE"].includes((row[usageCol] || "").toString().trim())),
       }))
       .filter(t => t.date || t.program)

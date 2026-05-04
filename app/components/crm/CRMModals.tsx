@@ -322,7 +322,7 @@ export function AptDetailPanel({ apt, onClose, onEdit, onViewProfile, updAptStat
 }
 
 // ── Customer Detail Panel ─────────────────────────────────────────────────────
-import { useState as _useState, useEffect as _useEffect, useRef as _useRef, useCallback as _useCallback } from "react";
+import { useState as _useState, useEffect as _useEffect, useRef as _useRef, useCallback as _useCallback, useMemo as _useMemo } from "react";
 
 interface DriveFolder { id: string; name: string }
 interface DriveImage  { id: string; name: string; mimeType: string; thumbnailLink: string | null; webViewLink: string | null; createdTime: string | null; size: string | null }
@@ -355,8 +355,10 @@ function PhotoCard({ img, clientId, onClick }: { img: DriveImage; clientId: stri
 interface TxRecord {
   rowIndex: number;
   date: string;
+  program_status: string;
   program: string;
-  quantity: string;
+  quantity: number;
+  price: number;
   doctor: string;
   staff: string;
   usedCourse: boolean;
@@ -382,40 +384,36 @@ const DETAIL_TABS = [
 export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod, onEdit, onFollow, onBookApt }: CustDetailProps) {
   const [activeTab, setActiveTab] = _useState("info");
 
-  // ── Treatment history state ───────────────────────────────────────────────
+  // ── Transaction state (shared by treatment + course tabs) ───────────────
   const [txList,    setTxList]    = _useState<TxRecord[]>([]);
   const [txLoading, setTxLoading] = _useState(false);
   const [txLoaded,  setTxLoaded]  = _useState<string | null>(null);
   const [txError,   setTxError]   = _useState<string | null>(null);
+  const [courseHistOpen, setCourseHistOpen] = _useState<string | null>(null);
 
-  _useEffect(() => {
-    if (activeTab !== "treatment" || !cust || !txMod) return;
-    if (txLoaded === cust.customer_id) return;
-    setTxLoading(true);
-    setTxError(null);
-
+  const loadTx = _useCallback((custId: string) => {
+    if (!txMod || txLoaded === custId) return;
+    setTxLoading(true); setTxError(null);
     const params = new URLSearchParams({
       spreadsheetId: txMod.spreadsheetId,
       sheetName:     txMod.sheetName,
       configName:    txMod.configName || "Sales_Config",
-      customerId:    cust.customer_id,
+      customerId:    custId,
     });
-    const url = `/api/crm/transactions?${params.toString()}`;
-    fetch(url)
+    fetch(`/api/crm/transactions?${params.toString()}`)
       .then(r => r.json())
-      .then(d => {
-        if (d.error) { setTxError(d.error); return; }
-        setTxList(d.transactions || []);
-        setTxLoaded(cust.customer_id);
-      })
-      .catch(e => { console.error(e); setTxError(e.message); })
+      .then(d => { if (d.error) { setTxError(d.error); return; } setTxList(d.transactions || []); setTxLoaded(custId); })
+      .catch(e => setTxError(e.message))
       .finally(() => setTxLoading(false));
-  }, [activeTab, cust, txMod, txLoaded]);
+  }, [txMod, txLoaded]);
 
-  // reset treatment เมื่อเปลี่ยนลูกค้า
   _useEffect(() => {
-    setTxList([]);
-    setTxLoaded(null);
+    if ((activeTab === "treatment" || activeTab === "course") && cust) loadTx(cust.customer_id);
+  }, [activeTab, cust, loadTx]);
+
+  // reset เมื่อเปลี่ยนลูกค้า
+  _useEffect(() => {
+    setTxList([]); setTxLoaded(null); setCourseHistOpen(null);
   }, [cust?.customer_id]);
 
   // ── Photo browser state ───────────────────────────────────────────────────
@@ -541,8 +539,38 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
 
   const ml  = cust.member_level || "ทั่วไป";
   const mcf = MEMBER_CFG[ml] || MEMBER_CFG["ทั่วไป"];
-  const actCourses = courses.filter(c => c.customer_id === cust.customer_id && c.status === "active");
-  const allCourses = courses.filter(c => c.customer_id === cust.customer_id);
+
+  // ── คำนวณ Member balance และ Course balance จาก txList ───────────────────
+  const memberBalance = _useMemo(() => {
+    let bal = 0;
+    for (const tx of txList) {
+      if (tx.program === "เปิดMember") bal += tx.quantity;
+      if (tx.program_status === "ตัด Member") bal -= tx.price;
+    }
+    return bal;
+  }, [txList]);
+
+  // course balance: { [program]: { bought, used, history[] } }
+  const courseMap = _useMemo(() => {
+    const map: Record<string, { bought: number; used: number; history: TxRecord[] }> = {};
+    for (const tx of txList) {
+      const prog = tx.program;
+      if (!prog || prog === "เปิดMember") continue;
+      if (tx.program_status === "ชื้อคอร์ส" || tx.program_status === "ตัดคอร์ส") {
+        if (!map[prog]) map[prog] = { bought: 0, used: 0, history: [] };
+        if (tx.program_status === "ชื้อคอร์ส") map[prog].bought += tx.quantity;
+        if (tx.program_status === "ตัดคอร์ส")  map[prog].used  += tx.quantity;
+        map[prog].history.push(tx);
+      }
+    }
+    return map;
+  }, [txList]);
+
+  // Member history
+  const memberHistory = _useMemo(() =>
+    txList.filter(tx => tx.program === "เปิดMember" || tx.program_status === "ตัด Member")
+          .sort((a, b) => b.date.localeCompare(a.date))
+  , [txList]);
   const custApts   = apts.filter(a => a.customer_id === cust.customer_id)
     .sort((a, b) => b.appointment_date.localeCompare(a.appointment_date));
 
@@ -713,38 +741,124 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
 
           {/* ── Tab: คอร์ส / Member ── */}
           {activeTab === "course" && (
-            <div className="px-5 py-4 space-y-3">
-              {allCourses.length === 0 ? (
-                <div className="py-8 flex flex-col items-center justify-center text-center">
-                  <div className="w-14 h-14 rounded-2xl bg-pink-50 flex items-center justify-center mb-3">
-                    <svg className="w-7 h-7 text-pink-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
-                    </svg>
-                  </div>
-                  <p className="text-sm font-semibold text-slate-400">ไม่มีคอร์ส</p>
+            <div className="px-4 py-4 space-y-4">
+              {txLoading ? (
+                <div className="py-12 flex items-center justify-center gap-2 text-pink-400">
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                  <span className="text-sm">กำลังโหลด...</span>
                 </div>
+              ) : txError ? (
+                <div className="py-8 text-center text-sm text-red-400">{txError}</div>
+              ) : !txMod ? (
+                <div className="py-8 text-center text-sm text-slate-400">ไม่ได้ตั้งค่า Sales Transactions module</div>
               ) : (
-                allCourses.map(co => (
-                  <div key={co.course_id} className={`rounded-2xl p-4 border ${co.status === "active" ? "bg-pink-50/60 border-pink-100" : "bg-slate-50 border-slate-100"}`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm font-bold text-slate-700">{co.course_name}</p>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${co.status === "active" ? "bg-emerald-100 text-emerald-600" : "bg-slate-200 text-slate-500"}`}>
-                        {co.status === "active" ? "ใช้งาน" : co.status === "completed" ? "ครบแล้ว" : "หมดอายุ"}
-                      </span>
+                <>
+                  {/* ── Member card ── */}
+                  <div className="rounded-2xl border border-pink-200 bg-gradient-to-br from-pink-50 to-rose-50 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-pink-400 to-rose-500 flex items-center justify-center">
+                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                        </div>
+                        <p className="font-bold text-slate-700 text-sm">Member Balance</p>
+                      </div>
+                      <button onClick={() => setCourseHistOpen(courseHistOpen === "__member__" ? null : "__member__")}
+                        className="text-[10px] text-pink-500 hover:text-pink-700 font-semibold underline">
+                        {courseHistOpen === "__member__" ? "ซ่อน" : "ดูรายการ"}
+                      </button>
                     </div>
-                    <div className="flex items-center justify-between text-xs text-slate-500 mb-2">
-                      <span>ใช้แล้ว {co.used_sessions}/{co.total_sessions} ครั้ง</span>
-                      <span className="font-bold text-rose-500">คงเหลือ {co.remaining_sessions} ครั้ง</span>
-                    </div>
-                    <div className="h-1.5 bg-pink-100 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full transition-all"
-                        style={{ width: `${Math.min((co.used_sessions / (co.total_sessions || 1)) * 100, 100)}%`, background: co.status === "active" ? "linear-gradient(90deg,#f43f5e,#ec4899)" : "#cbd5e1" }}/>
-                    </div>
-                    {co.expire_date && (
-                      <p className="text-[10px] text-slate-400 mt-1.5">หมดอายุ: {fmtDate(co.expire_date)}</p>
+                    <p className={`text-2xl font-bold ${memberBalance < 0 ? "text-red-500" : "text-rose-600"}`}>
+                      ฿{memberBalance.toLocaleString()}
+                    </p>
+                    {memberBalance < 0 && <p className="text-[10px] text-red-400 mt-0.5">⚠ ยอดติดลบ</p>}
+
+                    {/* Member history */}
+                    {courseHistOpen === "__member__" && (
+                      <div className="mt-3 pt-3 border-t border-pink-200 space-y-1.5">
+                        {memberHistory.length === 0
+                          ? <p className="text-xs text-slate-400 text-center py-2">ไม่มีรายการ</p>
+                          : memberHistory.map((tx, i) => {
+                              const isAdd = tx.program === "เปิดMember";
+                              const amt   = isAdd ? tx.quantity : tx.price;
+                              return (
+                                <div key={i} className="flex items-center justify-between text-xs">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0 ${isAdd ? "bg-emerald-400" : "bg-rose-400"}`}>
+                                      {isAdd ? "+" : "−"}
+                                    </span>
+                                    <span className="text-slate-600">{fmtDate(tx.date)}</span>
+                                    <span className="text-slate-400">·</span>
+                                    <span className="text-slate-600">{isAdd ? "เปิด Member" : "ตัด Member"}</span>
+                                  </div>
+                                  <span className={`font-bold ${isAdd ? "text-emerald-600" : "text-rose-500"}`}>
+                                    {isAdd ? "+" : "−"}฿{amt.toLocaleString()}
+                                  </span>
+                                </div>
+                              );
+                            })
+                        }
+                      </div>
                     )}
                   </div>
-                ))
+
+                  {/* ── คอร์สแต่ละโปรแกรม ── */}
+                  {Object.keys(courseMap).length === 0 ? (
+                    <div className="py-6 text-center text-sm text-slate-400">ไม่มีคอร์สที่ซื้อ</div>
+                  ) : (
+                    Object.entries(courseMap).map(([prog, data]) => {
+                      const remaining = data.bought - data.used;
+                      const pct = data.bought > 0 ? Math.min((data.used / data.bought) * 100, 100) : 0;
+                      const isOpen = courseHistOpen === prog;
+                      return (
+                        <div key={prog} className={`rounded-2xl border p-4 ${remaining <= 0 ? "bg-slate-50 border-slate-200" : "bg-white border-pink-100"}`}>
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-slate-700 truncate">{prog}</p>
+                              <p className="text-xs text-slate-400">ซื้อ {data.bought} · ใช้ {data.used} ครั้ง</p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${remaining > 0 ? "bg-rose-50 text-rose-500 border border-rose-100" : "bg-slate-100 text-slate-400"}`}>
+                                {remaining > 0 ? `เหลือ ${remaining} ครั้ง` : "หมดแล้ว"}
+                              </span>
+                              <button onClick={() => setCourseHistOpen(isOpen ? null : prog)}
+                                className="text-[10px] text-pink-500 hover:text-pink-700 font-semibold underline">
+                                {isOpen ? "ซ่อน" : "รายการ"}
+                              </button>
+                            </div>
+                          </div>
+                          <div className="h-1.5 bg-pink-50 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full transition-all"
+                              style={{ width: `${pct}%`, background: remaining > 0 ? "linear-gradient(90deg,#f43f5e,#ec4899)" : "#94a3b8" }}/>
+                          </div>
+
+                          {/* Course history */}
+                          {isOpen && (
+                            <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5">
+                              {data.history.sort((a,b) => b.date.localeCompare(a.date)).map((tx, i) => {
+                                const isAdd = tx.program_status === "ชื้อคอร์ส";
+                                return (
+                                  <div key={i} className="flex items-center justify-between text-xs">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0 ${isAdd ? "bg-emerald-400" : "bg-rose-400"}`}>
+                                        {isAdd ? "+" : "−"}
+                                      </span>
+                                      <span className="text-slate-600">{fmtDate(tx.date)}</span>
+                                      <span className="text-slate-400">·</span>
+                                      <span className="text-slate-600">{isAdd ? "ซื้อคอร์ส" : "ตัดคอร์ส"}</span>
+                                    </div>
+                                    <span className={`font-bold ${isAdd ? "text-emerald-600" : "text-rose-500"}`}>
+                                      {isAdd ? "+" : "−"}{tx.quantity} ครั้ง
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </>
               )}
             </div>
           )}
