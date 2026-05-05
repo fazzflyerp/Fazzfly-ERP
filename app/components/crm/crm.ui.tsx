@@ -30,7 +30,7 @@ export const Badge = ({ label, bg, text }: { label: string; bg: string; text: st
 // ─── Modal ────────────────────────────────────────────────────────────────────
 export const Modal = ({ onClose, children }: { onClose: () => void; children: React.ReactNode }) => (
   <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
-    <div className="absolute inset-0 backdrop-blur-sm" style={{ background: "rgba(253,242,248,0.75)" }} onClick={onClose}/>
+    <div className="absolute inset-0" style={{ background: "rgba(253,242,248,0.85)" }} onClick={onClose}/>
     <div className="relative w-full sm:max-w-lg max-h-[92vh] overflow-y-auto bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl shadow-pink-100 border-t border-x border-pink-200 sm:border z-10">
       {children}
     </div>
