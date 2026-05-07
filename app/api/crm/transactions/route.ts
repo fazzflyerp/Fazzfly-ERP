@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
     };
 
     const custCol    = findCol("cust_id",        ["opd", "hn", "patient_id", "customer_id"]);
-    const dateCol    = findCol("date",            ["วันที่", "date"]);
+    const dateCol    = findCol("date",            ["วันที่", "date", "วันที่รักษา", "วันที่ทำรายการ", "วันที่บันทึก", "วันที่ใช้บริการ", "ว/ด/ป", "วัน", "transaction_date", "tx_date"]);
     const statusCol  = findCol("program_status",  ["สถานะ"]);
     const programCol = findCol("program",         ["ชื่อโปรแกรม (เลือก)", "ชื่อโปรแกรม", "โปรแกรม"]);
     const qtyCol     = findCol("quantity",        ["จำนวน"]);

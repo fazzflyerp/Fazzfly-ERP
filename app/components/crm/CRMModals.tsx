@@ -535,12 +535,19 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
     return name;
   };
 
+  // ── pattern helpers (ไม่ hardcode keyword — ใช้ได้กับทุก Sheet) ──────────────
+  const isMemberTx   = (tx: TxRecord) => /member/i.test(tx.program + " " + tx.program_status);
+  const isAddAction  = (s: string)    => /เปิด|ซื้อ|ชื้อ|add|buy|open|เพิ่ม/i.test(s);
+  const isDeductAction = (s: string)  => /ตัด|ใช้|cut|use|deduct|หัก/i.test(s);
+
   // ── คำนวณ Member balance และ Course balance จาก txList (ต้องอยู่ก่อน early return) ─
   const memberBalance = _useMemo(() => {
     let bal = 0;
     for (const tx of txList) {
-      if (tx.program === "เปิดMember") bal += tx.price;       // เปิด Member → ใช้ราคา (บาท)
-      if (tx.program_status === "ตัด Member") bal -= tx.price; // ตัด Member → หักราคา
+      if (!isMemberTx(tx)) continue;
+      const action = tx.program_status || tx.program;
+      if (isAddAction(action))    bal += tx.price;
+      else if (isDeductAction(action)) bal -= tx.price;
     }
     return bal;
   }, [txList]);
@@ -549,19 +556,19 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
     const map: Record<string, { bought: number; used: number; history: TxRecord[] }> = {};
     for (const tx of txList) {
       const prog = tx.program;
-      if (!prog || prog === "เปิดMember") continue;
-      if (tx.program_status === "ชื้อคอร์ส" || tx.program_status === "ตัดคอร์ส") {
-        if (!map[prog]) map[prog] = { bought: 0, used: 0, history: [] };
-        if (tx.program_status === "ชื้อคอร์ส") map[prog].bought += tx.quantity;
-        if (tx.program_status === "ตัดคอร์ส")  map[prog].used  += tx.quantity;
-        map[prog].history.push(tx);
-      }
+      if (!prog || isMemberTx(tx)) continue;
+      const action = tx.program_status;
+      if (!isAddAction(action) && !isDeductAction(action)) continue;
+      if (!map[prog]) map[prog] = { bought: 0, used: 0, history: [] };
+      if (isAddAction(action))    map[prog].bought += tx.quantity;
+      if (isDeductAction(action)) map[prog].used   += tx.quantity;
+      map[prog].history.push(tx);
     }
     return map;
   }, [txList]);
 
   const memberHistory = _useMemo(() =>
-    txList.filter(tx => tx.program === "เปิดMember" || tx.program_status === "ตัด Member")
+    txList.filter(tx => isMemberTx(tx))
           .sort((a, b) => b.date.localeCompare(a.date))
   , [txList]);
 
@@ -782,7 +789,7 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
                         {memberHistory.length === 0
                           ? <p className="text-xs text-slate-400 text-center py-2">ไม่มีรายการ</p>
                           : memberHistory.map((tx, i) => {
-                              const isAdd = tx.program === "เปิดMember";
+                              const isAdd = isAddAction(tx.program_status || tx.program);
                               const amt   = tx.price;
                               return (
                                 <div key={i} className="flex items-center justify-between text-xs">
@@ -839,7 +846,7 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
                           {isOpen && (
                             <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5">
                               {data.history.sort((a,b) => b.date.localeCompare(a.date)).map((tx, i) => {
-                                const isAdd = tx.program_status === "ชื้อคอร์ส";
+                                const isAdd = isAddAction(tx.program_status);
                                 return (
                                   <div key={i} className="flex items-center justify-between text-xs">
                                     <div className="flex items-center gap-1.5">
