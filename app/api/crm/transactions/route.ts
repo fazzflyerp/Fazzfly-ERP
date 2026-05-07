@@ -92,15 +92,21 @@ export async function GET(request: NextRequest) {
       return isNaN(n) ? 0 : n;
     };
 
-    console.log(`📋 cols → cust:${custCol} date:${dateCol} status:${statusCol} prog:${programCol} qty:${qtyCol} price:${priceCol} staff:${staffCol} doctor:${doctorCol}`);
-    console.log(`📋 headers:`, txHeaders.slice(0, 25));
+    console.log(`📋 [CRM-TX] spreadsheetId=${spreadsheetId.slice(-6)} customerId="${customerId}"`);
+    console.log(`📋 [CRM-TX] cols → cust:${custCol} date:${dateCol} status:${statusCol} prog:${programCol} qty:${qtyCol} price:${priceCol}`);
+    console.log(`📋 [CRM-TX] headers[0..20]:`, txHeaders.slice(0, 20));
+    console.log(`📋 [CRM-TX] totalRows=${txRows.length - 1} statusCol=${statusCol}`);
 
-    const transactions = txRows.slice(1)
-      .filter(row => {
-        if (custCol === -1) return false;
-        const rowCustId = (row[custCol] || "").toString().trim();
-        return rowCustId === customerId;
-      })
+    const allCustRows = txRows.slice(1).filter(row => {
+      if (custCol === -1) return false;
+      return (row[custCol] || "").toString().trim() === customerId;
+    });
+    console.log(`📋 [CRM-TX] rows for custId="${customerId}": ${allCustRows.length}`);
+    allCustRows.slice(0, 10).forEach((row, i) => {
+      console.log(`  row[${i}] → status="${(row[statusCol] ?? "N/A").toString().slice(0,30)}" prog="${(row[programCol] ?? "N/A").toString().slice(0,30)}" price="${(row[priceCol] ?? "N/A")}" date="${(row[dateCol] ?? "N/A").toString().slice(0,15)}"`);
+    });
+
+    const transactions = allCustRows
       .map((row, i) => ({
         rowIndex:       i + 2,
         date:           dateCol    !== -1 ? (row[dateCol]    || "").toString().trim() : "",
