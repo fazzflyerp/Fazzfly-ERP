@@ -536,17 +536,22 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
   };
 
   // ── pattern helpers (ไม่ hardcode keyword — ใช้ได้กับทุก Sheet) ──────────────
-  const isMemberTx   = (tx: TxRecord) => /member/i.test(tx.program + " " + tx.program_status);
-  const isAddAction  = (s: string)    => /เปิด|ซื้อ|ชื้อ|add|buy|open|เพิ่ม/i.test(s);
-  const isDeductAction = (s: string)  => /ตัด|ใช้|cut|use|deduct|หัก/i.test(s);
+  const isMemberTx    = (tx: TxRecord) => /member/i.test(tx.program + " " + tx.program_status);
+  const isAddAction   = (s: string)    => /เปิด|ซื้อ|ชื้อ|add|buy|open|เพิ่ม/i.test(s);
+  const isDeductAction = (s: string)   => /ตัด|ใช้|cut|use|deduct|หัก/i.test(s);
+  // ถ้า program_status ไม่มี action keyword (เช่น "ปกติ") ให้ดูจาก program แทน
+  const getAction = (tx: TxRecord) =>
+    (isAddAction(tx.program_status) || isDeductAction(tx.program_status))
+      ? tx.program_status
+      : tx.program;
 
   // ── คำนวณ Member balance และ Course balance จาก txList (ต้องอยู่ก่อน early return) ─
   const memberBalance = _useMemo(() => {
     let bal = 0;
     for (const tx of txList) {
       if (!isMemberTx(tx)) continue;
-      const action = tx.program_status || tx.program;
-      if (isAddAction(action))    bal += tx.price;
+      const action = getAction(tx);
+      if (isAddAction(action))         bal += tx.price;
       else if (isDeductAction(action)) bal -= tx.price;
     }
     return bal;
@@ -557,7 +562,7 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
     for (const tx of txList) {
       const prog = tx.program;
       if (!prog || isMemberTx(tx)) continue;
-      const action = tx.program_status;
+      const action = getAction(tx);
       if (!isAddAction(action) && !isDeductAction(action)) continue;
       if (!map[prog]) map[prog] = { bought: 0, used: 0, history: [] };
       if (isAddAction(action))    map[prog].bought += tx.quantity;
@@ -789,7 +794,7 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
                         {memberHistory.length === 0
                           ? <p className="text-xs text-slate-400 text-center py-2">ไม่มีรายการ</p>
                           : memberHistory.map((tx, i) => {
-                              const isAdd = isAddAction(tx.program_status || tx.program);
+                              const isAdd = isAddAction(getAction(tx));
                               const amt   = tx.price;
                               return (
                                 <div key={i} className="flex items-center justify-between text-xs">
