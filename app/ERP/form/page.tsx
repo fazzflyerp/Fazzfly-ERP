@@ -231,27 +231,8 @@ export default function FormPage() {
     const isPriceTypeFn = (fn: string) => /^price_type_/i.test(fn);
     const isPaymentFn   = (fn: string) => /^payment_/i.test(fn);
 
-    const validateSalesRow = (row: Record<string, string>, allF: FormField[], rowLabel: string): string | null => {
-        const status = (row["program_status"] || "").trim();
-        if (status.includes("ตัด Member")) return null; // ยกเว้น ตัด Member
-
-        const priceField = allF.find(f => !isPriceTypeFn(f.fieldName) && !isPaymentFn(f.fieldName) && f.type === "number");
-        const amount = priceField ? (row[priceField.fieldName] || "").trim() : "";
-        if (!amount) return null; // ยังไม่กรอกเงิน → ไม่บังคับ
-
-        const priceTypeFields = allF.filter(f => isPriceTypeFn(f.fieldName));
-        if (priceTypeFields.length > 0) {
-            const hasPriceType = priceTypeFields.some(f => row[f.fieldName] && row[f.fieldName] !== "");
-            if (!hasPriceType) return `${rowLabel} - โปรดเลือกประเภทของราคา`;
-        }
-
-        const paymentFields = allF.filter(f => isPaymentFn(f.fieldName));
-        if (paymentFields.length > 0) {
-            const hasPayment = paymentFields.some(f => row[f.fieldName] && row[f.fieldName] !== "");
-            if (!hasPayment) return `${rowLabel} - โปรดเลือกช่องทางชำระ`;
-        }
-
-        return null;
+    const validateSalesRow = (_row: Record<string, string>, _allF: FormField[], _rowLabel: string): string | null => {
+        return null; // ราคา / ประเภทราคา / ช่องทางชำระ เป็น optional ทั้งหมด
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
