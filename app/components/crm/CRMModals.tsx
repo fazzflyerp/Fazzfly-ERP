@@ -571,7 +571,11 @@ export function CustDetailPanel({ cust, onClose, courses, apts, clientId, txMod,
 
   const memberHistory = _useMemo(() =>
     txList.filter(tx => isMemberTx(tx))
-          .sort((a, b) => b.date.localeCompare(a.date))
+          .sort((a, b) => {
+            const d = a.date.localeCompare(b.date);
+            if (d !== 0) return d;
+            return (isMemberAdd(a) ? 0 : 1) - (isMemberAdd(b) ? 0 : 1);
+          })
   , [txList]);
 
   if (!cust) return null;
