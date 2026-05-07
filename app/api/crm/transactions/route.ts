@@ -69,11 +69,12 @@ export async function GET(request: NextRequest) {
     const custCol    = findCol("cust_id",        ["opd", "hn", "patient_id", "customer_id"]);
     const dateCol    = findCol("date",            ["วันที่", "date", "วันที่รักษา", "วันที่ทำรายการ", "วันที่บันทึก", "วันที่ใช้บริการ", "ว/ด/ป", "วัน", "transaction_date", "tx_date"]);
     let statusCol = findCol("program_status", ["สถานะ", "ประเภท", "ประเภทรายการ", "ประเภทบริการ", "ประเภทการใช้บริการ", "ประเภทสมาชิก", "status", "type", "transaction_type"]);
-    // auto-detect: ถ้าหา header ไม่เจอ ให้ scan ค่าในแต่ละ column หา "ตัด" หรือ "เปิดMember"
+    // auto-detect: ถ้าหา header ไม่เจอ scan ค่าทุกแถว (ไม่จำกัด) หา "ตัด Member" หรือ "เปิดMember"
     if (statusCol === -1) {
       const memberKw = /ตัด\s*member|เปิด\s*member/i;
+      const allDataRows = txRows.slice(1);
       for (let ci = 0; ci < (txRows[0]?.length ?? 0); ci++) {
-        const hits = txRows.slice(1, 30).filter(r => memberKw.test((r[ci] ?? "").toString())).length;
+        const hits = allDataRows.filter(r => memberKw.test((r[ci] ?? "").toString())).length;
         if (hits >= 1) { statusCol = ci; break; }
       }
     }
