@@ -69,14 +69,17 @@ export async function GET(request: NextRequest) {
     const custCol    = findCol("cust_id",        ["opd", "hn", "patient_id", "customer_id"]);
     const dateCol    = findCol("date",            ["วันที่", "date", "วันที่รักษา", "วันที่ทำรายการ", "วันที่บันทึก", "วันที่ใช้บริการ", "ว/ด/ป", "วัน", "transaction_date", "tx_date"]);
     let statusCol = findCol("program_status", ["สถานะ", "ประเภท", "ประเภทรายการ", "ประเภทบริการ", "ประเภทการใช้บริการ", "ประเภทสมาชิก", "status", "type", "transaction_type"]);
-    // auto-detect: ถ้าหา header ไม่เจอ scan ค่าทุกแถว (ไม่จำกัด) หา "ตัด Member" หรือ "เปิดMember"
-    if (statusCol === -1) {
-      const memberKw = /ตัด\s*member|เปิด\s*member/i;
-      const allDataRows = txRows.slice(1);
+    // ตรวจ: ถ้า statusCol ชี้ไปคอลัมน์ที่ไม่มีข้อมูล member (เช่น ซ้ำชื่อกับคอลัมน์อื่น)
+    // → หา column ที่มี "ตัด Member" หรือ "เปิดMember" จริงๆ แทน
+    const memberKw = /ตัด\s*member|เปิด\s*member/i;
+    const allDataRows = txRows.slice(1);
+    const hasMemberData = (ci: number) => allDataRows.some(r => memberKw.test((r[ci] ?? "").toString()));
+    if (statusCol === -1 || !hasMemberData(statusCol)) {
+      let found = -1;
       for (let ci = 0; ci < (txRows[0]?.length ?? 0); ci++) {
-        const hits = allDataRows.filter(r => memberKw.test((r[ci] ?? "").toString())).length;
-        if (hits >= 1) { statusCol = ci; break; }
+        if (hasMemberData(ci)) { found = ci; break; }
       }
+      if (found !== -1) statusCol = found;
     }
     const programCol = findCol("program",         ["ชื่อโปรแกรม (เลือก)", "ชื่อโปรแกรม", "โปรแกรม"]);
     const qtyCol     = findCol("quantity",        ["จำนวน"]);
