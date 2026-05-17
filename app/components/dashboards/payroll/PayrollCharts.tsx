@@ -80,9 +80,9 @@ export default function PayrollCharts({
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(value: number, name: string, props: any) => [
-                    `${value} คน (${props.payload.percentage.toFixed(1)}%)`,
-                    props.payload.grade,
+                  formatter={(value, _name, props) => [
+                    `${value} คน (${(props as any).payload.percentage.toFixed(1)}%)`,
+                    (props as any).payload.grade,
                   ]}
                   contentStyle={{
                     backgroundColor: "white",

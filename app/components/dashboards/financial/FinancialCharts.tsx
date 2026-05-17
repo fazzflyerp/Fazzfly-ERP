@@ -66,11 +66,11 @@ export default function FinancialCharts({
                 tickFormatter={formatCurrency}
               />
               <Tooltip
-                formatter={(value: number) => [
+                formatter={(value) => [
                   new Intl.NumberFormat("th-TH", {
                     style: "currency",
                     currency: "THB",
-                  }).format(value),
+                  }).format(Number(value)),
                 ]}
                 contentStyle={{
                   backgroundColor: "white",
@@ -134,11 +134,11 @@ export default function FinancialCharts({
                 tickFormatter={formatCurrency}
               />
               <Tooltip
-                formatter={(value: number) => [
+                formatter={(value) => [
                   new Intl.NumberFormat("th-TH", {
                     style: "currency",
                     currency: "THB",
-                  }).format(value),
+                  }).format(Number(value)),
                 ]}
                 contentStyle={{
                   backgroundColor: "white",
