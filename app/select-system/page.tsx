@@ -16,7 +16,6 @@ import { useUserRole } from "@/app/context/UserRoleContext";
 import OverviewDashboard from "@/app/components/dashboards/overview/OverviewDashboard";
 import StaffCalendar from "@/app/components/StaffCalendar";
 import QuickNav, { QuickNavTrigger } from "@/app/components/QuickNav";
-import { LangToggle } from "@/app/components/GoogleTranslate";
 
 const ROUTES = {
   ERP_HOME: "/ERP/home",
@@ -275,7 +274,6 @@ export default function SystemSelectorPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <LangToggle />
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
             className="flex items-center gap-2 pl-2 pr-4 py-1.5 rounded-full border border-slate-200 bg-white/80 hover:border-red-200 hover:bg-red-50 transition-all duration-200 group"
