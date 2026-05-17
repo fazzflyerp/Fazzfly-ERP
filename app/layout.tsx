@@ -7,7 +7,6 @@ import {
   Poppins 
 } from "next/font/google";
 import Providers from "./providers-wrapper";
-import GoogleTranslate from "./components/GoogleTranslate";
 import "./globals.css";
 
 // ฟอนต์ไทย Noto Sans Thai (Default) - ใช้ variable --font-kanit เพื่อให้ทำงานกับ CSS เดิม
@@ -59,7 +58,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body suppressHydrationWarning>
         <Providers>{children}</Providers>
-        <GoogleTranslate />
       </body>
     </html>
   );

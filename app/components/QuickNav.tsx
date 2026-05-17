@@ -4,7 +4,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { LangToggle } from "@/app/components/GoogleTranslate";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 interface Module      { moduleId: string; moduleName: string; spreadsheetId: string; sheetName: string; configName: string }
@@ -291,7 +290,6 @@ export default function QuickNav({ isOpen, onClose }: { isOpen: boolean; onClose
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <LangToggle />
               <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
                 {I.close}
               </button>
