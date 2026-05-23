@@ -128,11 +128,32 @@ export function saInvalidateCache(spreadsheetId: string): void {
 const RETRYABLE = new Set([401, 403, 429, 500, 502, 503, 504]);
 const MAX_RETRIES = 4;
 
+// Normalize a range string for the Sheets API:
+// 1. Quote sheet names containing non-ASCII or special chars (Thai, spaces, etc.)
+// 2. If no "!" present (bare sheet name), append !A:ZZ so the API treats it as a
+//    sheet reference, not a named range — avoids "Unable to parse range" errors.
+function _quoteRange(range: string): string {
+  const bangIdx = range.indexOf("!");
+  const sheetPart = bangIdx >= 0 ? range.slice(0, bangIdx) : range;
+  const colPart   = bangIdx >= 0 ? range.slice(bangIdx)    : "!A:ZZ";
+
+  // Already quoted
+  if (sheetPart.startsWith("'") && sheetPart.endsWith("'")) {
+    return bangIdx >= 0 ? range : `${sheetPart}!A:ZZ`;
+  }
+
+  // Quote if contains non-ASCII (Thai etc.), space, dash, or other special chars
+  const needsQuote = /[^\w]/.test(sheetPart);
+  const quoted = needsQuote ? `'${sheetPart}'` : sheetPart;
+  return `${quoted}${colPart}`;
+}
+
 export async function saReadRange(
   spreadsheetId: string,
   range: string,
   ttl = DEFAULT_TTL   // ttl=0 → bypass cache (ใช้หลัง write)
 ): Promise<any[][]> {
+  range = _quoteRange(range);
   const key = _cacheKey(spreadsheetId, range);
 
   // ── cache hit ──

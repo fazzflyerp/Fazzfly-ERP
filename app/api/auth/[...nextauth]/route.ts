@@ -7,6 +7,10 @@
 
 import NextAuth, { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import CredentialsProvider from "next-auth/providers/credentials";
+import { saReadRange } from "@/lib/google-sa";
+
+const MASTER_SHEET_ID = process.env.MASTER_SHEET_ID!;
 
 const scopes = [
   "openid",
@@ -31,6 +35,40 @@ const authOptions: NextAuthOptions = {
         }
       },
     }),
+
+    CredentialsProvider({
+      name: "Email & Password",
+      credentials: {
+        email:    { label: "Email",    type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) return null;
+        const email = credentials.email.toLowerCase().trim();
+
+        try {
+          // client_user: A=client_id B=email C=role D=is_active E=notes F=password_hash G=branch_id H=branch_name
+          const rows = await saReadRange(MASTER_SHEET_ID, "client_user!A:H");
+          const row  = rows.slice(1).find((r) => (r[1] ?? "").toString().toLowerCase().trim() === email);
+          if (!row) return null;
+
+          const isActive = (row[3] ?? "").toString().toUpperCase() === "TRUE";
+          const stored   = (row[5] ?? "").toString().trim();
+          if (!isActive || !stored) return null;
+
+          // plain text comparison — demo only
+          if (credentials.password !== stored) return null;
+
+          return {
+            id:    email,
+            email: email,
+            name:  (row[7] ?? row[0] ?? email).toString(),
+          };
+        } catch {
+          return null;
+        }
+      },
+    }),
   ],
   
   callbacks: {
@@ -42,13 +80,25 @@ const authOptions: NextAuthOptions = {
 
       // ✅ เก็บ token เฉพาะของ user นี้
       if (account) {
-        token.accessToken = account.access_token;
-        token.refreshToken = account.refresh_token;
-        token.expiresAt = Date.now() + (account.expires_in || 3600) * 1000;
-        token.scope = account.scope; // ✅ เก็บ scope ด้วย
+        if (account.type === "credentials") {
+          token.provider  = "credentials";
+          token.expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 วัน
+        } else {
+          token.accessToken  = account.access_token;
+          token.refreshToken = account.refresh_token;
+          token.expiresAt    = Date.now() + (account.expires_in || 3600) * 1000;
+          token.scope        = account.scope;
+          token.provider     = "google";
+        }
       }
 
-      // ✅ Auto-refresh with error handling
+      // ✅ Credentials: ต่ออายุอัตโนมัติทุกครั้งที่ active (ไม่ต้อง re-check sheet)
+      if (token.provider === "credentials") {
+        token.expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+        return token;
+      }
+
+      // ✅ Google: Auto-refresh — refresh 5 นาทีก่อนหมดอายุ
       if (token.expiresAt && Date.now() > (token.expiresAt - 300000)) { // refresh 5 นาทีก่อนหมดอายุ
         try {
           console.log(`🔄 Refreshing token for user: ${token.email}`);
@@ -112,23 +162,39 @@ const authOptions: NextAuthOptions = {
     
     async redirect({ url, baseUrl }) {
       if (url.startsWith(baseUrl)) return url;
-      return `${baseUrl}/select-system`;
+      return `${baseUrl}/auth-router`;
     },
   },
   
   pages: {
     signIn: "/login",
-    error: "/auth/error", // ✅ เพิ่ม error page
+    error: "/auth/error",
   },
 
   session: {
     strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 วัน
-    updateAge: 60 * 60, // update ทุก 1 ชั่วโมง
+    maxAge:    30 * 24 * 60 * 60, // 30 วัน
+    updateAge: 60 * 60,           // rotate ทุก 1 ชั่วโมง
   },
 
   jwt: {
     maxAge: 30 * 24 * 60 * 60,
+  },
+
+  // ✅ Persistent cookie — ไม่หายเมื่อปิด browser
+  cookies: {
+    sessionToken: {
+      name: process.env.NODE_ENV === "production"
+        ? "__Secure-next-auth.session-token"
+        : "next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax" as const,
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 30 * 24 * 60 * 60, // 30 วัน (วินาที)
+      },
+    },
   },
 
   debug: process.env.NODE_ENV === "development",

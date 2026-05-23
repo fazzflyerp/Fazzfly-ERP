@@ -81,7 +81,7 @@ const MASTER_CONFIG_ID = process.env.NEXT_PUBLIC_MASTER_CONFIG_ID || "1j7LguHaX8
 
 export default function HomePage() {
   const { data: session, status } = useSession();
-  const { canEdit, isAdmin, loading: roleLoading } = useUserRole();
+  const { canEdit, isAdmin, isSuperAdmin, loading: roleLoading } = useUserRole();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -756,7 +756,8 @@ export default function HomePage() {
           </button>
 
 
-          {/* ✅ Tab ข้อมูลหลัก */}
+          {/* ✅ Tab ข้อมูลหลัก — SUPER_ADMIN only */}
+          {isSuperAdmin() && (
           <button
               onClick={() => setActiveTab("masterdata")}
               className={`px-4 lg:px-6 py-2.5 lg:py-3 font-semibold transition-all relative whitespace-nowrap text-sm lg:text-base ${activeTab === "masterdata"
@@ -779,6 +780,7 @@ export default function HomePage() {
                 <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-600 to-purple-500 rounded-full"></div>
               )}
             </button>
+          )}
 
           {/* ✅ Tab Activity Log — Admin only */}
           {isAdmin() && (

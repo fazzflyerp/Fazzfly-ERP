@@ -37,11 +37,12 @@ async function getAccessEntry(userEmail: string): Promise<AccessEntry | null> {
   if (cached && now < cached.expiry) return cached;
 
   try {
-    const [userRows, dbRows, modRows, crmRows] = await Promise.all([
+    const [userRows, dbRows, modRows, crmRows, dashRows] = await Promise.all([
       saReadRange(MASTER_SHEET_ID, "client_user!A:E"),
       saReadRange(MASTER_SHEET_ID, "client_db!A:E").catch(() => [] as any[][]),
       saReadRange(MASTER_SHEET_ID, "client_modules!A:H").catch(() => [] as any[][]),
       saReadRange(MASTER_SHEET_ID, "client_crm!A:H").catch(() => [] as any[][]),
+      saReadRange(MASTER_SHEET_ID, "client_dashboard!A:I").catch(() => [] as any[][]),
     ]);
 
     const userRow = userRows.slice(1).find(
@@ -79,6 +80,13 @@ async function getAccessEntry(userEmail: string): Promise<AccessEntry | null> {
         if (raw) ownedSheetIds.add(extractSheetId(raw));
       });
     }
+
+    // จาก client_dashboard: col A=dashboardId, col B=clientId, col D=spreadsheetId
+    dashRows.slice(1).forEach((r) => {
+      if ((r[1] ?? "").toString().trim() !== clientId) return;
+      const raw = (r[3] ?? "").toString().trim();
+      if (raw) ownedSheetIds.add(extractSheetId(raw));
+    });
 
     const entry: AccessEntry = { clientId, ownedSheetIds, expiry: now + ACCESS_TTL };
     evictOldest();

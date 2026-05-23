@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { Menu, X } from "lucide-react";
 import {
@@ -693,86 +693,132 @@ function AnalyticsSection() {
 
 /* ─────────────────────── PRICING ─────────────────────── */
 function PricingSection() {
-  const bundles = [
-    {
-      tag: "Standard Bundle",
-      name: "CRM + ERP",
-      price: "10,999",
-      from: "20,000",
-      highlight: true,
-      extras: ["Complimentary Access Add-on (2,000 THB)", "Marketing Pack for Beginners (5,999 THB)"],
-    },
-    { tag: "Essentials Only", name: "CRM", price: "5,999", from: "8,000", highlight: false, extras: [] },
-    { tag: "Essentials Only", name: "ERP", price: "8,999", from: "11,000", highlight: false, extras: [] },
-  ];
-
-  const subs = [
-    { name: "CRM + ERP", price: "999" },
-    { name: "CRM", price: "699" },
-    { name: "ERP", price: "899" },
-  ];
-
   return (
-    <section id="pricing" className="bg-white py-24 px-8">
-      <div className="max-w-7xl mx-auto">
-        <h2 className="text-4xl lg:text-5xl font-bold text-center text-gray-900 mb-16" style={fcMinimal}>
+    <section
+      id="pricing"
+      className="relative overflow-hidden py-24 px-8"
+      style={{ background: "white" }}
+    >
+      {/* gradient blob top-right */}
+      <div
+        className="pointer-events-none absolute -top-20 right-0 h-[480px] w-[480px] rounded-full opacity-60"
+        style={{ background: "radial-gradient(circle, #f9a8d4 0%, #e879f9 40%, transparent 70%)", filter: "blur(60px)" }}
+      />
+      {/* decorative orbs */}
+      <div
+        className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full opacity-40"
+        style={{ background: "radial-gradient(circle, #f9a8d4 0%, #ec4899 60%, transparent 100%)", filter: "blur(48px)" }}
+      />
+      <div
+        className="pointer-events-none absolute bottom-12 left-1/3 h-48 w-48 rounded-full opacity-25"
+        style={{ background: "radial-gradient(circle, #c084fc 0%, #a855f7 60%, transparent 100%)", filter: "blur(40px)" }}
+      />
+
+      <div className="relative mx-auto max-w-6xl">
+        <h2 className="mb-16 text-center text-5xl font-bold text-gray-900 lg:text-6xl" style={fcMinimal}>
           Choose your plan
         </h2>
 
-        <div className="grid lg:grid-cols-3 gap-6 mb-12 items-center">
-          {bundles.map((b) => (
-            <div
-              key={b.name + b.tag}
-              className={`rounded-3xl p-8 border-2 flex flex-col gap-4 ${
-                b.highlight
-                  ? "border-[#0b479c] bg-[#0b479c] text-white shadow-2xl shadow-blue-200 scale-105"
-                  : "border-gray-100 bg-gray-50 text-gray-900"
-              }`}
-            >
-              <p className={`text-xs font-bold tracking-widest uppercase ${b.highlight ? "text-blue-200" : "text-gray-400"}`} style={fcMinimal}>
-                {b.tag}
-              </p>
-              <h3 className="text-2xl font-bold" style={fcMinimal}>{b.name}</h3>
-              <div>
-                <p className={`text-sm line-through ${b.highlight ? "text-blue-300" : "text-gray-400"}`} style={fcMinimal}>
-                  FROM {b.from}
-                </p>
-                <p className="text-4xl font-bold" style={fcMinimal}>
-                  {b.price} <span className="text-lg font-normal">THB</span>
-                </p>
-              </div>
-              {b.extras.length > 0 && (
-                <div className="mt-2 space-y-2">
-                  <p className="text-xs font-bold text-yellow-300 uppercase tracking-wider" style={fcMinimal}>EXCLUSIVE OFFERS</p>
-                  {b.extras.map((e) => (
-                    <p key={e} className="text-xs text-blue-200" style={fcSubject}>✦ {e}</p>
-                  ))}
-                </div>
-              )}
-              <a
-                href="#register"
-                className={`mt-auto text-center py-3 rounded-full font-bold text-sm transition-all hover:scale-105 ${
-                  b.highlight ? "bg-white text-[#0b479c]" : "bg-[#0b479c] text-white"
-                }`}
-                style={fcSubject}
-              >
-                เลือกแผนนี้
-              </a>
-            </div>
-          ))}
-        </div>
+        <div className="grid gap-6 lg:grid-cols-3 lg:items-stretch">
 
-        <div className="bg-gray-50 rounded-3xl p-8">
-          <h3 className="text-xl font-bold text-gray-900 mb-6 text-center" style={fcMinimal}>Subscription</h3>
-          <div className="grid md:grid-cols-3 gap-4">
-            {subs.map((s) => (
-              <div key={s.name} className="bg-white rounded-2xl p-6 text-center shadow-sm">
-                <p className="text-sm text-gray-500 mb-1" style={fcSubject}>{s.name}</p>
-                <p className="text-3xl font-bold text-[#0b479c]" style={fcMinimal}>{s.price}</p>
-                <p className="text-xs text-gray-400" style={fcMinimal}>THB / MONTHLY</p>
+          {/* ── Col 1: Standard Bundle ── */}
+          <div className="flex h-full flex-col gap-6 rounded-3xl bg-white p-10 shadow-sm" style={{ border: "1px solid #f0f0f0" }}>
+            <div>
+              <p className="mb-1.5 text-base font-semibold text-gray-500" style={fcMinimal}>Standard Bundle</p>
+              <p className="text-3xl font-bold text-gray-900" style={fcMinimal}>CRM + ERP</p>
+            </div>
+
+            <div className="flex items-baseline gap-4">
+              <span className="text-6xl font-bold text-gray-900" style={fcMinimal}>10,999</span>
+              <div className="leading-snug">
+                <span className="text-base font-semibold text-red-500" style={fcMinimal}>FROM</span>
+                <br />
+                <span className="text-xl font-bold text-red-500" style={fcMinimal}>20,000</span>
+              </div>
+            </div>
+
+            <hr className="border-gray-100" />
+
+            <div className="flex-1">
+              <p className="mb-3 text-sm font-bold uppercase tracking-widest text-gray-800" style={fcMinimal}>
+                EXCLUSIVE OFFERS
+              </p>
+              <p className="text-base text-gray-500" style={fcSubject}>Complimentary Access Add-on (2,000THB)</p>
+              <p className="mt-1 text-base text-gray-500" style={fcSubject}>Marketing Pack for Beginners (5,999THB)</p>
+            </div>
+
+            <a
+              href="#register"
+              className="rounded-full bg-gray-900 py-4 text-center text-base font-bold text-white transition-all hover:scale-[1.02] hover:bg-gray-800"
+              style={fcSubject}
+            >
+              เลือกแผนนี้
+            </a>
+          </div>
+
+          {/* ── Col 2: Essentials (CRM + ERP stacked, equal height) ── */}
+          <div className="flex h-full flex-col gap-4">
+            {[
+              { name: "CRM", price: "5,999", from: "8,000" },
+              { name: "ERP", price: "8,999", from: "11,000" },
+            ].map((b) => (
+              <div
+                key={b.name}
+                className="flex flex-1 flex-col gap-5 rounded-3xl p-10"
+                style={{ background: "linear-gradient(135deg, #f3e8ff 0%, #fce7f3 100%)" }}
+              >
+                <div>
+                  <p className="mb-1.5 text-base font-semibold text-gray-500" style={fcMinimal}>Essentials Only</p>
+                  <p className="text-3xl font-bold text-gray-900" style={fcMinimal}>{b.name}</p>
+                </div>
+                <div className="flex flex-1 items-baseline gap-4">
+                  <span className="text-5xl font-bold text-gray-900" style={fcMinimal}>{b.price}</span>
+                  <div className="leading-snug">
+                    <span className="text-base font-semibold text-red-500" style={fcMinimal}>FROM</span>
+                    <br />
+                    <span className="text-xl font-bold text-red-500" style={fcMinimal}>{b.from}</span>
+                  </div>
+                </div>
+                <a
+                  href="#register"
+                  className="rounded-full bg-white py-3 text-center text-base font-bold text-gray-900 shadow-sm transition-all hover:scale-[1.02]"
+                  style={fcSubject}
+                >
+                  เลือกแผนนี้
+                </a>
               </div>
             ))}
           </div>
+
+          {/* ── Col 3: Subscription ── */}
+          <div className="flex h-full flex-col">
+            <p className="mb-6 text-2xl font-bold text-gray-900" style={fcMinimal}>Subscription</p>
+            <div className="flex flex-1 flex-col justify-between">
+              {[
+                { name: "CRM + ERP", price: "999" },
+                { name: "CRM",       price: "699" },
+                { name: "ERP",       price: "899" },
+              ].map((s, i, arr) => (
+                <div key={s.name} className="flex flex-1 flex-col justify-center">
+                  <div className="flex items-center justify-between py-4">
+                    <p className="text-xl font-bold text-gray-900" style={fcMinimal}>{s.name}</p>
+                    <div className="text-right">
+                      <span className="flex items-center justify-end gap-1 text-sm text-gray-400" style={fcMinimal}>
+                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                          <path d="m3 11 18-5v12L3 13v-2z" />
+                          <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+                        </svg>
+                        MONTHLY
+                      </span>
+                      <p className="text-3xl font-bold text-gray-900" style={fcMinimal}>{s.price} THB</p>
+                    </div>
+                  </div>
+                  {i < arr.length - 1 && <hr className="border-gray-100" />}
+                </div>
+              ))}
+            </div>
+          </div>
+
         </div>
       </div>
     </section>
@@ -857,7 +903,7 @@ function RegisterSection() {
                 placeholder={field.placeholder}
                 value={(form as unknown as Record<string, string>)[field.key]}
                 onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0b479c] transition"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#0b479c] transition"
                 style={fcSubject}
               />
             </div>
@@ -918,7 +964,7 @@ function RegisterSection() {
                 value={form.date}
                 min={new Date().toISOString().split("T")[0]}
                 onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0b479c] transition"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#0b479c] transition"
                 style={fcSubject}
               />
             </div>
@@ -930,7 +976,7 @@ function RegisterSection() {
                 type="time"
                 value={form.time}
                 onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0b479c] transition"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#0b479c] transition"
                 style={fcSubject}
               />
             </div>
@@ -975,15 +1021,153 @@ function RegisterSection() {
 /* ─────────────────────── FOOTER ─────────────────────── */
 function Footer() {
   return (
-    <footer className="bg-[#0b479c] text-blue-200 py-10 px-8 text-center">
-      <Image src="/logo.png" alt="FAZZFLY" width={100} height={30} className="mx-auto mb-4 brightness-200" style={{ width: "auto" }} />
-      <p className="text-sm" style={fcSubject}>© 2025 FAZZFLY. All rights reserved.</p>
+    <footer className="bg-[#0b1f4a] px-8 pt-16 pb-8 text-blue-200">
+      <div className="mx-auto max-w-6xl">
+
+        {/* top grid */}
+        <div className="grid gap-12 border-b border-white/10 pb-12 lg:grid-cols-3">
+
+          {/* col 1: brand */}
+          <div className="lg:col-span-1">
+            <Image src="/logo.png" alt="FAZZFLY" width={160} height={50} className="mb-4 brightness-200" style={{ width: "auto" }} />
+            <p className="mb-1 text-base font-bold text-white" style={fcMinimal}>
+              ระบบจัดการธุรกิจและคลินิกครบวงจร
+            </p>
+            <p className="text-sm leading-relaxed text-blue-300" style={fcSubject}>
+              ช่วยให้ธุรกิจคุณโตไวขึ้น ทำงานน้อยลง<br />
+              และไม่เสียลูกค้าอีกต่อไป
+            </p>
+
+            {/* social icons */}
+            <div className="mt-6 flex gap-3">
+              {/* LINE */}
+              <a
+                href="https://line.me/R/ti/p/@334ltpct?oat_content=url&ts=05231621"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-[#06C755] transition-opacity hover:opacity-80"
+                title="LINE OA"
+              >
+                <svg viewBox="0 0 24 24" className="h-5 w-5 fill-white">
+                  <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63h2.386c.349 0 .63.285.63.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63.349 0 .631.285.631.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.281.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314" />
+                </svg>
+              </a>
+
+              {/* Email */}
+              <a
+                href="mailto:fazzflyerp@gmail.com"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 transition-opacity hover:opacity-80"
+                title="Email"
+              >
+                <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </a>
+
+              {/* Phone */}
+              <a
+                href="tel:0624126191"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 transition-opacity hover:opacity-80"
+                title="โทร"
+              >
+                <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
+              </a>
+            </div>
+          </div>
+
+          {/* col 2: nav links */}
+          <div>
+            <p className="mb-5 text-sm font-bold uppercase tracking-widest text-white" style={fcMinimal}>เมนู</p>
+            <ul className="space-y-3">
+              {[
+                { label: "ทำไมต้อง FAZZFLY", href: "#why-us" },
+                { label: "FAZZFLY CRM", href: "#crm" },
+                { label: "FAZZFLY ERP", href: "#erp" },
+                { label: "Creator Tools", href: "#flynn" },
+                { label: "Deep Analytics", href: "#analytics" },
+                { label: "ราคา", href: "#pricing" },
+                { label: "ขอทดลองใช้ฟรี", href: "#register" },
+              ].map((l) => (
+                <li key={l.label}>
+                  <a href={l.href} className="text-sm text-blue-300 transition-colors hover:text-white" style={fcSubject}>
+                    {l.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* col 3: company info */}
+          <div>
+            <p className="mb-5 text-sm font-bold uppercase tracking-widest text-white" style={fcMinimal}>ติดต่อเรา</p>
+            <div className="space-y-4 text-sm text-blue-300" style={fcSubject}>
+              <div>
+                <p className="font-semibold text-white">บริษัท โคตรทรัพย์ซิสเต็ม 78 จำกัด</p>
+                <p className="text-xs text-blue-400">KHOTSUB SYSTEM 78 CO., LTD.</p>
+              </div>
+              <div className="flex gap-2">
+                <svg className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                </svg>
+                <p className="leading-relaxed">
+                  48/1 แกรนด์ บางกอก บูเลอวาร์ด สาทร<br />
+                  ถนนกัลปพฤกษ์ แขวงบางแค เขตบางแค<br />
+                  กรุงเทพมหานคร 10160
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <svg className="h-4 w-4 flex-shrink-0 text-blue-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 6.75z" />
+                </svg>
+                <a href="tel:0624126191" className="hover:text-white transition-colors">062-412-6191</a>
+              </div>
+              <div className="flex items-center gap-2">
+                <svg className="h-4 w-4 flex-shrink-0 text-blue-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                </svg>
+                <a href="mailto:fazzflyerp@gmail.com" className="hover:text-white transition-colors">fazzflyerp@gmail.com</a>
+              </div>
+              <div className="flex items-center gap-2">
+                <svg viewBox="0 0 24 24" className="h-4 w-4 flex-shrink-0 fill-[#06C755]">
+                  <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63h2.386c.349 0 .63.285.63.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63.349 0 .631.285.631.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.281.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314" />
+                </svg>
+                <a
+                  href="https://line.me/R/ti/p/@334ltpct?oat_content=url&ts=05231621"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-white transition-colors"
+                >
+                  LINE OA: @FAZZFLY
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* bottom bar */}
+        <div className="pt-8 text-center text-xs text-blue-400" style={fcSubject}>
+          © 2026 KHOTSUB SYSTEM 78 CO., LTD. All rights reserved.
+        </div>
+
+      </div>
     </footer>
   );
 }
 
 /* ─────────────────────── PAGE ─────────────────────── */
 export default function LandingPage() {
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash) return;
+    const el = document.querySelector(hash);
+    if (el) {
+      setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-white">
       <Hero />
