@@ -224,7 +224,7 @@ export async function POST(request: NextRequest) {
         );
       } else {
         // period ใหม่ — append row ใหม่ (A=period, B=revenue, C=cogs, E=expenses)
-        const newRow = ["", "", "", "", ""];
+        const newRow: (string | number)[] = ["", "", "", "", ""];
         newRow[F_PERIOD]  = period;
         newRow[F_REVENUE] = revenue;
         newRow[F_COGS]    = cogs;
