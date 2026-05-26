@@ -21,7 +21,7 @@ import {
   generateWaterfallData,
   generateDoctorProgramData,
   getPeriodOptions,
-  normalizeDate,
+  filterByDateRange,
 } from "./salesUtils";
 
 interface DashboardData {
@@ -70,7 +70,8 @@ export default function SalesDashboard({
   // ============================================================
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>([]);
   const [selectedYear, setSelectedYear] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
   const [availableYears, setAvailableYears] = useState<
     { year: string; spreadsheetId: string; fileName: string }[]
   >([]);
@@ -125,13 +126,6 @@ export default function SalesDashboard({
   }, [selectedYear]); // ✅ Trigger on ANY change to selectedYear
 
   // ============================================================
-  // EFFECT: Reset date when periods change
-  // ============================================================
-  useEffect(() => {
-    setSelectedDate("");
-  }, [selectedPeriods]);
-
-  // ============================================================
   // EFFECT: Filter visualizations when periods/date change (NO API CALL)
   // ============================================================
   useEffect(() => {
@@ -139,7 +133,7 @@ export default function SalesDashboard({
     if (allData.length > 0 && config.length > 0) {
       generateVisualizations(allData, selectedPeriods, config);
     }
-  }, [selectedPeriods, selectedDate, allData, config]);
+  }, [selectedPeriods, dateFrom, dateTo, allData, config]);
 
   // ============================================================
   // API: Fetch Available Years
@@ -305,19 +299,11 @@ export default function SalesDashboard({
       }
     }
 
-    // ✅ Filter by date (client-side)
-    if (selectedDate) {
+    // ✅ Filter by date range (client-side)
+    if (dateFrom || dateTo) {
       const dateField = configData.find((f) => f.type === "date");
       if (dateField) {
-        const beforeDate = filteredRows.length;
-        const targetDate = normalizeDate(selectedDate);
-
-        filteredRows = filteredRows.filter((row) => {
-          const rawDate = String(row[dateField.fieldName] || "").trim();
-          if (!rawDate) return false;
-          const normalizedRowDate = normalizeDate(rawDate);
-          return normalizedRowDate === targetDate;
-        });
+        filteredRows = filterByDateRange(filteredRows, dateField.fieldName, dateFrom || undefined, dateTo || undefined);
       }
     }
 
@@ -350,7 +336,8 @@ export default function SalesDashboard({
 
   const handleClearFilters = () => {
     setSelectedYear(null);
-    setSelectedDate("");
+    setDateFrom("");
+    setDateTo("");
     setSelectedPeriods([]);
   };
 
@@ -411,7 +398,7 @@ export default function SalesDashboard({
               📍 Periods:{" "}
               {selectedPeriods.length > 0 ? selectedPeriods.join(", ") : "(none)"}
             </div>
-            <div>📅 Date: {selectedDate || "(all)"}</div>
+            <div>📅 Date: {dateFrom || dateTo ? `${dateFrom || "?"} – ${dateTo || "?"}` : "(all)"}</div>
             <div>🔍 Filtered: {filteredData.length} rows</div>
             <div>
               📆 Year: {selectedYear || "Current"}
@@ -441,20 +428,18 @@ export default function SalesDashboard({
         allData={allData}
         selectedYear={selectedYear}
         selectedPeriods={selectedPeriods}
-        selectedDate={selectedDate}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
         availableYears={availableYears}
         loadingYears={loadingYears}
         archiveFolderId={archiveFolderId}
-        loading={loading} // ✅ Pass loading state
-        onYearChange={(year) => {
-          setSelectedYear(year);
-        }}
+        loading={loading}
+        onYearChange={(year) => setSelectedYear(year)}
         onPeriodToggle={handlePeriodToggle}
         onSelectAll={handleSelectAll}
-        onDateChange={(date) => setSelectedDate(date)}
+        onDateFromChange={(d) => setDateFrom(d)}
+        onDateToChange={(d) => setDateTo(d)}
         onClearFilters={handleClearFilters}
-        onDefaultPeriodReady={(period) => {
-        }}
       />
 
       {/* KPI Cards */}
