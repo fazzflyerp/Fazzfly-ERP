@@ -69,7 +69,7 @@ function buildCards(modules: Module[]): ModuleCard[] {
         key:        m.moduleId,
         group:      "ระบบสต๊อค",
         label:      "คลังกลาง",
-        sublabel:   "จัดการสต๊อคและอนุมัติคำขอ",
+        sublabel:   undefined,
         gradient:   "from-emerald-500 to-teal-400",
         shadowColor:"rgba(16,185,129,0.35)",
         icon: (
@@ -81,7 +81,6 @@ function buildCards(modules: Module[]): ModuleCard[] {
         actions: [
           { label: "คลังกลาง",     href: "/ERP/inv/central",  primary: true },
           { label: "สั่งซื้อ",      href: "/ERP/inv/purchase" },
-          { label: "ดูสต๊อค",      href: "/ERP/inv/stock"    },
           { label: "จัดการสินค้า", href: "/ERP/master-data-demo?spreadsheetId=1XbHnhzkkLREggF7WTlRoND-dPPBBtGwM6St7l2nMP8A&sheetName=Product&configName=Product_config&moduleName=Product&tab=edit" },
         ],
       });
@@ -275,6 +274,7 @@ export default function HomeDemoPage() {
   const [mounted, setMounted]             = useState(false);
   const [navOpen, setNavOpen]             = useState(false);
   const [isSA, setIsSA]                   = useState(false);
+  const [liabilities, setLiabilities]     = useState<{ liability_id: string; po_id: string; supplier_name: string; installment_no: string; due_date: string; amount: string; status: string }[]>([]);
 
 
   useEffect(() => { setMounted(true); }, []);
@@ -296,6 +296,12 @@ export default function HomeDemoPage() {
         const role     = (authData.role     || "STAFF").toUpperCase();
         const branchId = (authData.branchId || "").toString().trim();
         setIsSA(role === "SUPER_ADMIN");
+        if (role === "SUPER_ADMIN") {
+          fetch("/api/inv/liabilities?status=PENDING")
+            .then((r) => r.ok ? r.json() : { liabilities: [] })
+            .then((d) => setLiabilities(d.liabilities || []))
+            .catch(() => {});
+        }
 
         let mods: Module[] = (modulesData.modules || []).filter((m: Module) => {
           if (m.configName) return true;
@@ -538,6 +544,51 @@ export default function HomeDemoPage() {
                           );
                         })
                       )}
+
+                      {/* Liabilities widget — การเงิน group, SA only */}
+                      {groupName === "การเงิน" && isSA && (() => {
+                        const isOverdue = (due: string) => {
+                          const p = due.split("/");
+                          if (p.length !== 3) return false;
+                          return new Date(Number(p[2]), Number(p[1]) - 1, Number(p[0])) < new Date();
+                        };
+                        const totalAmt  = liabilities.reduce((s, l) => s + Number(l.amount || 0), 0);
+                        const overdueList = liabilities.filter((l) => isOverdue(l.due_date));
+                        return (
+                          <div
+                            onClick={() => router.push("/ERP/inv/liabilities")}
+                            className="group flex items-center gap-4 bg-violet-500/[0.06] hover:bg-violet-500/[0.10] border border-violet-500/20 hover:border-violet-500/35 rounded-xl px-4 py-3.5 transition-all duration-200 cursor-pointer"
+                          >
+                            <div className="w-0.5 h-10 rounded-full flex-shrink-0 bg-violet-400" />
+                            <div className="w-10 h-10 flex-shrink-0 rounded-xl flex items-center justify-center bg-gradient-to-br from-violet-500 to-indigo-400"
+                              style={{ boxShadow: "0 4px 12px rgba(139,92,246,0.35)" }}>
+                              <svg className="w-5 h-5 text-white scale-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                              </svg>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="text-white font-semibold text-sm leading-tight">หนี้สินค้างชำระ</p>
+                                {overdueList.length > 0 && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-red-500/20 border border-red-500/30 text-red-400 font-medium">
+                                    เกินกำหนด {overdueList.length} งวด
+                                  </span>
+                                )}
+                              </div>
+                              {liabilities.length === 0 ? (
+                                <p className="text-slate-500 text-xs mt-0.5">ไม่มีหนี้สินค้างชำระ</p>
+                              ) : (
+                                <p className="text-violet-400 text-xs mt-0.5 font-medium">
+                                  ฿{totalAmt.toLocaleString()} · {liabilities.length} งวดที่ยังไม่ชำระ
+                                </p>
+                              )}
+                            </div>
+                            <svg className="w-4 h-4 text-violet-600 group-hover:text-violet-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </section>
                 );

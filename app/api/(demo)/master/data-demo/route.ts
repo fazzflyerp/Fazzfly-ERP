@@ -1,68 +1,45 @@
 /**
  * GET /api/master/data-demo
- * DEMO version — อ่านข้อมูลจาก client spreadsheet
- * ใช้ accessToken ของ user (Google OAuth) แทน SA เพราะ SA อาจไม่มีสิทธิ์อ่าน client sheet
+ * DEMO version — อ่านข้อมูลจาก client spreadsheet ด้วย Service Account
  *
- * Query: spreadsheetId, sheetName
+ * เปลี่ยนจาก OAuth accessToken → SA เพราะ accessToken หมดอายุได้ ทำให้ลูกค้าเห็น 401
+ * ต้องการ: spreadsheet ถูก share ให้ SA email (เช่นเดียวกับ payroll / finance ที่ใช้ SA อยู่แล้ว)
+ *
+ * Query: spreadsheetId, sheetName, includeHeader
  * Response: { success, count, rows, allRows (ถ้า includeHeader=true) }
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { saReadRange } from "@/lib/google-sa";
 
 export async function GET(request: NextRequest) {
   try {
     const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const accessToken = (token as any)?.accessToken;
-    if (!accessToken) return NextResponse.json({ error: "No access token — please sign out and sign in again" }, { status: 401 });
+    if (!token?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { searchParams } = new URL(request.url);
-    const spreadsheetId  = searchParams.get("spreadsheetId");
-    const sheetName      = searchParams.get("sheetName");
-    const includeHeader  = searchParams.get("includeHeader") === "true";
+    const spreadsheetId = searchParams.get("spreadsheetId") || "";
+    const sheetName     = searchParams.get("sheetName")     || "";
+    const includeHeader = searchParams.get("includeHeader") === "true";
 
     if (!spreadsheetId || !sheetName)
       return NextResponse.json({ error: "Missing spreadsheetId or sheetName" }, { status: 400 });
 
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}`;
-
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      const message = errJson?.error?.message || "";
-      console.error(`❌ [data-demo] Sheets ${res.status}:`, message);
-
-      // ถ้า sheet ไม่พบ → ดึงรายชื่อ sheet จริงมาแสดง
-      if (res.status === 400 && message.includes("Unable to parse range")) {
-        try {
-          const metaRes = await fetch(
-            `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`,
-            { headers: { Authorization: `Bearer ${accessToken}` } }
-          );
-          if (metaRes.ok) {
-            const meta = await metaRes.json();
-            const available = (meta.sheets || []).map((s: any) => s.properties?.title).filter(Boolean);
-            return NextResponse.json(
-              { error: `ไม่พบ sheet ชื่อ "${sheetName}" — sheet ที่มีจริง: ${available.join(", ")}`, available },
-              { status: 404 }
-            );
-          }
-        } catch { /* ignore */ }
+    let allRows: any[][];
+    try {
+      allRows = await saReadRange(spreadsheetId, sheetName);
+    } catch (err: any) {
+      const msg = (err?.message || "").toLowerCase();
+      if (msg.includes("unable to parse range") || msg.includes("not found") || msg.includes("404")) {
+        return NextResponse.json(
+          { error: `ไม่พบ sheet ชื่อ "${sheetName}" — กรุณาตรวจสอบชื่อ sheet ในไฟล์ Google Sheets` },
+          { status: 404 }
+        );
       }
-
-      return NextResponse.json(
-        { error: message || `Sheets API ${res.status}` },
-        { status: res.status >= 400 && res.status < 500 ? res.status : 500 }
-      );
+      throw err;
     }
 
-    const data = await res.json();
-    const allRows: any[][] = data.values || [];
     const rows = allRows.slice(1);
 
     return NextResponse.json({
@@ -72,6 +49,6 @@ export async function GET(request: NextRequest) {
       ...(includeHeader ? { allRows } : {}),
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Failed to fetch data" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "โหลดข้อมูลไม่สำเร็จ" }, { status: 500 });
   }
 }

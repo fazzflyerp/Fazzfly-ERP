@@ -807,18 +807,16 @@ export default function FinancePage() {
           })}
         </div>
 
-        {/* Liabilities widget — SA only, only shown when there are pending installments */}
-        {isSA && liabilities.length > 0 && (() => {
-          const totalOutstanding = liabilities.reduce((s, l) => s + Number(l.amount || 0), 0);
+        {/* Liabilities widget — SA only */}
+        {isSA && (() => {
           const isOverdue = (due: string) => {
             const p = due.split("/");
             if (p.length !== 3) return false;
             return new Date(Number(p[2]), Number(p[1]) - 1, Number(p[0])) < new Date();
           };
-          const overdue = liabilities.filter((l) => isOverdue(l.due_date));
-          const upcoming = liabilities
-            .filter((l) => !isOverdue(l.due_date))
-            .slice(0, 3);
+          const totalOutstanding = liabilities.reduce((s, l) => s + Number(l.amount || 0), 0);
+          const overdue  = liabilities.filter((l) => isOverdue(l.due_date));
+          const upcoming = liabilities.filter((l) => !isOverdue(l.due_date)).slice(0, 3);
           return (
             <div className="bg-violet-500/[0.06] border border-violet-500/20 rounded-2xl p-4">
               <div className="flex items-center justify-between mb-3">
@@ -839,33 +837,37 @@ export default function FinancePage() {
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
                 </button>
               </div>
-              <div className="flex flex-wrap items-center gap-4">
-                <div>
-                  <p className="text-[10px] text-slate-500 mb-0.5">ยอดค้างทั้งหมด</p>
-                  <p className="text-lg font-bold text-violet-400">฿{totalOutstanding.toLocaleString()}</p>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[10px] text-slate-500 mb-1.5">งวดที่ยังไม่ถึงกำหนด</p>
-                  <div className="flex flex-wrap gap-2">
-                    {overdue.map((l) => (
-                      <div key={l.liability_id} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-500/10 border border-red-500/20">
-                        <span className="text-[10px] font-mono text-red-400">{l.po_id}</span>
-                        <span className="text-[10px] text-red-400/70">งวด {l.installment_no}</span>
-                        <span className="text-[10px] font-semibold text-red-300">฿{Number(l.amount).toLocaleString()}</span>
-                        <span className="text-[10px] text-red-500">{l.due_date}</span>
-                      </div>
-                    ))}
-                    {upcoming.map((l) => (
-                      <div key={l.liability_id} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10">
-                        <span className="text-[10px] font-mono text-slate-400">{l.po_id}</span>
-                        <span className="text-[10px] text-slate-500">งวด {l.installment_no}</span>
-                        <span className="text-[10px] font-semibold text-slate-300">฿{Number(l.amount).toLocaleString()}</span>
-                        <span className="text-[10px] text-slate-500">{l.due_date}</span>
-                      </div>
-                    ))}
+              {liabilities.length === 0 ? (
+                <p className="text-xs text-slate-600">ไม่มีหนี้สินค้างชำระ</p>
+              ) : (
+                <div className="flex flex-wrap items-center gap-4">
+                  <div>
+                    <p className="text-[10px] text-slate-500 mb-0.5">ยอดค้างทั้งหมด</p>
+                    <p className="text-lg font-bold text-violet-400">฿{totalOutstanding.toLocaleString()}</p>
+                    <p className="text-[10px] text-slate-600">{liabilities.length} งวด</p>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap gap-2">
+                      {overdue.map((l) => (
+                        <div key={l.liability_id} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-500/10 border border-red-500/20">
+                          <span className="text-[10px] font-mono text-red-400">{l.po_id}</span>
+                          <span className="text-[10px] text-red-400/70">งวด {l.installment_no}</span>
+                          <span className="text-[10px] font-semibold text-red-300">฿{Number(l.amount).toLocaleString()}</span>
+                          <span className="text-[10px] text-red-500">{l.due_date}</span>
+                        </div>
+                      ))}
+                      {upcoming.map((l) => (
+                        <div key={l.liability_id} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10">
+                          <span className="text-[10px] font-mono text-slate-400">{l.po_id}</span>
+                          <span className="text-[10px] text-slate-500">งวด {l.installment_no}</span>
+                          <span className="text-[10px] font-semibold text-slate-300">฿{Number(l.amount).toLocaleString()}</span>
+                          <span className="text-[10px] text-slate-500">{l.due_date}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           );
         })()}

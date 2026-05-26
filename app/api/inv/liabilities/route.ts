@@ -49,7 +49,13 @@ export async function GET(request: NextRequest) {
     const filterPoId  = searchParams.get("po_id") ?? "";
     const filterStatus = searchParams.get("status") ?? "";
 
-    const rows = await saReadRange(ctx.sid, LIA_RANGE, 0);
+    let rows: any[][] = [];
+    try {
+      rows = await saReadRange(ctx.sid, LIA_RANGE, 0);
+    } catch {
+      // Sheet ยังไม่มี → return empty
+      return NextResponse.json({ liabilities: [] });
+    }
     let liabilities = rows.slice(1).filter((r) => r[0]).map(parseLia);
 
     if (filterPoId)   liabilities = liabilities.filter((l) => l.po_id === filterPoId);

@@ -1,43 +1,30 @@
 /**
  * GET /api/master/config-demo
- * DEMO version — อ่าน config sheet ด้วย accessToken ของ user
+ * DEMO version — อ่าน config sheet ด้วย Service Account
+ *
+ * เปลี่ยนจาก OAuth accessToken → SA เพราะ accessToken หมดอายุได้ ทำให้ลูกค้าเห็น 401
  * Query: spreadsheetId, configName
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { saReadRange } from "@/lib/google-sa";
 
 export async function GET(request: NextRequest) {
   try {
     const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const accessToken = (token as any)?.accessToken;
-    if (!accessToken) return NextResponse.json({ error: "No access token" }, { status: 401 });
+    if (!token?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { searchParams } = new URL(request.url);
-    const spreadsheetId = searchParams.get("spreadsheetId");
-    const configName    = searchParams.get("configName");
+    const spreadsheetId = searchParams.get("spreadsheetId") || "";
+    const configName    = searchParams.get("configName")    || "";
 
     if (!spreadsheetId || !configName)
       return NextResponse.json({ error: "Missing spreadsheetId or configName" }, { status: 400 });
 
-    const range = `${configName}!A1:K100`;
-    const url   = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`;
+    const rows = await saReadRange(spreadsheetId, `${configName}!A1:K100`);
 
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      return NextResponse.json({ error: `Sheets API error: ${res.status}`, detail: text }, { status: 500 });
-    }
-
-    const data  = await res.json();
-    const rows: any[][] = data.values || [];
-
-    if (rows.length === 0)
+    if (!rows || rows.length === 0)
       return NextResponse.json({ error: "Config sheet is empty" }, { status: 404 });
 
     const headerRow = rows[0];

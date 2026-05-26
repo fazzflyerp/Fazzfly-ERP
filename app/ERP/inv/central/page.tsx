@@ -7,6 +7,7 @@ interface Lot {
   lot_id: string; product_id: string; product_name: string; category: string; brand: string;
   unit: string; qty_original: number; qty_remaining: number;
   expiry_date: string; purchase_date: string; supplier: string;
+  cost_per_unit: number;
 }
 interface StockRequest {
   request_id: string; branch_id: string; branch_name: string;
@@ -89,12 +90,12 @@ export default function InvCentralPage() {
     try {
       const [authRes, lotsRes, reqRes] = await Promise.all([
         fetch("/api/auth/branch-check"),
-        fetch("/api/inv/stock?type=central"),
+        fetch("/api/inv/lots"),
         fetch("/api/inv/request"),
       ]);
       const auth = await authRes.json();
       if (auth.role !== "SUPER_ADMIN") { router.replace("/ERP/home-demo"); return; }
-      setLots((await lotsRes.json()).stock || []);
+      setLots((await lotsRes.json()).lots || []);
       const allReqs: StockRequest[] = (await reqRes.json()).requests || [];
       setRequests(allReqs.filter((r) => r.status.toUpperCase() === "PENDING"));
       setHistoryReqs(allReqs.filter((r) => r.status.toUpperCase() !== "PENDING"));
@@ -269,7 +270,40 @@ export default function InvCentralPage() {
         {error && <p className="text-red-400 mb-4 text-sm">{error}</p>}
 
         {/* ── Stock tab ── */}
-        {tab === "stock" && (
+        {tab === "stock" && (() => {
+          const activeLots  = lots.filter((l) => l.qty_remaining > 0);
+          const totalValue  = activeLots.reduce((s, l) => s + l.qty_remaining * (l.cost_per_unit || 0), 0);
+          const uniqueSKUs  = new Set(activeLots.map((l) => l.product_id)).size;
+          const warn30Date  = new Date(); warn30Date.setDate(warn30Date.getDate() + 30);
+          const expiringCount = activeLots.filter((l) => {
+            if (!l.expiry_date) return false;
+            return new Date(l.expiry_date) <= warn30Date;
+          }).length;
+          return (
+          <>
+          {/* KPI row */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+            <div className="bg-emerald-500/[0.07] border border-emerald-500/20 rounded-2xl p-4">
+              <p className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">มูลค่าสต๊อครวม</p>
+              <p className="text-xl font-bold text-emerald-400">฿{totalValue.toLocaleString("th-TH", { maximumFractionDigits: 0 })}</p>
+            </div>
+            <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
+              <p className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">Lots ที่มีของ</p>
+              <p className="text-xl font-bold text-white">{activeLots.length}</p>
+              <p className="text-[10px] text-slate-600 mt-0.5">จากทั้งหมด {lots.length} lots</p>
+            </div>
+            <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
+              <p className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">SKU ในคลัง</p>
+              <p className="text-xl font-bold text-white">{uniqueSKUs}</p>
+              <p className="text-[10px] text-slate-600 mt-0.5">ชนิดสินค้า</p>
+            </div>
+            <div className={`border rounded-2xl p-4 ${expiringCount > 0 ? "bg-red-500/[0.07] border-red-500/20" : "bg-white/[0.04] border-white/10"}`}>
+              <p className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">ใกล้หมดอายุ</p>
+              <p className={`text-xl font-bold ${expiringCount > 0 ? "text-red-400" : "text-slate-600"}`}>{expiringCount}</p>
+              <p className="text-[10px] text-slate-600 mt-0.5">ใน 30 วัน</p>
+            </div>
+          </div>
+
           <div className="bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-[24px] overflow-hidden relative">
             <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-emerald-400/30 to-transparent" />
             <div className="overflow-x-auto">
@@ -342,7 +376,9 @@ export default function InvCentralPage() {
               </table>
             </div>
           </div>
-        )}
+          </>
+          );
+        })()}
 
         {/* ── Pending Requests tab ── */}
         {tab === "requests" && (

@@ -42,9 +42,10 @@ interface PO {
   created_at: string;
   approved_by: string;
   approved_at: string;
+  payment_config: string;
 }
 
-type Tab = "create" | "list";
+type Tab          = "create" | "list";
 type StatusFilter = "ALL" | "PENDING" | "APPROVED" | "RECEIVED" | "CANCELLED";
 
 const inputCls  = "w-full bg-white/5 border border-white/10 text-white placeholder-slate-600 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500/50 focus:bg-white/8 transition-all";
@@ -63,9 +64,25 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
 
 const PAYMENT_LABELS: Record<string, string> = {
   FULL:        "ชำระเต็มจำนวน",
+  NET:         "เครดิต (Net)",
+  EQUAL:       "ผ่อนเท่าๆ กัน",
+  DEPOSIT:     "มัดจำ",
+  CUSTOM:      "กำหนดเอง",
   INSTALLMENT: "ผ่อนชำระ",
   PARTIAL:     "จ่ายบางส่วน",
 };
+
+const PAYMENT_METHODS = [
+  { value: "FULL",    label: "เต็มจำนวน",     desc: "ชำระทันทีเมื่ออนุมัติ" },
+  { value: "NET",     label: "เครดิต",        desc: "Net 30 / 60 / 90 วัน" },
+  { value: "EQUAL",   label: "ผ่อนเท่าๆ กัน", desc: "หารเฉลี่ยตามงวด" },
+  { value: "DEPOSIT", label: "มัดจำ",          desc: "จ่ายมัดจำ + ส่วนเหลือ" },
+  { value: "CUSTOM",  label: "กำหนดเอง",       desc: "ระบุแต่ละงวดเอง" },
+] as const;
+
+function parseConfig(raw: string) {
+  try { return JSON.parse(raw || "{}"); } catch { return {}; }
+}
 
 export default function InvPurchasePage() {
   const router       = useRouter();
@@ -80,22 +97,28 @@ export default function InvPurchasePage() {
   const [submitting, setSubmitting] = useState(false);
   const [globalMsg, setGlobalMsg]   = useState({ type: "", text: "" });
 
-  // Modals
-  const [approveModal, setApproveModal]   = useState<PO | null>(null);
-  const [stockInModal, setStockInModal]   = useState<PO | null>(null);
-  const [cancelModal, setCancelModal]     = useState<PO | null>(null);
-  const [deleteModal, setDeleteModal]     = useState<PO | null>(null);
-  const [modalLoading, setModalLoading]   = useState(false);
-  const [modalMsg, setModalMsg]           = useState("");
-
-  const [stockInForm, setStockInForm] = useState({ expiry_date: "", note: "" });
-  const [cancelNote, setCancelNote]   = useState("");
+  const [approveModal, setApproveModal] = useState<PO | null>(null);
+  const [stockInModal, setStockInModal] = useState<PO | null>(null);
+  const [cancelModal, setCancelModal]   = useState<PO | null>(null);
+  const [deleteModal, setDeleteModal]   = useState<PO | null>(null);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalMsg, setModalMsg]         = useState("");
+  const [stockInForm, setStockInForm]   = useState({ expiry_date: "", note: "" });
+  const [cancelNote, setCancelNote]     = useState("");
 
   const [form, setForm] = useState({
     product_id: "", qty_ordered: "", cost_total: "",
-    supplier_name: "", payment_method: "FULL", installments_count: "1",
+    supplier_name: "",
+    payment_method: "FULL",
+    net_days: "30",
+    installments_count: "3",
+    interval_months: "1",
+    deposit_pct: "30",
     expected_delivery: "", note: "",
   });
+  const [customRows, setCustomRows] = useState<{ due_date: string; amount: string }[]>([
+    { due_date: "", amount: "" },
+  ]);
 
   useEffect(() => {
     async function init() {
@@ -116,30 +139,51 @@ export default function InvPurchasePage() {
         const qProductId = searchParams.get("productId");
         if (qProductId) {
           const match = prods.find((p) => p.product_id.toString() === qProductId);
-          if (match) {
-            setForm((f) => ({ ...f, product_id: match.product_id.toString() }));
-            setTab("create");
-          }
+          if (match) { setForm((f) => ({ ...f, product_id: match.product_id.toString() })); setTab("create"); }
         }
       } catch (e: any) {
         setGlobalMsg({ type: "error", text: e.message });
-      } finally {
-        setLoading(false);
-      }
+      } finally { setLoading(false); }
     }
     init();
   }, [router, searchParams]);
 
   const selectedProduct = products.find((p) => p.product_id.toString() === form.product_id);
   const calcQtyUnit     = selectedProduct ? Number(form.qty_ordered) * selectedProduct.qty_per_pkg : 0;
-  const showInstallments = form.payment_method === "INSTALLMENT" || form.payment_method === "PARTIAL";
-  const amtPerInst = showInstallments && Number(form.installments_count) > 0
-    ? (Number(form.cost_total) / Number(form.installments_count)).toFixed(0)
-    : "0";
+  const costTotalNum    = Number(form.cost_total) || 0;
+
+  // computed per method
+  const equalAmtPerInst = form.payment_method === "EQUAL" && Number(form.installments_count) > 0
+    ? Math.round(costTotalNum / Number(form.installments_count)) : 0;
+  const depositAmt   = Math.round(costTotalNum * (Number(form.deposit_pct) || 0) / 100);
+  const remainderAmt = costTotalNum - depositAmt;
+  const customTotal  = customRows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  const customDiff   = costTotalNum - customTotal;
+
+  const netDueLabel = (() => {
+    if (form.payment_method !== "NET" || !form.net_days || !costTotalNum) return "";
+    const d = new Date(); d.setDate(d.getDate() + Number(form.net_days));
+    return d.toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" });
+  })();
+
+  function resetForm() {
+    setForm({ product_id: "", qty_ordered: "", cost_total: "", supplier_name: "",
+      payment_method: "FULL", net_days: "30", installments_count: "3",
+      interval_months: "1", deposit_pct: "30", expected_delivery: "", note: "" });
+    setCustomRows([{ due_date: "", amount: "" }]);
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedProduct) return;
+
+    if (form.payment_method === "CUSTOM") {
+      if (customRows.some((r) => !r.due_date || !r.amount))
+        return setGlobalMsg({ type: "error", text: "กรุณากรอกวันครบกำหนดและจำนวนเงินทุกงวด" });
+      if (Math.abs(customDiff) >= 1)
+        return setGlobalMsg({ type: "error", text: `ยอดรวมงวดต่างจากราคา ${Math.abs(customDiff).toLocaleString()} บาท` });
+    }
+
     setSubmitting(true);
     setGlobalMsg({ type: "", text: "" });
     try {
@@ -147,52 +191,56 @@ export default function InvPurchasePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          product_id:        selectedProduct.product_id,
-          product_name:      selectedProduct.product_name,
-          category:          selectedProduct.category,
-          brand:             selectedProduct.brand,
-          unit:              selectedProduct.unit,
-          unit_pkg:          selectedProduct.unit_pkg,
-          qty_per_pkg:       selectedProduct.qty_per_pkg,
-          qty_ordered:       Number(form.qty_ordered),
-          cost_total:        Number(form.cost_total),
-          supplier_name:     form.supplier_name,
-          payment_method:    form.payment_method,
-          installments_count: showInstallments ? Number(form.installments_count) : 0,
-          expected_delivery: form.expected_delivery,
-          note:              form.note,
+          product_id:          selectedProduct.product_id,
+          product_name:        selectedProduct.product_name,
+          category:            selectedProduct.category,
+          brand:               selectedProduct.brand,
+          unit:                selectedProduct.unit,
+          unit_pkg:            selectedProduct.unit_pkg,
+          qty_per_pkg:         selectedProduct.qty_per_pkg,
+          qty_ordered:         Number(form.qty_ordered),
+          cost_total:          Number(form.cost_total),
+          supplier_name:       form.supplier_name,
+          payment_method:      form.payment_method,
+          net_days:            Number(form.net_days),
+          installments_count:  Number(form.installments_count),
+          interval_months:     Number(form.interval_months),
+          deposit_pct:         Number(form.deposit_pct),
+          custom_installments: form.payment_method === "CUSTOM"
+            ? customRows.map((r) => ({ due_date: r.due_date, amount: Number(r.amount) }))
+            : [],
+          expected_delivery:   form.expected_delivery,
+          note:                form.note,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
       setGlobalMsg({ type: "success", text: `สร้าง PO สำเร็จ: ${data.po_id}` });
-      setForm({ product_id: "", qty_ordered: "", cost_total: "", supplier_name: "",
-        payment_method: "FULL", installments_count: "1", expected_delivery: "", note: "" });
+      resetForm();
       const reload = await fetch("/api/inv/po");
       setPos((await reload.json()).pos || []);
       setTab("list");
       setStatusFilter("PENDING");
     } catch (e: any) {
       setGlobalMsg({ type: "error", text: e.message });
-    } finally {
-      setSubmitting(false);
-    }
+    } finally { setSubmitting(false); }
   }
 
   async function doApprove() {
     if (!approveModal) return;
     setModalLoading(true); setModalMsg("");
     try {
-      const res = await fetch("/api/inv/po", {
+      const res  = await fetch("/api/inv/po", {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ po_id: approveModal.po_id, action: "approve" }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
-      setModalMsg("อนุมัติสำเร็จ");
+      const lc = data.liabilities_created ?? 0;
+      setModalMsg(lc > 0 ? `อนุมัติสำเร็จ · สร้างตารางชำระ ${lc} งวด` : "อนุมัติสำเร็จ");
       const reload = await fetch("/api/inv/po");
       setPos((await reload.json()).pos || []);
-      setTimeout(() => setApproveModal(null), 800);
+      setTimeout(() => setApproveModal(null), 1200);
     } catch (e: any) { setModalMsg(`❌ ${e.message}`); }
     finally { setModalLoading(false); }
   }
@@ -202,14 +250,10 @@ export default function InvPurchasePage() {
     if (!stockInForm.expiry_date) { setModalMsg("❌ กรุณาระบุวันหมดอายุ"); return; }
     setModalLoading(true); setModalMsg("");
     try {
-      const res = await fetch("/api/inv/po", {
+      const res  = await fetch("/api/inv/po", {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          po_id:       stockInModal.po_id,
-          action:      "stock-in",
-          expiry_date: stockInForm.expiry_date,
-          note:        stockInForm.note,
-        }),
+        body: JSON.stringify({ po_id: stockInModal.po_id, action: "stock-in",
+          expiry_date: stockInForm.expiry_date, note: stockInForm.note }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
@@ -225,7 +269,7 @@ export default function InvPurchasePage() {
     if (!cancelModal) return;
     setModalLoading(true); setModalMsg("");
     try {
-      const res = await fetch("/api/inv/po", {
+      const res  = await fetch("/api/inv/po", {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ po_id: cancelModal.po_id, action: "cancel", note: cancelNote }),
       });
@@ -243,7 +287,7 @@ export default function InvPurchasePage() {
     if (!deleteModal) return;
     setModalLoading(true); setModalMsg("");
     try {
-      const res = await fetch("/api/inv/po", {
+      const res  = await fetch("/api/inv/po", {
         method: "DELETE", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ po_id: deleteModal.po_id }),
       });
@@ -258,7 +302,7 @@ export default function InvPurchasePage() {
 
   const filteredPos = statusFilter === "ALL" ? pos : pos.filter((p) => p.status === statusFilter);
   const statusCounts = {
-    ALL:       pos.length,
+    ALL: pos.length,
     PENDING:   pos.filter((p) => p.status === "PENDING").length,
     APPROVED:  pos.filter((p) => p.status === "APPROVED").length,
     RECEIVED:  pos.filter((p) => p.status === "RECEIVED").length,
@@ -273,7 +317,6 @@ export default function InvPurchasePage() {
 
   return (
     <div className="min-h-screen bg-[#0a0f1e] relative overflow-hidden">
-      {/* Ambient */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-[-15%] left-[-5%] w-[500px] h-[500px] rounded-full bg-emerald-600/10 blur-[120px]" />
         <div className="absolute bottom-[-20%] right-[-5%] w-[400px] h-[400px] rounded-full bg-teal-600/8 blur-[100px]" />
@@ -281,7 +324,6 @@ export default function InvPurchasePage() {
           style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.5) 1px,transparent 1px)", backgroundSize: "60px 60px" }} />
       </div>
 
-      {/* Header */}
       <header className="relative z-20 flex items-center gap-4 px-6 py-4 border-b border-white/5 backdrop-blur-xl bg-white/[0.02]">
         <button onClick={() => router.back()} className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-all">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg>
@@ -293,25 +335,18 @@ export default function InvPurchasePage() {
           <h1 className="text-white font-bold text-base">การจัดซื้อ</h1>
           <p className="text-slate-500 text-xs">Purchase Order — Central Warehouse</p>
         </div>
-        <button
-          onClick={() => router.push("/ERP/inv/liabilities")}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-500/15 border border-violet-500/25 text-violet-400 hover:bg-violet-500/25 text-sm font-medium transition-all"
-        >
+        <button onClick={() => router.push("/ERP/inv/liabilities")}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-500/15 border border-violet-500/25 text-violet-400 hover:bg-violet-500/25 text-sm font-medium transition-all">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
           หนี้สิน
         </button>
       </header>
 
-      {/* Tabs */}
       <div className="relative z-10 px-6 pt-5 max-w-5xl mx-auto">
         <div className="flex gap-1 bg-white/[0.03] border border-white/10 rounded-2xl p-1 w-fit">
           {([["list", "รายการ PO"], ["create", "สร้าง PO ใหม่"]] as [Tab, string][]).map(([t, label]) => (
             <button key={t} onClick={() => setTab(t)}
-              className={`px-5 py-2 rounded-xl text-sm font-medium transition-all ${
-                tab === t
-                  ? "bg-emerald-500 text-white shadow-lg"
-                  : "text-slate-400 hover:text-white"
-              }`}>
+              className={`px-5 py-2 rounded-xl text-sm font-medium transition-all ${tab === t ? "bg-emerald-500 text-white shadow-lg" : "text-slate-400 hover:text-white"}`}>
               {label}
             </button>
           ))}
@@ -320,13 +355,8 @@ export default function InvPurchasePage() {
 
       <main className="relative z-10 max-w-5xl mx-auto px-6 py-5 space-y-5">
 
-        {/* Global message */}
         {globalMsg.text && (
-          <div className={`px-4 py-3 rounded-xl border text-sm ${
-            globalMsg.type === "success"
-              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-              : "bg-red-500/10 border-red-500/20 text-red-400"
-          }`}>
+          <div className={`px-4 py-3 rounded-xl border text-sm ${globalMsg.type === "success" ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-red-500/10 border-red-500/20 text-red-400"}`}>
             {globalMsg.text}
           </div>
         )}
@@ -334,9 +364,7 @@ export default function InvPurchasePage() {
         {searchParams.get("productName") && tab === "create" && (
           <div className="flex items-center gap-3 px-5 py-3 bg-blue-500/10 border border-blue-500/20 rounded-[18px]">
             <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            <p className="text-blue-400 text-sm">
-              สั่งซื้อจากคำขอสาขา — สินค้า <span className="font-semibold">{searchParams.get("productName")}</span>
-            </p>
+            <p className="text-blue-400 text-sm">สั่งซื้อจากคำขอสาขา — สินค้า <span className="font-semibold">{searchParams.get("productName")}</span></p>
           </div>
         )}
 
@@ -396,38 +424,157 @@ export default function InvPurchasePage() {
                     className={inputCls} style={{ colorScheme: "dark" }} />
                 </div>
 
+                {/* ── Payment Method ───────────────────────────────────── */}
                 <div className="md:col-span-2">
                   <Label>รูปแบบการชำระเงิน</Label>
-                  <div className="flex gap-2">
-                    {(["FULL", "INSTALLMENT", "PARTIAL"] as const).map((m) => (
-                      <button type="button" key={m}
-                        onClick={() => setForm({ ...form, payment_method: m })}
-                        className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all ${
-                          form.payment_method === m
-                            ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
-                            : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
+
+                  {/* Method selector */}
+                  <div className="grid grid-cols-5 gap-2 mb-3">
+                    {PAYMENT_METHODS.map((m) => (
+                      <button type="button" key={m.value}
+                        onClick={() => setForm({ ...form, payment_method: m.value })}
+                        className={`p-3 rounded-xl border text-left transition-all ${
+                          form.payment_method === m.value
+                            ? "bg-emerald-500/15 border-emerald-500/40"
+                            : "bg-white/[0.03] border-white/10 hover:border-white/20"
                         }`}>
-                        {PAYMENT_LABELS[m]}
+                        <p className={`text-xs font-semibold ${form.payment_method === m.value ? "text-emerald-400" : "text-slate-300"}`}>{m.label}</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">{m.desc}</p>
                       </button>
                     ))}
                   </div>
+
+                  {/* Config panel */}
+                  {form.payment_method === "NET" && (
+                    <div className="bg-white/[0.03] border border-white/8 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-36">
+                          <Label>ชำระภายใน (วัน)</Label>
+                          <input type="number" min="1" value={form.net_days}
+                            onChange={(e) => setForm({ ...form, net_days: e.target.value })}
+                            className={inputCls} />
+                        </div>
+                        <div className="flex gap-2 mt-5">
+                          {["30", "45", "60", "90"].map((d) => (
+                            <button type="button" key={d}
+                              onClick={() => setForm({ ...form, net_days: d })}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                                form.net_days === d
+                                  ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                                  : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
+                              }`}>
+                              Net{d}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {netDueLabel && (
+                        <p className="text-xs text-emerald-400">
+                          ครบกำหนด: {netDueLabel} · ยอดชำระ {costTotalNum.toLocaleString()} บาท
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {form.payment_method === "EQUAL" && (
+                    <div className="bg-white/[0.03] border border-white/8 rounded-xl p-4 space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label>จำนวนงวด</Label>
+                          <input type="number" min="1" max="60" value={form.installments_count}
+                            onChange={(e) => setForm({ ...form, installments_count: e.target.value })}
+                            className={inputCls} />
+                        </div>
+                        <div>
+                          <Label>ทุกกี่เดือน</Label>
+                          <input type="number" min="1" max="12" value={form.interval_months}
+                            onChange={(e) => setForm({ ...form, interval_months: e.target.value })}
+                            className={inputCls} />
+                        </div>
+                      </div>
+                      {equalAmtPerInst > 0 && (
+                        <p className="text-xs text-emerald-400">
+                          งวดละ ≈ {equalAmtPerInst.toLocaleString()} บาท × {form.installments_count} งวด
+                          {Number(form.interval_months) > 1 && ` (ทุก ${form.interval_months} เดือน)`}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {form.payment_method === "DEPOSIT" && (
+                    <div className="bg-white/[0.03] border border-white/8 rounded-xl p-4 space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label>มัดจำ (%)</Label>
+                          <input type="number" min="1" max="99" value={form.deposit_pct}
+                            onChange={(e) => setForm({ ...form, deposit_pct: e.target.value })}
+                            className={inputCls} />
+                        </div>
+                        <div>
+                          <Label>ชำระส่วนที่เหลือใน (เดือน)</Label>
+                          <input type="number" min="1" value={form.interval_months}
+                            onChange={(e) => setForm({ ...form, interval_months: e.target.value })}
+                            className={inputCls} />
+                        </div>
+                      </div>
+                      {costTotalNum > 0 && (
+                        <div className="flex items-center gap-4 text-xs">
+                          <span className="bg-amber-500/15 border border-amber-500/25 text-amber-400 px-3 py-1.5 rounded-lg">
+                            มัดจำ {form.deposit_pct}% = {depositAmt.toLocaleString()} บาท (วันนี้)
+                          </span>
+                          <span className="text-slate-500">+</span>
+                          <span className="bg-white/5 border border-white/10 text-slate-300 px-3 py-1.5 rounded-lg">
+                            ส่วนที่เหลือ {remainderAmt.toLocaleString()} บาท (ใน {form.interval_months} เดือน)
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {form.payment_method === "CUSTOM" && (
+                    <div className="bg-white/[0.03] border border-white/8 rounded-xl p-4 space-y-3">
+                      <div className="space-y-2">
+                        {customRows.map((row, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <span className="text-xs text-slate-500 w-10 flex-shrink-0">งวด {i + 1}</span>
+                            <input type="date" value={row.due_date}
+                              onChange={(e) => setCustomRows((prev) => prev.map((r, j) => j === i ? { ...r, due_date: e.target.value } : r))}
+                              className={`${inputCls} flex-1`} style={{ colorScheme: "dark" }} />
+                            <input type="number" min="0" placeholder="จำนวนเงิน (บาท)" value={row.amount}
+                              onChange={(e) => setCustomRows((prev) => prev.map((r, j) => j === i ? { ...r, amount: e.target.value } : r))}
+                              className={`${inputCls} w-40`} />
+                            {customRows.length > 1 && (
+                              <button type="button"
+                                onClick={() => setCustomRows((prev) => prev.filter((_, j) => j !== i))}
+                                className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-red-400 transition-colors flex-shrink-0">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <button type="button"
+                        onClick={() => setCustomRows((prev) => [...prev, { due_date: "", amount: "" }])}
+                        className="text-xs text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-lg hover:bg-emerald-500/10 transition-all">
+                        + เพิ่มงวด
+                      </button>
+                      {costTotalNum > 0 && (
+                        <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border ${
+                          Math.abs(customDiff) < 1
+                            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                            : "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                        }`}>
+                          <span>ยอดรวม {customTotal.toLocaleString()} / {costTotalNum.toLocaleString()} บาท</span>
+                          {Math.abs(customDiff) >= 1 && (
+                            <span>· {customDiff > 0 ? `ยังขาด ${customDiff.toLocaleString()}` : `เกิน ${Math.abs(customDiff).toLocaleString()}`} บาท</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {showInstallments && (
-                  <div>
-                    <Label>จำนวนงวด *</Label>
-                    <input type="number" min="1" max="60" value={form.installments_count}
-                      onChange={(e) => setForm({ ...form, installments_count: e.target.value })}
-                      className={inputCls} />
-                    {form.cost_total && Number(form.installments_count) > 0 && (
-                      <p className="text-xs text-emerald-400 mt-1.5">
-                        ≈ {Number(amtPerInst).toLocaleString()} บาท/งวด
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <div className={showInstallments ? "" : "md:col-span-2"}>
+                <div className="md:col-span-2">
                   <Label>หมายเหตุ</Label>
                   <input type="text" value={form.note}
                     onChange={(e) => setForm({ ...form, note: e.target.value })}
@@ -449,19 +596,16 @@ export default function InvPurchasePage() {
         {/* ═══ LIST TAB ════════════════════════════════════════════════════ */}
         {tab === "list" && (
           <>
-            {/* Status filter */}
             <div className="flex gap-2 flex-wrap">
               {(["ALL", "PENDING", "APPROVED", "RECEIVED", "CANCELLED"] as StatusFilter[]).map((s) => {
-                const cfg = s === "ALL" ? null : STATUS_CONFIG[s];
+                const cfg   = s === "ALL" ? null : STATUS_CONFIG[s];
                 const count = statusCounts[s];
                 const active = statusFilter === s;
                 return (
                   <button key={s} onClick={() => setStatusFilter(s)}
                     className={`px-4 py-1.5 rounded-xl text-sm font-medium border transition-all flex items-center gap-2 ${
                       active
-                        ? s === "ALL"
-                          ? "bg-white/10 border-white/20 text-white"
-                          : `${cfg!.bg} ${cfg!.border} ${cfg!.color}`
+                        ? s === "ALL" ? "bg-white/10 border-white/20 text-white" : `${cfg!.bg} ${cfg!.border} ${cfg!.color}`
                         : "bg-white/[0.03] border-white/10 text-slate-500 hover:text-slate-300"
                     }`}>
                     <span>{s === "ALL" ? "ทั้งหมด" : cfg!.label}</span>
@@ -471,7 +615,6 @@ export default function InvPurchasePage() {
               })}
             </div>
 
-            {/* PO List */}
             <div className="bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-[24px] overflow-hidden relative">
               <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
               {filteredPos.length === 0 ? (
@@ -479,25 +622,26 @@ export default function InvPurchasePage() {
               ) : (
                 <div className="divide-y divide-white/5">
                   {filteredPos.map((po) => {
-                    const cfg = STATUS_CONFIG[po.status] || STATUS_CONFIG["PENDING"];
+                    const cfg           = STATUS_CONFIG[po.status] || STATUS_CONFIG["PENDING"];
                     const isInstallment = po.payment_method !== "FULL";
-                    const paidPct = Number(po.cost_total) > 0
-                      ? Math.round((Number(po.paid_amount) / Number(po.cost_total)) * 100)
-                      : 0;
+                    const paidPct       = Number(po.cost_total) > 0
+                      ? Math.round((Number(po.paid_amount) / Number(po.cost_total)) * 100) : 0;
+                    const cfg2 = parseConfig(po.payment_config);
 
                     return (
                       <div key={po.po_id} className="px-5 py-4 hover:bg-white/[0.02] transition-colors">
                         <div className="flex flex-wrap items-start gap-3">
-                          {/* Left info */}
                           <div className="flex-1 min-w-0 space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-mono text-xs text-emerald-400">{po.po_id}</span>
-                              <span className={`text-xs px-2 py-0.5 rounded-lg border ${cfg.bg} ${cfg.border} ${cfg.color}`}>
-                                {cfg.label}
-                              </span>
+                              <span className={`text-xs px-2 py-0.5 rounded-lg border ${cfg.bg} ${cfg.border} ${cfg.color}`}>{cfg.label}</span>
                               {isInstallment && (
                                 <span className="text-xs px-2 py-0.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400">
-                                  {PAYMENT_LABELS[po.payment_method]}
+                                  {PAYMENT_LABELS[po.payment_method] || po.payment_method}
+                                  {po.payment_method === "NET" && cfg2.net_days ? ` · Net${cfg2.net_days}` : ""}
+                                  {po.payment_method === "EQUAL" && cfg2.installments ? ` · ${cfg2.installments} งวด` : ""}
+                                  {po.payment_method === "DEPOSIT" && cfg2.deposit_pct ? ` · ${cfg2.deposit_pct}%` : ""}
+                                  {po.payment_method === "CUSTOM" && cfg2.installments ? ` · ${cfg2.installments.length} งวด` : ""}
                                 </span>
                               )}
                             </div>
@@ -523,47 +667,32 @@ export default function InvPurchasePage() {
                             )}
                           </div>
 
-                          {/* Actions */}
                           <div className="flex gap-2 flex-shrink-0 flex-wrap">
                             {po.status === "PENDING" && (
                               <>
                                 <button onClick={() => { setApproveModal(po); setModalMsg(""); }}
-                                  className="px-3 py-1.5 rounded-lg bg-blue-500/15 border border-blue-500/25 text-blue-400 hover:bg-blue-500/25 text-xs font-medium transition-all">
-                                  อนุมัติ
-                                </button>
+                                  className="px-3 py-1.5 rounded-lg bg-blue-500/15 border border-blue-500/25 text-blue-400 hover:bg-blue-500/25 text-xs font-medium transition-all">อนุมัติ</button>
                                 <button onClick={() => { setCancelModal(po); setModalMsg(""); setCancelNote(""); }}
-                                  className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:bg-red-500/15 hover:border-red-500/20 hover:text-red-400 text-xs font-medium transition-all">
-                                  ยกเลิก
-                                </button>
+                                  className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:bg-red-500/15 hover:border-red-500/20 hover:text-red-400 text-xs font-medium transition-all">ยกเลิก</button>
                                 <button onClick={() => { setDeleteModal(po); setModalMsg(""); }}
-                                  className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-600 hover:bg-red-500/15 hover:border-red-500/20 hover:text-red-400 text-xs font-medium transition-all">
-                                  ลบ
-                                </button>
+                                  className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-600 hover:bg-red-500/15 hover:border-red-500/20 hover:text-red-400 text-xs font-medium transition-all">ลบ</button>
                               </>
                             )}
                             {po.status === "APPROVED" && (
                               <>
                                 <button onClick={() => { setStockInModal(po); setModalMsg(""); setStockInForm({ expiry_date: "", note: "" }); }}
-                                  className="px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/25 text-xs font-medium transition-all">
-                                  รับสินค้า
-                                </button>
+                                  className="px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/25 text-xs font-medium transition-all">รับสินค้า</button>
                                 <button onClick={() => { setCancelModal(po); setModalMsg(""); setCancelNote(""); }}
-                                  className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:bg-red-500/15 hover:border-red-500/20 hover:text-red-400 text-xs font-medium transition-all">
-                                  ยกเลิก
-                                </button>
+                                  className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:bg-red-500/15 hover:border-red-500/20 hover:text-red-400 text-xs font-medium transition-all">ยกเลิก</button>
                               </>
                             )}
                             {po.status === "CANCELLED" && (
                               <button onClick={() => { setDeleteModal(po); setModalMsg(""); }}
-                                className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-600 hover:bg-red-500/15 hover:border-red-500/20 hover:text-red-400 text-xs font-medium transition-all">
-                                ลบ
-                              </button>
+                                className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-600 hover:bg-red-500/15 hover:border-red-500/20 hover:text-red-400 text-xs font-medium transition-all">ลบ</button>
                             )}
                             {po.status === "RECEIVED" && isInstallment && (
                               <button onClick={() => router.push("/ERP/inv/liabilities")}
-                                className="px-3 py-1.5 rounded-lg bg-violet-500/15 border border-violet-500/25 text-violet-400 hover:bg-violet-500/25 text-xs font-medium transition-all">
-                                ดูการชำระ
-                              </button>
+                                className="px-3 py-1.5 rounded-lg bg-violet-500/15 border border-violet-500/25 text-violet-400 hover:bg-violet-500/25 text-xs font-medium transition-all">ดูการชำระ</button>
                             )}
                           </div>
                         </div>
@@ -578,42 +707,70 @@ export default function InvPurchasePage() {
       </main>
 
       {/* ═══ APPROVE MODAL ═════════════════════════════════════════════════ */}
-      {approveModal && (
-        <Modal title="ยืนยันอนุมัติ PO" onClose={() => !modalLoading && setApproveModal(null)}>
-          <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-4 space-y-1.5 text-sm">
-            <Row label="PO ID" value={<span className="font-mono text-blue-400">{approveModal.po_id}</span>} />
-            <Row label="สินค้า" value={<span className="text-white font-semibold">{approveModal.product_name}</span>} />
-            <Row label="จำนวน" value={`${approveModal.qty_unit} ${approveModal.unit}`} />
-            <Row label="ราคารวม" value={`${Number(approveModal.cost_total).toLocaleString()} บาท`} />
-            <Row label="Supplier" value={approveModal.supplier_name || "—"} />
-            <Row label="การชำระ" value={PAYMENT_LABELS[approveModal.payment_method] || approveModal.payment_method} />
-            {approveModal.payment_method !== "FULL" && Number(approveModal.installments_count) > 0 && (
-              <Row label="งวด" value={`${approveModal.installments_count} งวด · ≈ ${Number(approveModal.amount_per_installment).toLocaleString()} บาท/งวด`} />
-            )}
-          </div>
-          {approveModal.payment_method !== "FULL" && Number(approveModal.installments_count) > 0 && (
-            <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl px-4 py-3 mb-4">
-              <p className="text-violet-400 text-xs">ระบบจะสร้างตารางการชำระ {approveModal.installments_count} งวดให้อัตโนมัติ</p>
+      {approveModal && (() => {
+        const cfg2   = parseConfig(approveModal.payment_config);
+        const method = approveModal.payment_method;
+        const total  = Number(approveModal.cost_total);
+        return (
+          <Modal title="ยืนยันอนุมัติ PO" onClose={() => !modalLoading && setApproveModal(null)}>
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-4 space-y-1.5 text-sm">
+              <Row label="PO ID"    value={<span className="font-mono text-blue-400">{approveModal.po_id}</span>} />
+              <Row label="สินค้า"  value={<span className="text-white font-semibold">{approveModal.product_name}</span>} />
+              <Row label="จำนวน"   value={`${approveModal.qty_unit} ${approveModal.unit}`} />
+              <Row label="ราคารวม" value={`${total.toLocaleString()} บาท`} />
+              <Row label="Supplier" value={approveModal.supplier_name || "—"} />
+              <Row label="การชำระ" value={PAYMENT_LABELS[method] || method} />
             </div>
-          )}
-          {modalMsg && <ModalMsg msg={modalMsg} />}
-          <ModalActions
-            onCancel={() => setApproveModal(null)}
-            onConfirm={doApprove}
-            loading={modalLoading}
-            confirmLabel="อนุมัติ"
-            confirmClass="bg-gradient-to-r from-blue-500 to-indigo-400"
-          />
-        </Modal>
-      )}
+
+            {/* Payment summary per method */}
+            {method !== "FULL" && (
+              <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl px-4 py-3 mb-4 space-y-1 text-xs text-violet-300">
+                {method === "NET" && (
+                  <p>ชำระ {total.toLocaleString()} บาท ภายใน <span className="font-semibold text-violet-200">Net {cfg2.net_days ?? 30} วัน</span> (1 งวด)</p>
+                )}
+                {(method === "EQUAL" || method === "INSTALLMENT") && (() => {
+                  const count = cfg2.installments ?? Number(approveModal.installments_count);
+                  const im    = cfg2.interval_months ?? 1;
+                  const amt   = count > 0 ? Math.round(total / count) : 0;
+                  return <p>ผ่อน <span className="font-semibold text-violet-200">{count} งวด</span> · งวดละ ≈ {amt.toLocaleString()} บาท · ทุก {im} เดือน</p>;
+                })()}
+                {method === "DEPOSIT" && (() => {
+                  const pct    = cfg2.deposit_pct ?? 30;
+                  const dAmt   = Math.round(total * pct / 100);
+                  const remain = total - dAmt;
+                  return (
+                    <>
+                      <p>มัดจำ <span className="font-semibold text-violet-200">{pct}% = {dAmt.toLocaleString()} บาท</span> (วันนี้)</p>
+                      <p>ส่วนที่เหลือ <span className="font-semibold">{remain.toLocaleString()} บาท</span> ใน {cfg2.interval_months ?? 1} เดือน</p>
+                    </>
+                  );
+                })()}
+                {(method === "CUSTOM" || method === "PARTIAL") && Array.isArray(cfg2.installments) && cfg2.installments.length > 0 && (
+                  <div className="space-y-0.5">
+                    <p className="font-semibold text-violet-200 mb-1">กำหนดชำระ {cfg2.installments.length} งวด</p>
+                    {cfg2.installments.map((item: any, i: number) => (
+                      <p key={i}>งวด {i + 1}: {new Date(item.due_date).toLocaleDateString("th-TH")} — {Number(item.amount).toLocaleString()} บาท</p>
+                    ))}
+                  </div>
+                )}
+                <p className="text-violet-400/70 text-[10px] mt-1">ระบบจะสร้างตารางชำระเงินใน Liabilities อัตโนมัติ</p>
+              </div>
+            )}
+
+            {modalMsg && <ModalMsg msg={modalMsg} />}
+            <ModalActions onCancel={() => setApproveModal(null)} onConfirm={doApprove}
+              loading={modalLoading} confirmLabel="อนุมัติ" confirmClass="bg-gradient-to-r from-blue-500 to-indigo-400" />
+          </Modal>
+        );
+      })()}
 
       {/* ═══ STOCK-IN MODAL ════════════════════════════════════════════════ */}
       {stockInModal && (
         <Modal title="รับสินค้าเข้าคลัง" onClose={() => !modalLoading && setStockInModal(null)}>
           <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-4 space-y-1.5 text-sm">
-            <Row label="PO ID" value={<span className="font-mono text-emerald-400">{stockInModal.po_id}</span>} />
+            <Row label="PO ID"   value={<span className="font-mono text-emerald-400">{stockInModal.po_id}</span>} />
             <Row label="สินค้า" value={<span className="text-white font-semibold">{stockInModal.product_name}</span>} />
-            <Row label="จำนวน" value={`${stockInModal.qty_unit} ${stockInModal.unit}`} />
+            <Row label="จำนวน"  value={`${stockInModal.qty_unit} ${stockInModal.unit}`} />
           </div>
           <div className="space-y-3 mb-4">
             <div>
@@ -630,16 +787,11 @@ export default function InvPurchasePage() {
             </div>
           </div>
           <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 mb-4">
-            <p className="text-emerald-400 text-xs">ระบบจะสร้าง LOT ใหม่ใน INV_Lots โดยอัตโนมัติ</p>
+            <p className="text-emerald-400 text-xs">ระบบจะสร้าง LOT + อัปเดต WAC ใน Stock_Levels อัตโนมัติ</p>
           </div>
           {modalMsg && <ModalMsg msg={modalMsg} />}
-          <ModalActions
-            onCancel={() => setStockInModal(null)}
-            onConfirm={doStockIn}
-            loading={modalLoading}
-            confirmLabel="ยืนยันรับสินค้า"
-            confirmClass="bg-gradient-to-r from-emerald-500 to-teal-400"
-          />
+          <ModalActions onCancel={() => setStockInModal(null)} onConfirm={doStockIn}
+            loading={modalLoading} confirmLabel="ยืนยันรับสินค้า" confirmClass="bg-gradient-to-r from-emerald-500 to-teal-400" />
         </Modal>
       )}
 
@@ -647,7 +799,7 @@ export default function InvPurchasePage() {
       {cancelModal && (
         <Modal title="ยืนยันยกเลิก PO" onClose={() => !modalLoading && setCancelModal(null)}>
           <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-4 space-y-1.5 text-sm">
-            <Row label="PO ID" value={<span className="font-mono text-red-400">{cancelModal.po_id}</span>} />
+            <Row label="PO ID"   value={<span className="font-mono text-red-400">{cancelModal.po_id}</span>} />
             <Row label="สินค้า" value={cancelModal.product_name} />
           </div>
           <div className="mb-4">
@@ -657,13 +809,8 @@ export default function InvPurchasePage() {
               placeholder="ระบุเหตุผล (ถ้ามี)" className={inputCls} />
           </div>
           {modalMsg && <ModalMsg msg={modalMsg} />}
-          <ModalActions
-            onCancel={() => setCancelModal(null)}
-            onConfirm={doCancel}
-            loading={modalLoading}
-            confirmLabel="ยืนยันยกเลิก"
-            confirmClass="bg-gradient-to-r from-red-500 to-rose-400"
-          />
+          <ModalActions onCancel={() => setCancelModal(null)} onConfirm={doCancel}
+            loading={modalLoading} confirmLabel="ยืนยันยกเลิก" confirmClass="bg-gradient-to-r from-red-500 to-rose-400" />
         </Modal>
       )}
 
@@ -671,34 +818,27 @@ export default function InvPurchasePage() {
       {deleteModal && (
         <Modal title="ยืนยันลบ PO" onClose={() => !modalLoading && setDeleteModal(null)}>
           <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-4 space-y-1.5 text-sm">
-            <Row label="PO ID" value={<span className="font-mono text-red-400">{deleteModal.po_id}</span>} />
+            <Row label="PO ID"   value={<span className="font-mono text-red-400">{deleteModal.po_id}</span>} />
             <Row label="สินค้า" value={deleteModal.product_name} />
-            <Row label="สถานะ" value={STATUS_CONFIG[deleteModal.status]?.label || deleteModal.status} />
+            <Row label="สถานะ"  value={STATUS_CONFIG[deleteModal.status]?.label || deleteModal.status} />
           </div>
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 mb-4">
             <p className="text-amber-400 text-xs">การลบนี้ไม่สามารถกู้คืนได้</p>
           </div>
           {modalMsg && <ModalMsg msg={modalMsg} />}
-          <ModalActions
-            onCancel={() => setDeleteModal(null)}
-            onConfirm={doDelete}
-            loading={modalLoading}
-            confirmLabel="ลบถาวร"
-            confirmClass="bg-gradient-to-r from-red-500 to-rose-400"
-          />
+          <ModalActions onCancel={() => setDeleteModal(null)} onConfirm={doDelete}
+            loading={modalLoading} confirmLabel="ลบถาวร" confirmClass="bg-gradient-to-r from-red-500 to-rose-400" />
         </Modal>
       )}
     </div>
   );
 }
 
-// ─── Reusable modal sub-components ─────────────────────────────────────────
-
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-[#0d1526] border border-white/10 rounded-[28px] w-full max-w-md p-6 relative overflow-hidden shadow-2xl">
+      <div className="bg-[#0d1526] border border-white/10 rounded-[28px] w-full max-w-md p-6 relative overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-white font-bold">{title}</h3>
@@ -724,21 +864,13 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 function ModalMsg({ msg }: { msg: string }) {
   const ok = !msg.startsWith("❌");
   return (
-    <p className={`mb-3 text-sm px-4 py-2.5 rounded-xl border ${
-      ok ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-         : "bg-red-500/10 text-red-400 border-red-500/20"
-    }`}>{msg}</p>
+    <p className={`mb-3 text-sm px-4 py-2.5 rounded-xl border ${ok ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-red-500/10 text-red-400 border-red-500/20"}`}>{msg}</p>
   );
 }
 
-function ModalActions({
-  onCancel, onConfirm, loading, confirmLabel, confirmClass,
-}: {
-  onCancel: () => void;
-  onConfirm: () => void;
-  loading: boolean;
-  confirmLabel: string;
-  confirmClass: string;
+function ModalActions({ onCancel, onConfirm, loading, confirmLabel, confirmClass }: {
+  onCancel: () => void; onConfirm: () => void;
+  loading: boolean; confirmLabel: string; confirmClass: string;
 }) {
   return (
     <div className="flex gap-3">

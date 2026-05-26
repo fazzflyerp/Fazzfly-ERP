@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { saReadRange, saUpdateRow, saAppendRow, saBatchUpdate, saInvalidateCache } from "@/lib/google-sa";
 import { getInvAccess, genId, thaiTimestamp } from "@/lib/inv-access";
+import { recordStockLedger } from "@/lib/inv-stock-ledger";
 
 export async function POST(request: NextRequest) {
   try {
@@ -205,6 +206,21 @@ export async function POST(request: NextRequest) {
 
     saInvalidateCache(sid);
     saInvalidateCache(bSid);
+
+    // อัปเดต Stock_Levels + append INV_Transactions OUT (1 รายการรวมทุก lot)
+    await recordStockLedger({
+      sid,
+      productName,
+      category: resolved[0]?.category ?? "",
+      brand:    resolved[0]?.brand    ?? "",
+      unit,
+      txnType: "OUT",
+      qty:      totalQty,
+      unitCost: 0, // ใช้ avg_cost ปัจจุบันจาก Stock_Levels อัตโนมัติ
+      referenceId: request_id,
+      note: `โอนให้ ${branchName}${note ? " · " + note : ""}`,
+      createdBy: email,
+    });
 
     // 5. Notify branch
     const lotDetail = resolved.map((l) => `${l.lot_id} ×${l.qty}`).join(", ");
