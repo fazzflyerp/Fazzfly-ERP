@@ -100,6 +100,27 @@ function parseConfig(raw: string): any {
   try { return JSON.parse(raw || "{}"); } catch { return {}; }
 }
 
+const PO_HEADERS = [
+  "po_id","product_id","product_name","category","brand","unit","unit_pkg","qty_per_pkg",
+  "qty_ordered","qty_unit","cost_per_unit","cost_total","supplier_name","payment_method",
+  "installments_count","amount_per_installment","paid_amount","outstanding_amount",
+  "expected_delivery","received_date","lot_id","expiry_date","status","note",
+  "created_by","created_at","approved_by","approved_at","payment_config",
+];
+
+async function ensurePoSheet(sid: string): Promise<void> {
+  try {
+    await saReadRange(sid, `${PO_SHEET}!A1`, 0);
+  } catch (err: any) {
+    const msg = String(err?.message ?? err);
+    if (!msg.includes("Unable to parse range") && !msg.includes("not found")) throw err;
+    // Sheet doesn't exist — create it with header row
+    await saStructuralBatchUpdate(sid, [{ addSheet: { properties: { title: PO_SHEET } } }]);
+    await saUpdateRow(sid, `${PO_SHEET}!A1:AC1`, PO_HEADERS);
+    saInvalidateCache(sid);
+  }
+}
+
 async function auth(request: NextRequest) {
   const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
   if (!token?.email) return null;
@@ -116,8 +137,15 @@ export async function GET(request: NextRequest) {
     const ctx = await auth(request);
     if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const rows = await saReadRange(ctx.sid, PO_RANGE, 0);
-    const pos  = rows.slice(1).filter((r) => r[0]).map(parsePoRow);
+    let rows: any[][] = [];
+    try {
+      rows = await saReadRange(ctx.sid, PO_RANGE, 0);
+    } catch (err: any) {
+      const msg = String(err?.message ?? err);
+      if (!msg.includes("Unable to parse range") && !msg.includes("not found")) throw err;
+      // Sheet not yet created — return empty list
+    }
+    const pos = rows.slice(1).filter((r) => r[0]).map(parsePoRow);
     return NextResponse.json({ pos });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -146,6 +174,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "กรุณากรอก: product_name, qty_ordered, cost_total" }, { status: 400 });
 
     const sid = ctx.sid;
+    await ensurePoSheet(sid);
     const ts  = thaiTimestamp();
     const poId = await genId("PO", sid, PO_SHEET);
 
