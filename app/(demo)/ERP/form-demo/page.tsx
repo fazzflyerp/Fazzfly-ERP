@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import ImageUpload from "../../components/ImageUpload";
+import ImageUpload from "@/app/components/ImageUpload";
 
 interface FormField {
     fieldName: string;
