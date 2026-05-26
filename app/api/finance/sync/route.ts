@@ -165,7 +165,21 @@ export async function GET(request: NextRequest) {
         };
       });
 
-    return NextResponse.json({ rows });
+    // debug: แนบถ้า revenue = 0 ทุกงวด
+    const totalRevenue = rows.reduce((s, r) => s + r.computed.revenue, 0);
+    const debugSync = totalRevenue === 0 && helperS.length > 1 ? {
+      branchNameReceived: branchName,
+      helperSRows: helperS.length - 1,
+      sampleHelperS: helperS.slice(1, 4).map((r) => ({
+        period:     (r[HS_PERIOD]      ?? "").toString(),
+        periodNorm: normPeriod((r[HS_PERIOD] ?? "").toString()),
+        amount:     (r[HS_AMOUNT]      ?? "").toString(),
+        branchName: (r[HS_BRANCH_NAME] ?? "").toString(),
+      })),
+      revenueMapEntries: Object.entries(revenueMap).slice(0, 5),
+    } : undefined;
+
+    return NextResponse.json({ rows, ...(debugSync ? { debugSync } : {}) });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

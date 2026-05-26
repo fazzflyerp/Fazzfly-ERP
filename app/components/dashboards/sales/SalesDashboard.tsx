@@ -19,6 +19,7 @@ import {
   generateRankingTableData,
   generatePieChartData,
   generateWaterfallData,
+  generateDoctorProgramData,
   getPeriodOptions,
   normalizeDate,
 } from "./salesUtils";
@@ -84,6 +85,7 @@ export default function SalesDashboard({
   const [rankingTableData, setRankingTableData] = useState<any[]>([]);
   const [pieChartData, setPieChartData] = useState<any[]>([]);
   const [waterfallData, setWaterfallData] = useState<any[]>([]);
+  const [doctorProgramData, setDoctorProgramData] = useState<any[]>([]);
 
   // ============================================================
   // EFFECT: Validate props on mount
@@ -325,6 +327,7 @@ export default function SalesDashboard({
     setRankingTableData(generateRankingTableData(filteredRows));
     setPieChartData(generatePieChartData(filteredRows));
     setWaterfallData(generateWaterfallData(filteredRows));
+    setDoctorProgramData(generateDoctorProgramData(filteredRows));
   };
 
   // ============================================================
@@ -468,6 +471,7 @@ export default function SalesDashboard({
         pieChartData={pieChartData}
         lineChartData={lineChartData}
         waterfallData={waterfallData}
+        doctorProgramData={doctorProgramData}
       />
 
       {/* Ranking */}

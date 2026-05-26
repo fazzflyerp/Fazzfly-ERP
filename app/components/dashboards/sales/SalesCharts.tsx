@@ -27,10 +27,18 @@ import {
 // Import Plotly แบบ dynamic เพื่อป้องกัน SSR error
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
+interface DoctorProgram {
+  doctor: string;
+  totalSales: number;
+  count: number;
+  programs: { program: string; totalSales: number; count: number }[];
+}
+
 interface SalesChartsProps {
   pieChartData: any[];
   lineChartData: any[];
   waterfallData: any[];
+  doctorProgramData: DoctorProgram[];
 }
 
 const COLORS = [
@@ -43,13 +51,84 @@ const COLORS = [
   "#cfcdcd", 
   "#696565",
   "#70b8e4ff ",
-  "#9fe2eaff",   
+  "#9fe2eaff",
 ];
+
+function DoctorProgramChart({ doctorProgramData, colors }: { doctorProgramData: DoctorProgram[]; colors: string[] }) {
+  const [expanded, setExpanded] = React.useState<Record<number, boolean>>({});
+  const toggle = (i: number) => setExpanded((prev) => ({ ...prev, [i]: !prev[i] }));
+
+  return (
+    <div className="bg-white rounded-xl lg:rounded-2xl p-4 lg:p-6 border border-slate-200 shadow-sm">
+      <h3 className="text-base lg:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+        <span className="text-lg lg:text-2xl">🩺</span>
+        โปรแกรมแยกตามแพทย์
+      </h3>
+      <div className="space-y-2">
+        {doctorProgramData.map((doc, di) => {
+          const isOpen = !!expanded[di];
+          const maxSales = doc.programs[0]?.totalSales || 1;
+          return (
+            <div key={di} className="border border-slate-100 rounded-xl overflow-hidden">
+              {/* Header — คลิกเพื่อ toggle */}
+              <button
+                onClick={() => toggle(di)}
+                className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                    {doc.doctor.charAt(0)}
+                  </span>
+                  <span className="font-semibold text-slate-800 text-sm truncate">{doc.doctor}</span>
+                  <span className="text-xs text-slate-400 flex-shrink-0">{doc.count} รายการ · {doc.programs.length} โปรแกรม</span>
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0 ml-2">
+                  <span className="text-sm font-bold text-blue-600">
+                    ฿{doc.totalSales.toLocaleString("th-TH", { maximumFractionDigits: 0 })}
+                  </span>
+                  <svg className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </button>
+
+              {/* Programs — collapse */}
+              {isOpen && (
+                <div className="divide-y divide-slate-50 px-4 py-1">
+                  {doc.programs.map((p, pi) => {
+                    const pct = (p.totalSales / maxSales) * 100;
+                    return (
+                      <div key={pi} className="py-2">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-slate-700 truncate flex-1 mr-2">{p.program}</span>
+                          <div className="flex items-center gap-3 flex-shrink-0">
+                            <span className="text-[11px] text-slate-400">{p.count} ครั้ง</span>
+                            <span className="text-xs font-semibold text-slate-700 w-24 text-right">
+                              ฿{p.totalSales.toLocaleString("th-TH", { maximumFractionDigits: 0 })}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: colors[pi % colors.length] }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function SalesCharts({
   pieChartData,
   lineChartData,
   waterfallData,
+  doctorProgramData,
 }: SalesChartsProps) {
   const [showProgramDetails, setShowProgramDetails] = useState(false);
   const [showTop10Only, setShowTop10Only] = useState(false);
@@ -611,6 +690,14 @@ export default function SalesCharts({
           </div>
         </div>
       )}
+
+{/* ============================================================ */}
+{/* Doctor × Program Breakdown */}
+{/* ============================================================ */}
+{doctorProgramData.length > 0 && (
+  <DoctorProgramChart doctorProgramData={doctorProgramData} colors={COLORS} />
+)}
+
     </div>
   );
 }

@@ -465,6 +465,44 @@ export function generateWaterfallData(rows: any[]): any[] {
 }
 
 /**
+ * Generate doctor-program breakdown data
+ * Output: [{ doctor, totalSales, count, programs: [{ program, totalSales, count }] }]
+ * sorted by doctor totalSales desc
+ */
+export function generateDoctorProgramData(rows: any[]): {
+  doctor: string;
+  totalSales: number;
+  count: number;
+  programs: { program: string; totalSales: number; count: number }[];
+}[] {
+  const grouped: Record<string, Record<string, { totalSales: number; count: number }>> = {};
+
+  rows.forEach((row) => {
+    const doctor  = String(row["doctor"]  || "").trim();
+    const program = String(row["program"] || "").trim();
+    if (!doctor || !program) return;
+
+    const sales = parseNumericValue(row["total_sales"]) || 0;
+
+    if (!grouped[doctor]) grouped[doctor] = {};
+    if (!grouped[doctor][program]) grouped[doctor][program] = { totalSales: 0, count: 0 };
+    grouped[doctor][program].totalSales += sales;
+    grouped[doctor][program].count      += 1;
+  });
+
+  return Object.entries(grouped)
+    .map(([doctor, programs]) => {
+      const programList = Object.entries(programs)
+        .map(([program, d]) => ({ program, totalSales: d.totalSales, count: d.count }))
+        .sort((a, b) => b.totalSales - a.totalSales);
+      const totalSales = programList.reduce((s, p) => s + p.totalSales, 0);
+      const count      = programList.reduce((s, p) => s + p.count, 0);
+      return { doctor, totalSales, count, programs: programList };
+    })
+    .sort((a, b) => b.totalSales - a.totalSales);
+}
+
+/**
  * Generate ranking table data (Top 10 Customers)
  */
 export function generateRankingTableData(rows: any[]): any[] {

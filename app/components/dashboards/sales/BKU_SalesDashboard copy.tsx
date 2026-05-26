@@ -561,6 +561,7 @@ export default function SalesDashboard({
         pieChartData={pieChartData}
         lineChartData={lineChartData}
         waterfallData={waterfallData}
+        doctorProgramData={[]}
       />
 
       {/* Ranking */}
