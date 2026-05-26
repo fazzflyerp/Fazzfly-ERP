@@ -105,6 +105,8 @@ export default function FinancePage() {
   const [dataError, setDataError] = useState("");
   const [syncDebug, setSyncDebug] = useState<any>(null);
 
+  const [liabilities, setLiabilities] = useState<{ liability_id: string; po_id: string; supplier_name: string; installment_no: string; due_date: string; amount: string; status: string }[]>([]);
+
   const [mode, setMode]           = useState<Mode>("mom");
   const [activeType, setActiveType] = useState<ActiveType | null>(null);
   const [activePeriod, setActivePeriod] = useState("");
@@ -162,6 +164,10 @@ export default function FinancePage() {
           } catch {
             setBranches([{ id: "", name: "ทั้งหมด" }]);
           }
+          try {
+            const liaRes = await fetch("/api/inv/liabilities?status=PENDING");
+            if (liaRes.ok) setLiabilities((await liaRes.json()).liabilities || []);
+          } catch { /* liabilities optional */ }
           await loadData("", "");
         } else {
           setSelBranch(auth.branchId || "");
@@ -800,6 +806,69 @@ export default function FinancePage() {
             );
           })}
         </div>
+
+        {/* Liabilities widget — SA only, only shown when there are pending installments */}
+        {isSA && liabilities.length > 0 && (() => {
+          const totalOutstanding = liabilities.reduce((s, l) => s + Number(l.amount || 0), 0);
+          const isOverdue = (due: string) => {
+            const p = due.split("/");
+            if (p.length !== 3) return false;
+            return new Date(Number(p[2]), Number(p[1]) - 1, Number(p[0])) < new Date();
+          };
+          const overdue = liabilities.filter((l) => isOverdue(l.due_date));
+          const upcoming = liabilities
+            .filter((l) => !isOverdue(l.due_date))
+            .slice(0, 3);
+          return (
+            <div className="bg-violet-500/[0.06] border border-violet-500/20 rounded-2xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-violet-400 flex-shrink-0" />
+                  <span className="text-sm font-semibold text-violet-300">หนี้สินค้างชำระ</span>
+                  {overdue.length > 0 && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-lg bg-red-500/15 border border-red-500/25 text-red-400 font-medium">
+                      เกินกำหนด {overdue.length} งวด
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => router.push("/ERP/inv/liabilities")}
+                  className="text-[11px] text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1"
+                >
+                  ดูทั้งหมด
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-4">
+                <div>
+                  <p className="text-[10px] text-slate-500 mb-0.5">ยอดค้างทั้งหมด</p>
+                  <p className="text-lg font-bold text-violet-400">฿{totalOutstanding.toLocaleString()}</p>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] text-slate-500 mb-1.5">งวดที่ยังไม่ถึงกำหนด</p>
+                  <div className="flex flex-wrap gap-2">
+                    {overdue.map((l) => (
+                      <div key={l.liability_id} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-500/10 border border-red-500/20">
+                        <span className="text-[10px] font-mono text-red-400">{l.po_id}</span>
+                        <span className="text-[10px] text-red-400/70">งวด {l.installment_no}</span>
+                        <span className="text-[10px] font-semibold text-red-300">฿{Number(l.amount).toLocaleString()}</span>
+                        <span className="text-[10px] text-red-500">{l.due_date}</span>
+                      </div>
+                    ))}
+                    {upcoming.map((l) => (
+                      <div key={l.liability_id} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10">
+                        <span className="text-[10px] font-mono text-slate-400">{l.po_id}</span>
+                        <span className="text-[10px] text-slate-500">งวด {l.installment_no}</span>
+                        <span className="text-[10px] font-semibold text-slate-300">฿{Number(l.amount).toLocaleString()}</span>
+                        <span className="text-[10px] text-slate-500">{l.due_date}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Mode / filter bar */}
         <div className="flex flex-wrap items-center gap-2">
