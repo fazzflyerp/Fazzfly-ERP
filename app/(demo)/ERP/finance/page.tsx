@@ -5,6 +5,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import QuickNavDemo, { QuickNavDemoTrigger } from "@/app/components/QuickNavDemo";
 
 interface ComputedRow {
   period: string;
@@ -95,6 +96,7 @@ export default function FinancePage() {
   const sheetName     = searchParams.get("sheetName")     || "Finance";
   const moduleName    = searchParams.get("moduleName")    || "Financial Dashboard";
 
+  const [navOpen, setNavOpen] = useState(false);
   const [role, setRole]               = useState("");
   const [branchName, setBranchName]   = useState("");
   const [branches, setBranches]       = useState<{ id: string; name: string }[]>([]);
@@ -613,12 +615,6 @@ export default function FinancePage() {
       grouped.get(k)!.push(row);
     }
 
-    const typeStyle: Record<ActiveType, { border: string; badge: string }> = {
-      revenue:  { border: "border-l-emerald-500", badge: "text-emerald-400 bg-emerald-500/10 border-emerald-500/25" },
-      cogs:     { border: "border-l-amber-500",   badge: "text-amber-400   bg-amber-500/10   border-amber-500/25"   },
-      expenses: { border: "border-l-rose-500",    badge: "text-rose-400    bg-rose-500/10    border-rose-500/25"    },
-    };
-
     return (
       <div>
         {/* Overall summary */}
@@ -647,84 +643,145 @@ export default function FinancePage() {
           </div>
         </div>
 
-        {/* Grouped by date */}
+        {/* ── Bank-book ledger ── */}
         <div className="overflow-auto max-h-[640px]">
-          <table className="w-full table-fixed text-[11px]">
-            <colgroup>
-              {/* badge */}<col style={{ width: "80px" }} />
-              {/* รายการ */}<col style={{ width: "150px" }} />
-              {/* จำนวน */}<col style={{ width: "68px" }} />
-              {/* ยอดเงิน */}<col style={{ width: "100px" }} />
-              {/* สาขา */}<col />
-            </colgroup>
-          {Array.from(grouped.entries()).map(([dateKey, dayRows]) => {
-            const dayRev = dayRows.filter((r) => r.type === "revenue").reduce((s, r) => s + r.amount, 0);
-            const dayCog = dayRows.filter((r) => r.type === "cogs").reduce((s, r) => s + r.amount, 0);
-            const dayExp = dayRows.filter((r) => r.type === "expenses").reduce((s, r) => s + r.amount, 0);
-            const dayNet = dayRev - dayCog - dayExp;
-            const displayDate = fmtDateDisplay(dateKey);
+          {/* Sticky header */}
+          <div className="sticky top-0 z-10 grid grid-cols-[90px_1fr_90px_90px_96px] gap-0 border-b border-white/[0.08] bg-[#0a0f1e]/95 backdrop-blur-sm">
+            <div className="px-3 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">วันที่</div>
+            <div className="px-3 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">รายการ</div>
+            <div className="px-3 py-2 text-[10px] font-semibold text-emerald-500/70 uppercase tracking-wide text-right">เข้า</div>
+            <div className="px-3 py-2 text-[10px] font-semibold text-rose-500/70 uppercase tracking-wide text-right">ออก</div>
+            <div className="px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wide text-right">คงเหลือ</div>
+          </div>
 
-            return (
-              <tbody key={dateKey}>
-                {/* Date header */}
-                <tr>
-                  <td colSpan={5} className="sticky top-0 z-10 bg-[#0d1424]/95 backdrop-blur-sm border-y border-white/[0.06] px-4 py-2">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <span className="text-xs font-bold text-white">{displayDate}</span>
-                      <span className="text-[10px] text-slate-500">{dayRows.length} รายการ</span>
-                      <div className="flex items-center gap-3 ml-auto flex-wrap">
-                        {dayRev > 0 && <span className="text-[11px] font-semibold text-emerald-400">+฿{fmt(dayRev)}</span>}
-                        {dayCog > 0 && <span className="text-[11px] font-semibold text-amber-400">-฿{fmt(dayCog)}</span>}
-                        {dayExp > 0 && <span className="text-[11px] font-semibold text-rose-400">-฿{fmt(dayExp)}</span>}
-                        <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${dayNet >= 0 ? "text-purple-300 bg-purple-500/15" : "text-red-300 bg-red-500/15"}`}>
-                          {dayNet >= 0 ? "+" : ""}฿{fmt(dayNet)}
-                        </span>
-                      </div>
+          {(() => {
+            // คำนวณ running balance ทั้งหมดก่อน (เรียง asc เสมอเพื่อ balance ถูก แล้วค่อย reverse ถ้า dodSort=desc)
+            type FlatItem = {
+              dateKey: string; displayDate: string; type: ActiveType;
+              row: Record<string,string>; income: number; outgo: number;
+            };
+            const flatAsc: FlatItem[] = [];
+            const ascEntries = [...grouped.entries()].sort((a,b) => a[0].localeCompare(b[0]));
+            for (const [dateKey, dayRows] of ascEntries) {
+              const displayDate = fmtDateDisplay(dateKey);
+              for (const { type, row } of dayRows) {
+                const nameCol = { revenue:"โปรแกรม", cogs:"ชื่อสินค้า", expenses:"หมวดค่าใช้จ่าย" }[type];
+                const amtCol  = { revenue:"ยอดเงิน",  cogs:"ยอดต้นทุน",  expenses:"ยอดเงิน"          }[type];
+                const amt = parseFloat((row[amtCol] ?? "").toString().replace(/[^\d.\-]/g,"")) || 0;
+                flatAsc.push({
+                  dateKey, displayDate, type, row,
+                  income: type === "revenue" ? amt : 0,
+                  outgo:  type !== "revenue" ? amt : 0,
+                });
+              }
+            }
+            // attach running balance (asc order)
+            let bal = 0;
+            const withBal = flatAsc.map((item) => {
+              bal += item.income - item.outgo;
+              return { ...item, balance: bal };
+            });
+            // apply display sort
+            const display = dodSort === "desc" ? [...withBal].reverse() : withBal;
+
+            // group by date for day-separator rows
+            const byDate = new Map<string, typeof withBal>();
+            for (const item of (dodSort === "desc" ? [...withBal].reverse() : withBal)) {
+              if (!byDate.has(item.dateKey)) byDate.set(item.dateKey, []);
+              byDate.get(item.dateKey)!.push(item);
+            }
+
+            const typeStyle2: Record<ActiveType, { dot: string; badge: string; nameLabel: string }> = {
+              revenue:  { dot:"bg-emerald-400", badge:"text-emerald-400 bg-emerald-500/10 border-emerald-500/25", nameLabel:"โปรแกรม" },
+              cogs:     { dot:"bg-amber-400",   badge:"text-amber-400   bg-amber-500/10   border-amber-500/25",   nameLabel:"สินค้า" },
+              expenses: { dot:"bg-rose-400",    badge:"text-rose-400    bg-rose-500/10    border-rose-500/25",    nameLabel:"หมวด" },
+            };
+
+            return Array.from(byDate.entries()).map(([dateKey, items]) => {
+              const dayIncome = items.reduce((s,r) => s + r.income, 0);
+              const dayOutgo  = items.reduce((s,r) => s + r.outgo,  0);
+              const dayNet    = dayIncome - dayOutgo;
+              // balance at end of this day = last item in asc order
+              const dayEndBal = dodSort === "desc"
+                ? items[items.length-1].balance
+                : items[items.length-1].balance;
+
+              return (
+                <div key={dateKey}>
+                  {/* Day separator */}
+                  <div className="sticky top-[33px] z-[9] grid grid-cols-[90px_1fr_90px_90px_96px] bg-[#0d1424]/98 backdrop-blur-sm border-y border-white/[0.06]">
+                    <div className="px-3 py-1.5 flex items-center gap-1.5">
+                      <span className="text-[10px] font-bold text-white">{items[0].displayDate}</span>
                     </div>
-                  </td>
-                </tr>
-                {/* Rows */}
-                {dayRows.map(({ type, row }, i) => {
-                  const s        = typeStyle[type];
-                  const nameCol  = { revenue: "โปรแกรม", cogs: "ชื่อสินค้า", expenses: "หมวดค่าใช้จ่าย" }[type];
-                  const nameLabel= { revenue: "โปรแกรม", cogs: "ชื่อสินค้า", expenses: "หมวด" }[type];
-                  const qtyCol   = { revenue: "จำนวนที่ใช้", cogs: "จำนวนที่ใช้", expenses: "" }[type];
-                  const amtCol   = { revenue: "ยอดเงิน", cogs: "ยอดต้นทุน", expenses: "ยอดเงิน" }[type];
-                  const amtLabel = { revenue: "ยอดเงิน", cogs: "ต้นทุน", expenses: "ยอดเงิน" }[type];
-                  return (
-                    <tr key={i} className={`border-t border-white/[0.03] border-l-2 ${s.border} hover:bg-white/[0.03] transition-colors`}>
-                      <td className="px-4 py-2">
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${s.badge} whitespace-nowrap`}>
-                          {TYPE_META[type].label}
-                        </span>
-                      </td>
-                      <td className="px-2 py-2 truncate max-w-0">
-                        <p className="text-[9px] text-slate-600 leading-none mb-0.5">{nameLabel}</p>
-                        <p className="text-slate-300 truncate">{row[nameCol] ?? ""}</p>
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        {qtyCol ? (
-                          <>
-                            <p className="text-[9px] text-slate-600 leading-none mb-0.5">จำนวน</p>
-                            <p className="text-slate-300">{row[qtyCol] ?? ""}</p>
-                          </>
-                        ) : null}
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        <p className="text-[9px] text-slate-600 leading-none mb-0.5">{amtLabel}</p>
-                        <p className="text-slate-300 font-medium"><DetailCell value={row[amtCol] ?? ""} /></p>
-                      </td>
-                      <td className="px-4 py-2 truncate max-w-0">
-                        <p className="text-[9px] text-slate-600 leading-none mb-0.5">สาขา</p>
-                        <p className="text-slate-400 truncate">{row["สาขา"] ?? ""}</p>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            );
-          })}
-          </table>
+                    <div className="px-3 py-1.5 flex items-center">
+                      <span className="text-[10px] text-slate-600">{items.length} รายการ</span>
+                    </div>
+                    <div className="px-3 py-1.5 text-right">
+                      {dayIncome > 0 && <span className="text-[10px] font-semibold text-emerald-400">+{fmt(dayIncome)}</span>}
+                    </div>
+                    <div className="px-3 py-1.5 text-right">
+                      {dayOutgo > 0 && <span className="text-[10px] font-semibold text-rose-400">-{fmt(dayOutgo)}</span>}
+                    </div>
+                    <div className="px-3 py-1.5 text-right">
+                      <span className={`text-[10px] font-bold ${dayNet >= 0 ? "text-purple-400" : "text-red-400"}`}>
+                        {dayNet >= 0 ? "+" : ""}{fmt(dayNet)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Transaction rows */}
+                  {items.map((item, i) => {
+                    const s = typeStyle2[item.type];
+                    const nameCol  = { revenue:"โปรแกรม", cogs:"ชื่อสินค้า", expenses:"หมวดค่าใช้จ่าย" }[item.type];
+                    const qtyCol   = { revenue:"จำนวนที่ใช้", cogs:"จำนวนที่ใช้", expenses:"" }[item.type];
+                    const qty      = qtyCol ? item.row[qtyCol] ?? "" : "";
+                    const branch   = item.row["สาขา"] ?? "";
+                    return (
+                      <div key={i} className="grid grid-cols-[90px_1fr_90px_90px_96px] border-b border-white/[0.03] hover:bg-white/[0.025] transition-colors group">
+                        {/* วันที่ (ว่างในแถวย่อย) */}
+                        <div className="px-3 py-2.5 flex items-start pt-3">
+                          <span className={`w-1.5 h-1.5 rounded-full mt-0.5 flex-shrink-0 ${s.dot}`} />
+                        </div>
+                        {/* รายการ */}
+                        <div className="px-3 py-2.5 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${s.badge} flex-shrink-0`}>
+                              {TYPE_META[item.type].label}
+                            </span>
+                            {branch && <span className="text-[9px] text-slate-600 truncate">{branch}</span>}
+                          </div>
+                          <p className="text-xs text-slate-200 truncate">{item.row[nameCol] ?? ""}</p>
+                          {qty && <p className="text-[10px] text-slate-600 mt-0.5">×{qty}</p>}
+                        </div>
+                        {/* เข้า */}
+                        <div className="px-3 py-2.5 text-right flex items-center justify-end">
+                          {item.income > 0 && (
+                            <span className="text-xs font-semibold text-emerald-400">
+                              +{fmt(item.income)}
+                            </span>
+                          )}
+                        </div>
+                        {/* ออก */}
+                        <div className="px-3 py-2.5 text-right flex items-center justify-end">
+                          {item.outgo > 0 && (
+                            <span className="text-xs font-semibold text-rose-400">
+                              -{fmt(item.outgo)}
+                            </span>
+                          )}
+                        </div>
+                        {/* คงเหลือ */}
+                        <div className="px-3 py-2.5 text-right flex items-center justify-end">
+                          <span className={`text-xs font-bold ${item.balance >= 0 ? "text-slate-300" : "text-red-400"}`}>
+                            {fmt(item.balance)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            });
+          })()}
         </div>
       </div>
     );
@@ -884,6 +941,7 @@ export default function FinancePage() {
 
       {/* Header */}
       <header className="relative z-20 flex items-center gap-4 px-6 py-4 border-b border-white/5 backdrop-blur-xl bg-white/[0.02]">
+        <QuickNavDemoTrigger onClick={() => setNavOpen(true)} />
         <button onClick={() => router.back()} className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-all">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg>
         </button>
@@ -896,7 +954,7 @@ export default function FinancePage() {
           <h1 className="text-white font-bold text-base">{moduleName}</h1>
           <p className="text-slate-500 text-xs">{selBranchLabel} · {filteredRows.length} งวด</p>
         </div>
-        <button
+<button
           onClick={() => loadData(selBranch, currentBname)}
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10 transition-all"
         >
@@ -1389,6 +1447,7 @@ export default function FinancePage() {
           <div className="px-6 py-8 text-center text-slate-600 text-sm">กำลังโหลดรายการ...</div>
         )}
       </main>
+      <QuickNavDemo isOpen={navOpen} onClose={() => setNavOpen(false)} />
     </div>
   );
 }

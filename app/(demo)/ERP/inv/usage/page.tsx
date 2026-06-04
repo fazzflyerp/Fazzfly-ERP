@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import QuickNavDemo, { QuickNavDemoTrigger } from "@/app/components/QuickNavDemo";
 
 interface AvailableProduct {
   product_id: string; product_name: string; category: string; unit: string; total_remaining: number;
@@ -23,6 +24,7 @@ const selectCls = "w-full bg-[#0d1526] border border-white/10 text-white rounded
 
 export default function InvUsagePage() {
   const router = useRouter();
+  const [navOpen, setNavOpen] = useState(false);
   const [role, setRole]               = useState("");
   const [branchName, setBranchName]   = useState<string | null>(null);
   const [allBranches, setAllBranches] = useState<BranchSheet[]>([]);
@@ -172,6 +174,7 @@ export default function InvUsagePage() {
 
       {/* Header */}
       <header className="relative z-20 flex items-center gap-4 px-6 py-4 border-b border-white/5 backdrop-blur-xl bg-white/[0.02]">
+        <QuickNavDemoTrigger onClick={() => setNavOpen(true)} />
         <button onClick={() => router.back()} className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-all">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg>
         </button>
@@ -434,6 +437,7 @@ export default function InvUsagePage() {
           </div>
         </div>
       )}
+      <QuickNavDemo isOpen={navOpen} onClose={() => setNavOpen(false)} />
     </div>
   );
 }

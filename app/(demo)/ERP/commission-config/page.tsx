@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import QuickNavDemo, { QuickNavDemoTrigger } from "@/app/components/QuickNavDemo";
 
 interface SalesStaff { nickname: string; fullName: string; position: string; branchId: string }
 interface Tier { min: number; max: number | null; rate: number; nickname: string }
@@ -25,6 +26,7 @@ function CommissionConfigContent() {
   const searchParams = useSearchParams();
   const spreadsheetId = searchParams.get("spreadsheetId") || "";
 
+  const [navOpen, setNavOpen] = useState(false);
   const [branchId,    setBranchId]    = useState<string | null>(null);
   const [isCentral,   setIsCentral]   = useState(false);
   const [allBranches, setAllBranches] = useState<{ branchId: string; branchName: string }[]>([]);
@@ -152,6 +154,7 @@ function CommissionConfigContent() {
 
         {/* Header */}
         <div className="mb-6 flex items-center gap-3">
+          <QuickNavDemoTrigger onClick={() => setNavOpen(true)} />
           <button onClick={() => spreadsheetId ? router.push(`/ERP/payroll-branch?spreadsheetId=${spreadsheetId}`) : router.back()} className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-colors">
             <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
           </button>
@@ -291,6 +294,7 @@ function CommissionConfigContent() {
           </div>
         </div>
       </div>
+      <QuickNavDemo isOpen={navOpen} onClose={() => setNavOpen(false)} />
     </div>
   );
 }

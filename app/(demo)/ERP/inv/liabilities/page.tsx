@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import QuickNavDemo, { QuickNavDemoTrigger } from "@/app/components/QuickNavDemo";
 
 interface Liability {
   liability_id: string;
@@ -31,6 +32,7 @@ function isOverdue(dueDate: string): boolean {
 export default function LiabilitiesPage() {
   const router = useRouter();
 
+  const [navOpen, setNavOpen] = useState(false);
   const [liabilities, setLiabilities] = useState<Liability[]>([]);
   const [loading, setLoading]         = useState(true);
   const [filter, setFilter]           = useState<Filter>("PENDING");
@@ -128,6 +130,7 @@ export default function LiabilitiesPage() {
 
       {/* Header */}
       <header className="relative z-20 flex items-center gap-4 px-6 py-4 border-b border-white/5 backdrop-blur-xl bg-white/[0.02]">
+        <QuickNavDemoTrigger onClick={() => setNavOpen(true)} />
         <button onClick={() => router.back()} className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-all">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg>
         </button>
@@ -318,6 +321,7 @@ export default function LiabilitiesPage() {
           </div>
         </div>
       )}
+      <QuickNavDemo isOpen={navOpen} onClose={() => setNavOpen(false)} />
     </div>
   );
 }

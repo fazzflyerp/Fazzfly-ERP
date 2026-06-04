@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import ImageUpload from "@/app/components/ImageUpload";
+import QuickNavDemo, { QuickNavDemoTrigger } from "@/app/components/QuickNavDemo";
 
 interface FormField {
     fieldName: string;
@@ -36,6 +37,7 @@ export default function FormDemoPage() {
     const [lineItems, setLineItems] = useState<Array<{ [key: string]: string }>>([{}]);
     const [helperInfo, setHelperInfo] = useState<{ [key: number]: { [key: string]: HelperOption } }>({});
 
+    const [navOpen, setNavOpen] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
@@ -48,6 +50,16 @@ export default function FormDemoPage() {
     const [selectedBranchName, setSelectedBranchName] = useState<string>("");
     const [branchLoaded, setBranchLoaded] = useState(false);
     const isCentral = branchId === "central";
+
+    // ── Program price presets (Sales form only) ──────────────────────────────
+    const [programPresets, setProgramPresets] = useState<Record<string, { price: number; price_type: "per_unit" | "fixed" }>>({});
+
+    // ── Price Settings Modal state ───────────────────────────────────────────
+    type PresetRow = { program: string; price: string; price_type: "per_unit" | "fixed" };
+    const [showPriceSettings, setShowPriceSettings] = useState(false);
+    const [settingRows, setSettingRows] = useState<PresetRow[]>([]);
+    const [settingSaving, setSettingSaving] = useState(false);
+    const [settingMsg, setSettingMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
     const moduleId      = searchParams.get("moduleId");
     const spreadsheetId = searchParams.get("spreadsheetId");
@@ -163,6 +175,64 @@ export default function FormDemoPage() {
         fetchHelpers(formFields, filterBranchId);
     }, [selectedBranchName]);
 
+    // ── Load program price presets (Sales form only) ─────────────────────────
+    const loadPresets = (openSettings = false) => {
+        if (!spreadsheetId) return;
+        fetch(`/api/module/program-price?spreadsheetId=${encodeURIComponent(spreadsheetId)}`)
+            .then((r) => r.json())
+            .then((d) => {
+                if (d.presets) setProgramPresets(d.presets);
+                if (openSettings) {
+                    const list: PresetRow[] = (d.list || []).map((p: any) => ({
+                        program: p.program,
+                        price: String(p.price),
+                        price_type: p.price_type === "fixed" ? "fixed" : "per_unit",
+                    }));
+                    setSettingRows(list.length > 0 ? list : [{ program: "", price: "", price_type: "per_unit" }]);
+                    setSettingMsg(null);
+                    setShowPriceSettings(true);
+                }
+            })
+            .catch(() => {
+                if (openSettings) {
+                    setSettingRows([{ program: "", price: "", price_type: "per_unit" }]);
+                    setSettingMsg(null);
+                    setShowPriceSettings(true);
+                }
+            });
+    };
+
+    useEffect(() => {
+        if (!isSales) return;
+        loadPresets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isSales, spreadsheetId]);
+
+    // ── Save presets ──────────────────────────────────────────────────────────
+    const savePresets = async () => {
+        if (!spreadsheetId) return;
+        setSettingSaving(true);
+        setSettingMsg(null);
+        try {
+            const payload = settingRows
+                .filter((r) => r.program.trim())
+                .map((r) => ({ program: r.program.trim(), price: parseFloat(r.price) || 0, price_type: r.price_type }));
+            const res = await fetch("/api/module/program-price", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ spreadsheetId, presets: payload }),
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || "Save failed");
+            setSettingMsg({ type: "ok", text: `บันทึกสำเร็จ ${json.count} โปรแกรม` });
+            loadPresets(); // refresh preset map
+        } catch (e: any) {
+            setSettingMsg({ type: "err", text: e.message });
+        } finally {
+            setSettingSaving(false);
+        }
+    };
+
     const hasSection      = formFields.some((f) => f.section && f.section.trim() !== "");
     const customerFields  = hasSection ? formFields.filter((f) => f.section === "customer") : formFields;
     const lineItemFields  = hasSection ? formFields.filter((f) => f.section === "lineitem") : [];
@@ -180,19 +250,47 @@ export default function FormDemoPage() {
             const newRows = [...prev];
             const updatedRow = { ...newRows[rowIdx], [fieldName]: value };
             const allF = lineItemFields.length > 0 ? lineItemFields : formFields;
+
+            // ── Program price preset auto-fill (Sales only) ──────────────────
+            let presetAutoFilled = false;
+            if (isSales && fieldName === "program" && value) {
+                const preset = programPresets[value];
+                if (preset) {
+                    const qty = parseFloat(updatedRow["quantity"] || updatedRow["qty"] || "1") || 1;
+                    updatedRow["price"] = preset.price_type === "per_unit"
+                        ? String(preset.price * qty)
+                        : String(preset.price);
+                    presetAutoFilled = true;
+                }
+            }
+
+            // ── Qty change → recalculate price if per_unit preset ────────────
+            if (isSales && (fieldName === "quantity" || fieldName === "qty") && value) {
+                const program = updatedRow["program"] || "";
+                const preset = program ? programPresets[program] : undefined;
+                if (preset && preset.price_type === "per_unit") {
+                    updatedRow["price"] = String((preset.price) * (parseFloat(value) || 1));
+                    presetAutoFilled = true;
+                }
+            }
+
+            // ── Sync payment/price-type fields when price changes ─────────────
+            // Triggers on: direct price input OR preset auto-fill
             const isPriceSource = allF.find(
                 (f) => f.fieldName === fieldName && !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && f.type === "number"
             );
-            if (isPriceSource) {
+            if (isPriceSource || presetAutoFilled) {
+                const effectivePrice = updatedRow["price"] || value;
                 allF.filter((f) => isPriceTypeField(f.fieldName)).forEach((pt) => {
-                    if (updatedRow[pt.fieldName]) updatedRow[pt.fieldName] = value;
+                    if (updatedRow[pt.fieldName]) updatedRow[pt.fieldName] = effectivePrice;
                 });
                 const activePayments = allF.filter((f) => isPaymentField(f.fieldName) && updatedRow[f.fieldName] && updatedRow[f.fieldName] !== "");
                 if (activePayments.length === 1) {
                     const cur = updatedRow[activePayments[0].fieldName];
-                    if (cur === "__on__" || cur === "__selected__") updatedRow[activePayments[0].fieldName] = value;
+                    if (cur === "__on__" || cur === "__selected__") updatedRow[activePayments[0].fieldName] = effectivePrice;
                 }
             }
+
             newRows[rowIdx] = updatedRow;
             return newRows;
         });
@@ -424,8 +522,9 @@ export default function FormDemoPage() {
         );
     };
 
-    // ── Render field ────────────────────────────────────────────────────────
-    const renderField = (field: FormField, value: string, onChange: (val: string) => void) => {
+    // ── Render field ─────────────────────────────────────────────────────────
+    // Extra context passed when rendering inside a line item (for preset badge)
+    const renderField = (field: FormField, value: string, onChange: (val: string) => void, lineItemRow?: { [key: string]: string }) => {
         switch (field.type) {
             case "image":
                 return (
@@ -465,13 +564,27 @@ export default function FormDemoPage() {
                         </label>
                     </div>
                 );
-            case "number":
+            case "number": {
+                // Show preset badge on price field when auto-filled from Program_Price
+                const isPriceField = field.fieldName === "price";
+                const presetProgram = lineItemRow?.["program"] || "";
+                const activePreset = isSales && isPriceField && presetProgram ? programPresets[presetProgram] : undefined;
                 return (
                     <div>
-                        <label className={baseLabel}>{field.label}{field.required && <span className="text-red-400 ml-1">*</span>}</label>
-                        <input type="number" value={value} onChange={(e) => onChange(e.target.value)} placeholder={field.placeholder} className={baseInputClass} required={field.required} step="any" />
+                        <div className="flex items-center justify-between mb-1.5">
+                            <label className={baseLabel.replace("mb-1.5", "")}>{field.label}{field.required && <span className="text-red-400 ml-1">*</span>}</label>
+                            {activePreset && (
+                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                    {activePreset.price_type === "per_unit" ? `฿${activePreset.price.toLocaleString("th-TH")}/ครั้ง` : `฿${activePreset.price.toLocaleString("th-TH")} คงที่`}
+                                </span>
+                            )}
+                        </div>
+                        <input type="number" value={value} onChange={(e) => onChange(e.target.value)} placeholder={field.placeholder}
+                            className={`${baseInputClass}${activePreset ? " border-amber-500/30 focus:ring-amber-500/40 focus:border-amber-500/50" : ""}`}
+                            required={field.required} step="any" />
                     </div>
                 );
+            }
             case "date":
                 return (
                     <div>
@@ -519,6 +632,7 @@ export default function FormDemoPage() {
                 <div className="px-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-between h-16">
                         <div className="flex items-center gap-4">
+                            <QuickNavDemoTrigger onClick={() => setNavOpen(true)} />
                             <button onClick={() => router.push("/ERP/home-demo")}
                                 className="p-2 hover:bg-white/10 rounded-xl transition-colors">
                                 <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -538,8 +652,22 @@ export default function FormDemoPage() {
                             </div>
                         </div>
 
-                        {/* Branch badge / selector */}
+                        {/* Right side: settings gear (Sales) + branch */}
                         <div className="flex items-center gap-2">
+                            {isSales && (
+                                <button
+                                    type="button"
+                                    onClick={() => loadPresets(true)}
+                                    title="ตั้งค่าราคาโปรแกรม"
+                                    className="p-2 rounded-xl text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 border border-white/[0.07] hover:border-amber-500/30 transition-all"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </button>
+                            )}
+                        {/* Branch badge / selector */}
                             {isCentral ? (
                                 <select
                                     value={selectedBranchName}
@@ -667,7 +795,7 @@ export default function FormDemoPage() {
                                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                                                     {regularFields.map((field) => (
                                                         <div key={field.fieldName} className={field.type === "textarea" || field.type === "image" ? "md:col-span-2 lg:col-span-3" : ""}>
-                                                            {renderField(field, row[field.fieldName] || "", (val) => handleLineItemChange(field.fieldName, val, idx, field.helper!))}
+                                                            {renderField(field, row[field.fieldName] || "", (val) => handleLineItemChange(field.fieldName, val, idx, field.helper!), row)}
                                                         </div>
                                                     ))}
                                                 </div>
@@ -743,10 +871,155 @@ export default function FormDemoPage() {
                 </form>
             </div>
 
+            {/* ── Price Settings Modal ─────────────────────────────────────── */}
+            {showPriceSettings && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+                    <div className="w-full max-w-2xl bg-[#0f1629] border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08]">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center">
+                                    <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h2 className="text-sm font-bold text-white">ตั้งค่าราคาโปรแกรม</h2>
+                                    <p className="text-[11px] text-slate-500">ราคาจะขึ้นอัตโนมัติเมื่อเลือกโปรแกรมในฟอร์ม</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowPriceSettings(false)} className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/10 transition-colors">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        {(() => {
+                            // หา helper options ของ field "program" จาก lineItemFields
+                            const allF = lineItemFields.length > 0 ? lineItemFields : formFields;
+                            const progField = allF.find((f) => f.fieldName === "program");
+                            const progOptions: HelperOption[] = progField?.helper ? (helperOptions[progField.helper] || []) : [];
+                            // set ของโปรแกรมที่ถูกเลือกไปแล้วใน settingRows
+                            const usedPrograms = new Set(settingRows.map((r) => r.program).filter(Boolean));
+                            // โปรแกรมที่ยังไม่มี preset เลย (สำหรับปุ่มเพิ่มโปรแกรม)
+                            const availableToAdd = progOptions.filter((o) => !usedPrograms.has(o.value));
+                            return (
+                                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+                                    {/* Column headers */}
+                                    <div className="grid grid-cols-[1fr_120px_140px_36px] gap-2 px-1">
+                                        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">โปรแกรม</span>
+                                        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">ราคา (฿)</span>
+                                        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">ประเภท</span>
+                                        <span />
+                                    </div>
+
+                                    {settingRows.map((row, i) => {
+                                        // options สำหรับแถวนี้ = อันนี้เอง + ที่ยังไม่ถูกใช้
+                                        const rowOptions = progOptions.filter((o) => o.value === row.program || !usedPrograms.has(o.value));
+                                        return (
+                                            <div key={i} className="grid grid-cols-[1fr_120px_140px_36px] gap-2 items-center">
+                                                {progOptions.length > 0 ? (
+                                                    <select
+                                                        value={row.program}
+                                                        onChange={(e) => setSettingRows((prev) => prev.map((r, j) => j === i ? { ...r, program: e.target.value } : r))}
+                                                        className="px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-xl text-sm text-white focus:outline-none focus:border-amber-500/50 transition-colors cursor-pointer"
+                                                    >
+                                                        <option value="" className="bg-[#0f1629]">-- เลือกโปรแกรม --</option>
+                                                        {rowOptions.map((o) => (
+                                                            <option key={o.value} value={o.value} className="bg-[#0f1629]">{o.value}{o.label && o.label !== o.value ? ` — ${o.label}` : ""}</option>
+                                                        ))}
+                                                    </select>
+                                                ) : (
+                                                    <input
+                                                        value={row.program}
+                                                        onChange={(e) => setSettingRows((prev) => prev.map((r, j) => j === i ? { ...r, program: e.target.value } : r))}
+                                                        placeholder="ชื่อโปรแกรม"
+                                                        className="px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-xl text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500/50 transition-colors"
+                                                    />
+                                                )}
+                                                <input
+                                                    type="number"
+                                                    value={row.price}
+                                                    onChange={(e) => setSettingRows((prev) => prev.map((r, j) => j === i ? { ...r, price: e.target.value } : r))}
+                                                    placeholder="0"
+                                                    min="0"
+                                                    className="px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-xl text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500/50 transition-colors"
+                                                />
+                                                <select
+                                                    value={row.price_type}
+                                                    onChange={(e) => setSettingRows((prev) => prev.map((r, j) => j === i ? { ...r, price_type: e.target.value as "per_unit" | "fixed" } : r))}
+                                                    className="px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-xl text-sm text-white focus:outline-none focus:border-amber-500/50 transition-colors cursor-pointer"
+                                                >
+                                                    <option value="per_unit" className="bg-[#0f1629]">× จำนวน</option>
+                                                    <option value="fixed"    className="bg-[#0f1629]">คงที่</option>
+                                                </select>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSettingRows((prev) => prev.filter((_, j) => j !== i))}
+                                                    className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+
+                                    {/* ปุ่มเพิ่ม — ซ่อนถ้าครบทุกโปรแกรมแล้ว */}
+                                    {(progOptions.length === 0 || availableToAdd.length > 0) && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setSettingRows((prev) => [...prev, { program: "", price: "", price_type: "per_unit" }])}
+                                            className="w-full py-2 text-xs font-semibold text-amber-400 border border-dashed border-amber-500/30 rounded-xl hover:bg-amber-500/5 transition-colors flex items-center justify-center gap-1.5"
+                                        >
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                            เพิ่มโปรแกรม {progOptions.length > 0 && <span className="text-amber-500/60">({availableToAdd.length} ที่เหลือ)</span>}
+                                        </button>
+                                    )}
+                                    {progOptions.length > 0 && availableToAdd.length === 0 && settingRows.some((r) => r.program) && (
+                                        <p className="text-center text-[11px] text-slate-600 py-1">ตั้งค่าครบทุกโปรแกรมแล้ว</p>
+                                    )}
+
+                                    {/* Legend */}
+                                    <div className="flex gap-4 pt-1 px-1">
+                                        <p className="text-[11px] text-slate-600"><span className="text-slate-400 font-semibold">× จำนวน</span> — ราคา × qty</p>
+                                        <p className="text-[11px] text-slate-600"><span className="text-slate-400 font-semibold">คงที่</span> — ราคาเต็ม ไม่คูณจำนวน</p>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {/* Footer */}
+                        <div className="px-6 py-4 border-t border-white/[0.08] flex items-center justify-between gap-3">
+                            {settingMsg ? (
+                                <p className={`text-xs font-semibold ${settingMsg.type === "ok" ? "text-emerald-400" : "text-red-400"}`}>
+                                    {settingMsg.type === "ok" ? "✓" : "✗"} {settingMsg.text}
+                                </p>
+                            ) : <span />}
+                            <div className="flex gap-2">
+                                <button type="button" onClick={() => setShowPriceSettings(false)}
+                                    className="px-4 py-2 text-sm font-medium text-slate-400 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all">
+                                    ปิด
+                                </button>
+                                <button type="button" onClick={savePresets} disabled={settingSaving}
+                                    className="px-5 py-2 text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-xl shadow-lg shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2">
+                                    {settingSaving ? (
+                                        <><svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>กำลังบันทึก</>
+                                    ) : (
+                                        <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>บันทึก</>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <style jsx>{`
                 @keyframes slideIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
                 .animate-slideIn { animation: slideIn 0.3s ease-out; }
             `}</style>
+            <QuickNavDemo isOpen={navOpen} onClose={() => setNavOpen(false)} />
         </div>
     );
 }

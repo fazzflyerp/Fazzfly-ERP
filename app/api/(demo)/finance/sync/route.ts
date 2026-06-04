@@ -113,10 +113,10 @@ export async function GET(request: NextRequest) {
     if (!spreadsheetId) return NextResponse.json({ error: "Missing spreadsheetId" }, { status: 400 });
 
     const [finRows, helperS, helperE, helperU] = await Promise.all([
-      saReadRange(spreadsheetId, `${sheetName}!A:H`),
-      saReadRange(spreadsheetId, "HelperS!A:AJ"),
-      saReadRange(spreadsheetId, "HelperE!A:I"),
-      saReadRange(spreadsheetId, "HelperU!A:P"),
+      saReadRange(spreadsheetId, `${sheetName}!A:H`).catch(() => [] as any[][]),
+      saReadRange(spreadsheetId, "HelperS!A:AJ").catch(() => [] as any[][]),
+      saReadRange(spreadsheetId, "HelperE!A:I").catch(() => [] as any[][]),
+      saReadRange(spreadsheetId, "HelperU!A:P").catch(() => [] as any[][]),
     ]);
 
     // Aggregate helpers → { "04/2026": total }
@@ -195,10 +195,10 @@ export async function POST(request: NextRequest) {
     if (!spreadsheetId) return NextResponse.json({ error: "Missing spreadsheetId" }, { status: 400 });
 
     const [finRows, helperS, helperE, helperU] = await Promise.all([
-      saReadRange(spreadsheetId, `${sheetName}!A:H`),
-      saReadRange(spreadsheetId, "HelperS!A:AJ"),
-      saReadRange(spreadsheetId, "HelperE!A:I"),
-      saReadRange(spreadsheetId, "HelperU!A:P"),
+      saReadRange(spreadsheetId, `${sheetName}!A:H`).catch(() => [] as any[][]),
+      saReadRange(spreadsheetId, "HelperS!A:AJ").catch(() => [] as any[][]),
+      saReadRange(spreadsheetId, "HelperE!A:I").catch(() => [] as any[][]),
+      saReadRange(spreadsheetId, "HelperU!A:P").catch(() => [] as any[][]),
     ]);
 
     const revenueMap = aggregateHelperS(helperS.slice(1), branchName);

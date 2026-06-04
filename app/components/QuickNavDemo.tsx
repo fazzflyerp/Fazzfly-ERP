@@ -25,7 +25,7 @@ interface NavItem {
 }
 
 // ─── Route logic (mirrors buildCards in home-demo) ───────────────────────────
-function toNavItem(m: DemoModule): NavItem {
+function toNavItem(m: DemoModule): NavItem[] {
   const name   = (m.moduleName || "").toUpperCase();
   const config = (m.configName || "").toUpperCase();
   const sheet  = (m.sheetName  || "").toUpperCase();
@@ -39,36 +39,43 @@ function toNavItem(m: DemoModule): NavItem {
   const cashIcon    = <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>;
   const gridIcon    = <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7c-2 0-3 1-3 3zm0 5h16"/></svg>;
 
+  const acctIcon = <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>;
+
   if (config === "PAYROLL_CONFIG" || name.includes("PAYROLL"))
-    return { label: "คำนวณเงินเดือน", sublabel: sub, iconBg: "bg-blue-500",
-      href: `/ERP/payroll-branch?spreadsheetId=${m.spreadsheetId}`, icon: payrollIcon };
+    return [{ label: "คำนวณเงินเดือน", sublabel: sub, iconBg: "bg-blue-500",
+      href: `/ERP/payroll-branch?spreadsheetId=${m.spreadsheetId}`, icon: payrollIcon }];
 
   if (name === "INV_CENTRAL" || config === "INV_CENTRAL")
-    return { label: "คลังกลาง", sublabel: "จัดการสต๊อคและอนุมัติ", iconBg: "bg-emerald-500",
-      href: "/ERP/inv/central", icon: boxIcon };
+    return [{ label: "คลังกลาง", sublabel: "จัดการสต๊อคและอนุมัติ", iconBg: "bg-emerald-500",
+      href: "/ERP/inv/central", icon: boxIcon }];
 
   if (name === "INV_BRANCH")
-    return { label: "สต๊อคสาขา", sublabel: m.notes || m.sheetName, iconBg: "bg-violet-500",
-      href: "/ERP/inv/branch-stock", icon: boxIcon };
+    return [{ label: "สต๊อคสาขา", sublabel: m.notes || m.sheetName, iconBg: "bg-violet-500",
+      href: "/ERP/inv/branch-stock", icon: boxIcon }];
 
   if (config.includes("FINANCE") || name.startsWith("FINANC") || sheet.startsWith("FINANC"))
-    return { label: label, sublabel: "P&L Dashboard", iconBg: "bg-emerald-600",
-      href: `/ERP/finance?spreadsheetId=${m.spreadsheetId}&sheetName=${encodeURIComponent(m.sheetName)}&moduleName=${encodeURIComponent(m.moduleName || "Financial Dashboard")}`,
-      icon: chartIcon };
+    return [
+      { label: label, sublabel: "P&L Dashboard", iconBg: "bg-emerald-600",
+        href: `/ERP/finance?spreadsheetId=${m.spreadsheetId}&sheetName=${encodeURIComponent(m.sheetName)}&moduleName=${encodeURIComponent(m.moduleName || "Financial Dashboard")}`,
+        icon: chartIcon },
+      { label: "บัญชี", sublabel: "AR · AP", iconBg: "bg-violet-600",
+        href: `/ERP/accounting-demo?spreadsheetId=${m.spreadsheetId}`,
+        icon: acctIcon },
+    ];
 
   if (name.includes("EXPENSE") || config.includes("EXPENSE"))
-    return { label: label, sublabel: sub, iconBg: "bg-orange-500",
+    return [{ label: label, sublabel: sub, iconBg: "bg-orange-500",
       href: `/ERP/expense?spreadsheetId=${m.spreadsheetId}&configName=${encodeURIComponent(m.configName)}&sheetName=${encodeURIComponent(m.sheetName)}&title=${encodeURIComponent(m.moduleName || "ค่าใช้จ่าย")}`,
-      icon: cashIcon };
+      icon: cashIcon }];
 
   if (config.includes("SALES") || name.includes("SALES"))
-    return { label: label, sublabel: sub, iconBg: "bg-pink-500",
+    return [{ label: label, sublabel: sub, iconBg: "bg-pink-500",
       href: `/ERP/form-demo?moduleId=${m.moduleId}&spreadsheetId=${m.spreadsheetId}&configName=${encodeURIComponent(m.configName)}&sheetName=${encodeURIComponent(m.sheetName)}`,
-      icon: cartIcon };
+      icon: cartIcon }];
 
-  return { label: label, sublabel: sub, iconBg: "bg-slate-500",
+  return [{ label: label, sublabel: sub, iconBg: "bg-slate-500",
     href: `/ERP/master-data-demo?spreadsheetId=${m.spreadsheetId}&sheetName=${encodeURIComponent(m.sheetName)}&configName=${encodeURIComponent(m.configName)}&moduleName=${encodeURIComponent(m.moduleName)}`,
-    icon: gridIcon };
+    icon: gridIcon }];
 }
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
@@ -223,7 +230,7 @@ export default function QuickNavDemo({ isOpen, onClose }: { isOpen: boolean; onC
 
           if (isGeneric && !superAdmin) continue;
 
-          items.push(toNavItem(m));
+          items.push(...toNavItem(m));
         }
         setNavItems(items);
       })

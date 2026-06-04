@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import QuickNavDemo, { QuickNavDemoTrigger } from "@/app/components/QuickNavDemo";
 
 interface Lot {
   lot_id: string; product_id: string; product_name: string; category: string; brand: string;
@@ -9,6 +10,7 @@ interface Lot {
   expiry_date: string; purchase_date: string; supplier: string;
   cost_per_unit: number;
 }
+interface Branch { branchId: string; branchName: string; }
 interface StockRequest {
   request_id: string; branch_id: string; branch_name: string;
   product_id: string; product_name: string; unit: string; qty_requested: number;
@@ -29,6 +31,7 @@ function statusBadge(s: string) {
 
 export default function InvCentralPage() {
   const router = useRouter();
+  const [navOpen, setNavOpen] = useState(false);
   const [tab, setTab]             = useState<"stock" | "requests" | "history">("stock");
   const [lots, setLots]           = useState<Lot[]>([]);
   const [requests, setRequests]   = useState<StockRequest[]>([]);
@@ -65,6 +68,40 @@ export default function InvCentralPage() {
   const [undoing, setUndoing]   = useState(false);
   const [undoMsg, setUndoMsg]   = useState("");
 
+  // ── Dispense modal (จ่ายตรงไปสาขา) ──────────────────────────────
+  const [branches, setBranches]           = useState<Branch[]>([]);
+  const [dispenseLot, setDispenseLot]     = useState<Lot | null>(null);
+  const [dispenseForm, setDispenseForm]   = useState({ branch_id: "", qty: "", note: "" });
+  const [dispensing, setDispensing]       = useState(false);
+  const [dispenseMsg, setDispenseMsg]     = useState("");
+
+  // ── Lost modal (ยาหาย) ───────────────────────────────────────────
+  const [lostLot, setLostLot]     = useState<Lot | null>(null);
+  const [lostForm, setLostForm]   = useState({ qty: "", note: "" });
+  const [lostSaving, setLostSaving] = useState(false);
+  const [lostMsg, setLostMsg]     = useState("");
+
+  // ── Stock sort / filter ───────────────────────────────────────────
+  type StockSort = "date_desc" | "date_asc" | "name_asc" | "name_desc" | "qty_asc" | "qty_desc";
+  const [stockSort, setStockSort]           = useState<StockSort>("date_desc");
+  const [stockQ, setStockQ]                 = useState("");
+  const [stockCat, setStockCat]             = useState("");
+  const [stockSupp, setStockSupp]           = useState("");
+  const [stockShowEmpty, setStockShowEmpty] = useState(false);
+
+  // ── Requests sort / filter ────────────────────────────────────────
+  type ReqSort = "date_desc" | "date_asc" | "name_asc" | "name_desc";
+  const [reqQ, setReqQ]             = useState("");
+  const [reqBranch, setReqBranch]   = useState("");
+  const [reqSort, setReqSort]       = useState<ReqSort>("date_desc");
+
+  // ── History sort / filter ─────────────────────────────────────────
+  type HistSort = "date_desc" | "date_asc" | "name_asc" | "name_desc";
+  const [histQ, setHistQ]             = useState("");
+  const [histBranch, setHistBranch]   = useState("");
+  const [histStatus, setHistStatus]   = useState("");
+  const [histSort, setHistSort]       = useState<HistSort>("date_desc");
+
   // ── Stock validation (approve modal) ─────────────────────────────
   const lot1          = availableLots.find((l) => l.lot_id === approveForm.lot1_id);
   const lot2          = availableLots.find((l) => l.lot_id === approveForm.lot2_id);
@@ -88,10 +125,11 @@ export default function InvCentralPage() {
 
   const load = useCallback(async () => {
     try {
-      const [authRes, lotsRes, reqRes] = await Promise.all([
+      const [authRes, lotsRes, reqRes, branchRes] = await Promise.all([
         fetch("/api/auth/branch-check"),
         fetch("/api/inv/lots"),
         fetch("/api/inv/request"),
+        fetch("/api/auth/branches"),
       ]);
       const auth = await authRes.json();
       if (auth.role !== "SUPER_ADMIN") { router.replace("/ERP/home-demo"); return; }
@@ -99,6 +137,7 @@ export default function InvCentralPage() {
       const allReqs: StockRequest[] = (await reqRes.json()).requests || [];
       setRequests(allReqs.filter((r) => r.status.toUpperCase() === "PENDING"));
       setHistoryReqs(allReqs.filter((r) => r.status.toUpperCase() !== "PENDING"));
+      setBranches((await branchRes.json()).branches || []);
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   }, [router]);
@@ -207,6 +246,53 @@ export default function InvCentralPage() {
     finally { setEditSaving(false); }
   }
 
+  async function handleLost() {
+    if (!lostLot) return;
+    const qtyNum = Number(lostForm.qty);
+    if (qtyNum <= 0 || qtyNum > lostLot.qty_remaining) {
+      setLostMsg("❌ จำนวนไม่ถูกต้อง"); return;
+    }
+    setLostSaving(true); setLostMsg("");
+    try {
+      const res  = await fetch("/api/inv/central-lost", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lot_id: lostLot.lot_id, qty_lost: qtyNum, note: lostForm.note }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setLostMsg(`✓ บันทึกยาหาย ${qtyNum} ${lostLot.unit} สำเร็จ`);
+      setTimeout(() => { setLostLot(null); setLoading(true); load(); }, 1500);
+    } catch (e: any) { setLostMsg(`❌ ${e.message}`); }
+    finally { setLostSaving(false); }
+  }
+
+  async function handleDispense() {
+    if (!dispenseLot || !dispenseForm.branch_id || !dispenseForm.qty) return;
+    const qtyNum = Number(dispenseForm.qty);
+    if (qtyNum <= 0 || qtyNum > dispenseLot.qty_remaining) {
+      setDispenseMsg("❌ จำนวนไม่ถูกต้อง");
+      return;
+    }
+    setDispensing(true); setDispenseMsg("");
+    try {
+      const res  = await fetch("/api/inv/dispense", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          branch_id: dispenseForm.branch_id,
+          lot_id:    dispenseLot.lot_id,
+          qty:       qtyNum,
+          note:      dispenseForm.note,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      const branchName = branches.find((b) => b.branchId === dispenseForm.branch_id)?.branchName || dispenseForm.branch_id;
+      setDispenseMsg(`✓ จ่ายไปสาขา ${branchName} แล้ว ${qtyNum} ${dispenseLot.unit}`);
+      setTimeout(() => { setDispenseLot(null); setLoading(true); load(); }, 1500);
+    } catch (e: any) { setDispenseMsg(`❌ ${e.message}`); }
+    finally { setDispensing(false); }
+  }
+
   const today = new Date();
   const warn30 = new Date(today); warn30.setDate(today.getDate() + 30);
 
@@ -228,6 +314,7 @@ export default function InvCentralPage() {
 
       {/* Header */}
       <header className="relative z-20 flex items-center gap-4 px-6 py-4 border-b border-white/5 backdrop-blur-xl bg-white/[0.02]">
+        <QuickNavDemoTrigger onClick={() => setNavOpen(true)} />
         <button onClick={() => router.back()} className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-all">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg>
         </button>
@@ -239,34 +326,36 @@ export default function InvCentralPage() {
           <p className="text-slate-500 text-xs">Super Admin only</p>
         </div>
         <button onClick={() => router.push("/ERP/inv/purchase")}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-white text-sm font-semibold hover:opacity-90 transition-all"
+          className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-white text-sm font-semibold hover:opacity-90 transition-all"
           style={{ boxShadow: "0 4px 16px rgba(16,185,129,0.3)" }}>
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
-          สั่งซื้อ
+          <span className="hidden sm:inline">สั่งซื้อ</span>
         </button>
       </header>
 
       {/* Tabs */}
-      <div className="relative z-10 border-b border-white/5 bg-white/[0.01] px-6">
+      <div className="relative z-10 border-b border-white/5 bg-white/[0.01] px-3 sm:px-6">
         <div className="flex gap-1">
           <button onClick={() => setTab("stock")}
-            className={`px-5 py-3.5 text-sm font-medium border-b-2 transition-all ${tab === "stock" ? "border-emerald-400 text-emerald-400" : "border-transparent text-slate-500 hover:text-slate-300"}`}>
-            Stock คลังกลาง ({lots.length})
+            className={`px-3 sm:px-5 py-3.5 text-sm font-medium border-b-2 transition-all ${tab === "stock" ? "border-emerald-400 text-emerald-400" : "border-transparent text-slate-500 hover:text-slate-300"}`}>
+            <span className="hidden sm:inline">Stock คลังกลาง ({lots.length})</span>
+            <span className="sm:hidden">Stock</span>
           </button>
           <button onClick={() => setTab("requests")}
-            className={`px-5 py-3.5 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${tab === "requests" ? "border-emerald-400 text-emerald-400" : "border-transparent text-slate-500 hover:text-slate-300"}`}>
-            Pending Requests
+            className={`px-3 sm:px-5 py-3.5 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${tab === "requests" ? "border-emerald-400 text-emerald-400" : "border-transparent text-slate-500 hover:text-slate-300"}`}>
+            <span className="hidden sm:inline">Pending Requests</span>
+            <span className="sm:hidden">คำขอ</span>
             {requests.length > 0 && <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs rounded-full font-semibold">{requests.length}</span>}
           </button>
           <button onClick={() => setTab("history")}
-            className={`px-5 py-3.5 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${tab === "history" ? "border-emerald-400 text-emerald-400" : "border-transparent text-slate-500 hover:text-slate-300"}`}>
+            className={`px-3 sm:px-5 py-3.5 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${tab === "history" ? "border-emerald-400 text-emerald-400" : "border-transparent text-slate-500 hover:text-slate-300"}`}>
             ประวัติ
             {historyReqs.length > 0 && <span className="px-2 py-0.5 bg-white/10 text-slate-400 text-xs rounded-full">{historyReqs.length}</span>}
           </button>
         </div>
       </div>
 
-      <main className="relative z-10 max-w-6xl mx-auto px-6 py-6">
+      <main className="relative z-10 max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
         {error && <p className="text-red-400 mb-4 text-sm">{error}</p>}
 
         {/* ── Stock tab ── */}
@@ -279,6 +368,54 @@ export default function InvCentralPage() {
             if (!l.expiry_date) return false;
             return new Date(l.expiry_date) <= warn30Date;
           }).length;
+
+          // ── Filter options ────────────────────────────────────────
+          const cats  = Array.from(new Set(lots.map((l) => l.category).filter(Boolean))).sort();
+          const supps = Array.from(new Set(lots.map((l) => l.supplier).filter(Boolean))).sort();
+
+          // ── Apply filters ─────────────────────────────────────────
+          let displayLots = stockShowEmpty ? lots : lots.filter((l) => l.qty_remaining > 0);
+          if (stockQ) {
+            const q = stockQ.toLowerCase();
+            displayLots = displayLots.filter((l) =>
+              l.lot_id.toLowerCase().includes(q) ||
+              l.product_name.toLowerCase().includes(q) ||
+              (l.brand || "").toLowerCase().includes(q)
+            );
+          }
+          if (stockCat)  displayLots = displayLots.filter((l) => l.category === stockCat);
+          if (stockSupp) displayLots = displayLots.filter((l) => l.supplier === stockSupp);
+
+          // ── Apply sort ────────────────────────────────────────────
+          displayLots = [...displayLots].sort((a, b) => {
+            switch (stockSort) {
+              case "date_asc":  return a.lot_id.localeCompare(b.lot_id);
+              case "date_desc": return b.lot_id.localeCompare(a.lot_id);
+              case "name_asc":  return a.product_name.localeCompare(b.product_name, "th");
+              case "name_desc": return b.product_name.localeCompare(a.product_name, "th");
+              case "qty_asc":   return a.qty_remaining - b.qty_remaining;
+              case "qty_desc":  return b.qty_remaining - a.qty_remaining;
+              default: return 0;
+            }
+          });
+
+          // ── Sort header helper ────────────────────────────────────
+          function SortBtn({ asc, desc, label }: { asc: StockSort; desc: StockSort; label: string }) {
+            const active = stockSort === asc || stockSort === desc;
+            const isAsc  = stockSort === asc;
+            return (
+              <button
+                onClick={() => setStockSort(active ? (isAsc ? desc : asc) : desc)}
+                className={`flex items-center gap-1 group transition-colors ${active ? "text-emerald-400" : "text-slate-500 hover:text-slate-300"}`}>
+                {label}
+                <span className="flex flex-col gap-[1px] text-[8px] leading-none">
+                  <span className={active && isAsc ? "text-emerald-400" : "text-slate-600 group-hover:text-slate-500"}>▲</span>
+                  <span className={active && !isAsc ? "text-emerald-400" : "text-slate-600 group-hover:text-slate-500"}>▼</span>
+                </span>
+              </button>
+            );
+          }
+
           return (
           <>
           {/* KPI row */}
@@ -304,52 +441,157 @@ export default function InvCentralPage() {
             </div>
           </div>
 
+          {/* ── Filter bar ── */}
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            {/* Search */}
+            <div className="relative flex-1 min-w-[180px] max-w-xs">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/>
+              </svg>
+              <input
+                type="text"
+                value={stockQ}
+                onChange={(e) => setStockQ(e.target.value)}
+                placeholder="ค้นหา Lot ID / สินค้า..."
+                className="w-full bg-white/5 border border-white/10 text-white placeholder-slate-600 rounded-xl pl-9 pr-4 py-2 text-xs focus:outline-none focus:border-emerald-500/50 transition-all"
+              />
+            </div>
+
+            {/* Category */}
+            <select
+              value={stockCat}
+              onChange={(e) => setStockCat(e.target.value)}
+              className="bg-[#0d1526] border border-white/10 text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-emerald-500/50 transition-all min-w-[120px]"
+              style={{ color: stockCat ? "#fff" : "#475569" }}>
+              <option value="">หมวดทั้งหมด</option>
+              {cats.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+
+            {/* Supplier */}
+            <select
+              value={stockSupp}
+              onChange={(e) => setStockSupp(e.target.value)}
+              className="bg-[#0d1526] border border-white/10 text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-emerald-500/50 transition-all min-w-[140px]"
+              style={{ color: stockSupp ? "#fff" : "#475569" }}>
+              <option value="">Supplier ทั้งหมด</option>
+              {supps.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+
+            {/* Show empty toggle */}
+            <button
+              onClick={() => setStockShowEmpty((v) => !v)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-medium transition-all ${
+                stockShowEmpty
+                  ? "bg-slate-500/15 border-slate-500/30 text-slate-300"
+                  : "bg-white/5 border-white/10 text-slate-500 hover:text-slate-300 hover:border-white/20"
+              }`}>
+              <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 ${stockShowEmpty ? "bg-slate-400 border-slate-400" : "border-slate-600"}`}>
+                {stockShowEmpty && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>}
+              </span>
+              แสดง Lots หมด
+            </button>
+
+            {/* Active filter count + clear */}
+            {(stockQ || stockCat || stockSupp || stockShowEmpty) && (
+              <button
+                onClick={() => { setStockQ(""); setStockCat(""); setStockSupp(""); setStockShowEmpty(false); }}
+                className="px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium hover:bg-emerald-500/15 transition-all">
+                ล้างตัวกรอง
+              </button>
+            )}
+
+            {/* Result count */}
+            <span className="text-xs text-slate-500 ml-auto">
+              {displayLots.length} รายการ{displayLots.length !== lots.length ? ` / ${lots.length}` : ""}
+            </span>
+          </div>
+
           <div className="bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-[24px] overflow-hidden relative">
             <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-emerald-400/30 to-transparent" />
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-white/5">
-                    <th className="px-5 py-3.5">Lot ID</th>
-                    <th className="px-5 py-3.5">สินค้า</th>
-                    <th className="px-5 py-3.5">หมวด</th>
-                    <th className="px-5 py-3.5 text-right">คงเหลือ</th>
-                    <th className="px-5 py-3.5 text-right">ต้นฉบับ</th>
-                    <th className="px-5 py-3.5">หมดอายุ</th>
-                    <th className="px-5 py-3.5">Supplier</th>
-                    <th className="px-5 py-3.5"></th>
+                  <tr className="text-left text-xs uppercase tracking-wider border-b border-white/5">
+                    <th className="px-4 py-3.5">
+                      <SortBtn asc="date_asc" desc="date_desc" label="Lot ID" />
+                    </th>
+                    <th className="px-4 py-3.5">
+                      <SortBtn asc="name_asc" desc="name_desc" label="สินค้า" />
+                    </th>
+                    <th className="px-4 py-3.5 text-slate-500 hidden md:table-cell">หมวด</th>
+                    <th className="px-4 py-3.5 text-right">
+                      <SortBtn asc="qty_asc" desc="qty_desc" label="คงเหลือ" />
+                    </th>
+                    <th className="px-4 py-3.5 text-right text-slate-500 hidden sm:table-cell">ต้นฉบับ</th>
+                    <th className="px-4 py-3.5 text-slate-500 hidden sm:table-cell">หมดอายุ</th>
+                    <th className="px-4 py-3.5 text-slate-500 hidden md:table-cell">Supplier</th>
+                    <th className="px-4 py-3.5"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {lots.length === 0 ? (
-                    <tr><td colSpan={7} className="px-5 py-12 text-center text-slate-600">ยังไม่มีสต๊อคในคลังกลาง</td></tr>
-                  ) : lots.map((l) => {
+                  {displayLots.length === 0 ? (
+                    <tr><td colSpan={8} className="px-4 py-12 text-center text-slate-600">
+                      {lots.length === 0 ? "ยังไม่มีสต๊อคในคลังกลาง" : "ไม่พบรายการที่ตรงกับตัวกรอง"}
+                    </td></tr>
+                  ) : displayLots.map((l) => {
                     const expDate = l.expiry_date ? new Date(l.expiry_date) : null;
                     const isWarn  = expDate ? expDate <= warn30 : false;
                     const isEmpty = l.qty_remaining === 0;
                     return (
                       <tr key={l.lot_id} className={`border-t border-white/5 hover:bg-white/[0.03] transition-colors ${isEmpty ? "opacity-30" : ""}`}>
-                        <td className="px-5 py-3.5 font-mono text-xs text-emerald-400">{l.lot_id}</td>
-                        <td className="px-5 py-3.5">
-                          <p className="text-white font-medium">{l.product_name}</p>
+                        <td className="px-4 py-3.5 font-mono text-xs text-emerald-400">{l.lot_id}</td>
+                        <td className="px-4 py-3.5">
+                          <p className="text-white font-medium text-sm">{l.product_name}</p>
                           {l.brand && <p className="text-xs text-slate-500">{l.brand}</p>}
+                          {/* Mobile-only: show expiry inline */}
+                          {l.expiry_date && (
+                            <p className={`text-xs mt-0.5 sm:hidden ${isWarn ? "text-red-400" : "text-slate-600"}`}>{isWarn && "⚠ "}{l.expiry_date}</p>
+                          )}
                         </td>
-                        <td className="px-5 py-3.5 text-slate-500 text-xs">{l.category}</td>
-                        <td className="px-5 py-3.5 text-right">
+                        <td className="px-4 py-3.5 text-slate-500 text-xs hidden md:table-cell">{l.category}</td>
+                        <td className="px-4 py-3.5 text-right">
                           <span className={`font-bold text-base ${isEmpty ? "text-slate-600" : isWarn ? "text-amber-400" : "text-white"}`}>{l.qty_remaining}</span>
                           <span className="text-xs text-slate-500 ml-1">{l.unit}</span>
                         </td>
-                        <td className="px-5 py-3.5 text-right text-slate-600 text-xs">{l.qty_original}</td>
-                        <td className="px-5 py-3.5">
+                        <td className="px-4 py-3.5 text-right text-slate-600 text-xs hidden sm:table-cell">{l.qty_original}</td>
+                        <td className="px-4 py-3.5 hidden sm:table-cell">
                           {l.expiry_date ? (
                             <span className={`text-xs px-2.5 py-1 rounded-lg font-medium ${isWarn ? "bg-red-500/15 text-red-400 border border-red-500/20" : "bg-white/5 text-slate-400"}`}>
                               {isWarn && "⚠ "}{l.expiry_date}
                             </span>
                           ) : <span className="text-slate-600">—</span>}
                         </td>
-                        <td className="px-5 py-3.5 text-slate-500 text-xs">{l.supplier || "—"}</td>
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-2">
+                        <td className="px-4 py-3.5 text-slate-500 text-xs hidden md:table-cell">{l.supplier || "—"}</td>
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {/* จ่ายออก */}
+                            {!isEmpty && (
+                              <button
+                                onClick={() => {
+                                  setDispenseLot(l);
+                                  setDispenseForm({ branch_id: "", qty: l.qty_remaining.toString(), note: "" });
+                                  setDispenseMsg("");
+                                }}
+                                title="จ่ายออกไปสาขา"
+                                className="px-2 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/40 text-xs font-medium transition-all flex items-center gap-1">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                                <span className="hidden sm:inline">จ่ายออก</span>
+                              </button>
+                            )}
+                            {/* ยาหาย */}
+                            {!isEmpty && (
+                              <button
+                                onClick={() => {
+                                  setLostLot(l);
+                                  setLostForm({ qty: "1", note: "" });
+                                  setLostMsg("");
+                                }}
+                                title="บันทึกยาหาย"
+                                className="px-2 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 hover:border-red-500/40 text-xs font-medium transition-all flex items-center gap-1">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                                <span className="hidden sm:inline">ยาหาย</span>
+                              </button>
+                            )}
                             <button
                               onClick={() => {
                                 setEditLot(l);
@@ -360,12 +602,16 @@ export default function InvCentralPage() {
                                   supplier:      l.supplier,
                                 });
                               }}
-                              className="px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:bg-blue-500/15 hover:border-blue-500/20 hover:text-blue-400 text-xs transition-all">
-                              แก้ไข
+                              title="แก้ไข"
+                              className="px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:bg-blue-500/15 hover:border-blue-500/20 hover:text-blue-400 text-xs transition-all flex items-center gap-1">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                              <span className="hidden sm:inline">แก้ไข</span>
                             </button>
                             <button onClick={() => { setDeleteLot(l); setDeleteMsg(""); }}
-                              className="px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-600 hover:bg-red-500/15 hover:border-red-500/20 hover:text-red-400 text-xs transition-all">
-                              ลบ
+                              title="ลบ"
+                              className="px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-600 hover:bg-red-500/15 hover:border-red-500/20 hover:text-red-400 text-xs transition-all flex items-center gap-1">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                              <span className="hidden sm:inline">ลบ</span>
                             </button>
                           </div>
                         </td>
@@ -381,8 +627,70 @@ export default function InvCentralPage() {
         })()}
 
         {/* ── Pending Requests tab ── */}
-        {tab === "requests" && (
+        {tab === "requests" && (() => {
+          const reqBranches = Array.from(new Set(requests.map((r) => r.branch_name).filter(Boolean))).sort();
+
+          let dispReqs = requests;
+          if (reqQ) {
+            const q = reqQ.toLowerCase();
+            dispReqs = dispReqs.filter((r) =>
+              r.product_name.toLowerCase().includes(q) ||
+              r.branch_name.toLowerCase().includes(q) ||
+              r.request_id.toLowerCase().includes(q)
+            );
+          }
+          if (reqBranch) dispReqs = dispReqs.filter((r) => r.branch_name === reqBranch);
+          dispReqs = [...dispReqs].sort((a, b) => {
+            switch (reqSort) {
+              case "date_asc":  return a.requested_at.localeCompare(b.requested_at);
+              case "date_desc": return b.requested_at.localeCompare(a.requested_at);
+              case "name_asc":  return a.product_name.localeCompare(b.product_name, "th");
+              case "name_desc": return b.product_name.localeCompare(a.product_name, "th");
+              default: return 0;
+            }
+          });
+
+          return (
           <div className="space-y-3">
+            {/* Filter bar */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[180px] max-w-xs">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/>
+                </svg>
+                <input type="text" value={reqQ} onChange={(e) => setReqQ(e.target.value)}
+                  placeholder="ค้นหา สินค้า / สาขา / Request ID..."
+                  className="w-full bg-white/5 border border-white/10 text-white placeholder-slate-600 rounded-xl pl-9 pr-4 py-2 text-xs focus:outline-none focus:border-amber-500/50 transition-all" />
+              </div>
+              <select value={reqBranch} onChange={(e) => setReqBranch(e.target.value)}
+                className="bg-[#0d1526] border border-white/10 text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-amber-500/50 transition-all min-w-[130px]"
+                style={{ color: reqBranch ? "#fff" : "#475569" }}>
+                <option value="">สาขาทั้งหมด</option>
+                {reqBranches.map((b) => <option key={b} value={b}>{b}</option>)}
+              </select>
+              {/* Sort pills */}
+              <div className="flex gap-1">
+                {(["date_desc","date_asc","name_asc","name_desc"] as ReqSort[]).map((s) => {
+                  const labels: Record<ReqSort, string> = { date_desc: "ใหม่ก่อน", date_asc: "เก่าก่อน", name_asc: "A→Z", name_desc: "Z→A" };
+                  return (
+                    <button key={s} onClick={() => setReqSort(s)}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                        reqSort === s
+                          ? "bg-amber-500/15 border-amber-500/30 text-amber-300"
+                          : "bg-white/5 border-white/10 text-slate-500 hover:text-slate-300"
+                      }`}>{labels[s]}</button>
+                  );
+                })}
+              </div>
+              {(reqQ || reqBranch) && (
+                <button onClick={() => { setReqQ(""); setReqBranch(""); }}
+                  className="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-medium hover:bg-amber-500/15 transition-all">
+                  ล้างตัวกรอง
+                </button>
+              )}
+              <span className="text-xs text-slate-500 ml-auto">{dispReqs.length} คำขอ{dispReqs.length !== requests.length ? ` / ${requests.length}` : ""}</span>
+            </div>
+
             {requests.length === 0 ? (
               <div className="bg-white/[0.04] border border-white/10 rounded-[24px] px-6 py-16 text-center">
                 <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-3">
@@ -390,7 +698,11 @@ export default function InvCentralPage() {
                 </div>
                 <p className="text-slate-500">ไม่มีคำขอที่รอการอนุมัติ</p>
               </div>
-            ) : requests.map((req) => (
+            ) : dispReqs.length === 0 ? (
+              <div className="bg-white/[0.04] border border-white/10 rounded-[24px] px-6 py-12 text-center">
+                <p className="text-slate-500 text-sm">ไม่พบคำขอที่ตรงกับตัวกรอง</p>
+              </div>
+            ) : dispReqs.map((req) => (
               <div key={req.request_id} className="bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-[20px] p-5 relative overflow-hidden hover:bg-white/[0.06] transition-colors">
                 <div className="absolute top-0 left-6 right-6 h-px bg-gradient-to-r from-transparent via-amber-400/20 to-transparent" />
                 <div className="flex items-start justify-between gap-4">
@@ -430,63 +742,155 @@ export default function InvCentralPage() {
               </div>
             ))}
           </div>
-        )}
+          );
+        })()}
 
         {/* ── History tab ── */}
-        {tab === "history" && (
-          <div className="bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-[24px] overflow-hidden relative">
-            <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-            {historyReqs.length === 0 ? (
-              <p className="px-6 py-14 text-center text-slate-600">ยังไม่มีประวัติ</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-white/5">
-                      <th className="px-5 py-3.5">Request ID</th>
-                      <th className="px-5 py-3.5">สินค้า</th>
-                      <th className="px-5 py-3.5">สาขา</th>
-                      <th className="px-5 py-3.5 text-right">ขอ</th>
-                      <th className="px-5 py-3.5 text-right">อนุมัติ</th>
-                      <th className="px-5 py-3.5">Lot</th>
-                      <th className="px-5 py-3.5">สถานะ</th>
-                      <th className="px-5 py-3.5">วันที่</th>
-                      <th className="px-5 py-3.5"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {historyReqs.map((r) => (
-                      <tr key={r.request_id} className="border-t border-white/5 hover:bg-white/[0.02] transition-colors">
-                        <td className="px-5 py-3.5 font-mono text-xs text-slate-500">{r.request_id}</td>
-                        <td className="px-5 py-3.5 text-white font-medium">{r.product_name}</td>
-                        <td className="px-5 py-3.5 text-slate-400 text-xs">{r.branch_name}</td>
-                        <td className="px-5 py-3.5 text-right text-slate-400">{r.qty_requested} <span className="text-slate-600 text-xs">{r.unit}</span></td>
-                        <td className="px-5 py-3.5 text-right">
-                          {r.qty_approved
-                            ? <span className="text-emerald-400 font-semibold">{r.qty_approved} <span className="text-slate-600 text-xs font-normal">{r.unit}</span></span>
-                            : <span className="text-slate-600">—</span>}
-                        </td>
-                        <td className="px-5 py-3.5 font-mono text-xs text-slate-600">{r.lot_id || "—"}</td>
-                        <td className="px-5 py-3.5">
-                          <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold border ${statusBadge(r.status)}`}>{r.status}</span>
-                        </td>
-                        <td className="px-5 py-3.5 text-xs text-slate-600">{r.requested_at}</td>
-                        <td className="px-5 py-3.5">
-                          {r.status === "APPROVED" && (
-                            <button onClick={() => { setUndoReq(r); setUndoMsg(""); }}
-                              className="px-3 py-1.5 rounded-lg bg-slate-500/15 border border-slate-500/20 text-slate-400 hover:bg-orange-500/15 hover:border-orange-500/20 hover:text-orange-400 text-xs font-medium transition-all">
-                              ↩ Undo
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        {tab === "history" && (() => {
+          const histBranches  = Array.from(new Set(historyReqs.map((r) => r.branch_name).filter(Boolean))).sort();
+          const histStatuses  = Array.from(new Set(historyReqs.map((r) => r.status).filter(Boolean))).sort();
+
+          let dispHist = historyReqs;
+          if (histQ) {
+            const q = histQ.toLowerCase();
+            dispHist = dispHist.filter((r) =>
+              r.product_name.toLowerCase().includes(q) ||
+              r.branch_name.toLowerCase().includes(q) ||
+              r.request_id.toLowerCase().includes(q) ||
+              (r.lot_id || "").toLowerCase().includes(q)
+            );
+          }
+          if (histBranch) dispHist = dispHist.filter((r) => r.branch_name === histBranch);
+          if (histStatus) dispHist = dispHist.filter((r) => r.status.toUpperCase() === histStatus.toUpperCase());
+          dispHist = [...dispHist].sort((a, b) => {
+            switch (histSort) {
+              case "date_asc":  return a.requested_at.localeCompare(b.requested_at);
+              case "date_desc": return b.requested_at.localeCompare(a.requested_at);
+              case "name_asc":  return a.product_name.localeCompare(b.product_name, "th");
+              case "name_desc": return b.product_name.localeCompare(a.product_name, "th");
+              default: return 0;
+            }
+          });
+
+          return (
+          <div className="space-y-3">
+            {/* Filter bar */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[180px] max-w-xs">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/>
+                </svg>
+                <input type="text" value={histQ} onChange={(e) => setHistQ(e.target.value)}
+                  placeholder="ค้นหา สินค้า / สาขา / Lot ID..."
+                  className="w-full bg-white/5 border border-white/10 text-white placeholder-slate-600 rounded-xl pl-9 pr-4 py-2 text-xs focus:outline-none focus:border-white/30 transition-all" />
               </div>
-            )}
+              <select value={histBranch} onChange={(e) => setHistBranch(e.target.value)}
+                className="bg-[#0d1526] border border-white/10 text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-white/30 transition-all min-w-[130px]"
+                style={{ color: histBranch ? "#fff" : "#475569" }}>
+                <option value="">สาขาทั้งหมด</option>
+                {histBranches.map((b) => <option key={b} value={b}>{b}</option>)}
+              </select>
+              {/* Status chips */}
+              <div className="flex gap-1">
+                <button onClick={() => setHistStatus("")}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                    !histStatus ? "bg-white/10 border-white/20 text-white" : "bg-white/5 border-white/10 text-slate-500 hover:text-slate-300"
+                  }`}>ทั้งหมด</button>
+                {histStatuses.map((s) => {
+                  const colors: Record<string, string> = {
+                    APPROVED: "bg-emerald-500/15 border-emerald-500/30 text-emerald-300",
+                    REJECTED: "bg-red-500/15 border-red-500/30 text-red-300",
+                    REVERSED: "bg-slate-500/15 border-slate-500/30 text-slate-300",
+                  };
+                  const active = histStatus.toUpperCase() === s.toUpperCase();
+                  return (
+                    <button key={s} onClick={() => setHistStatus(active ? "" : s)}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                        active ? (colors[s.toUpperCase()] || "bg-white/10 border-white/20 text-white") : "bg-white/5 border-white/10 text-slate-500 hover:text-slate-300"
+                      }`}>{s}</button>
+                  );
+                })}
+              </div>
+              {/* Sort pills */}
+              <div className="flex gap-1">
+                {(["date_desc","date_asc","name_asc","name_desc"] as HistSort[]).map((s) => {
+                  const labels: Record<HistSort, string> = { date_desc: "ใหม่ก่อน", date_asc: "เก่าก่อน", name_asc: "A→Z", name_desc: "Z→A" };
+                  return (
+                    <button key={s} onClick={() => setHistSort(s)}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                        histSort === s
+                          ? "bg-white/10 border-white/20 text-white"
+                          : "bg-white/5 border-white/10 text-slate-500 hover:text-slate-300"
+                      }`}>{labels[s]}</button>
+                  );
+                })}
+              </div>
+              {(histQ || histBranch || histStatus) && (
+                <button onClick={() => { setHistQ(""); setHistBranch(""); setHistStatus(""); }}
+                  className="px-3 py-1.5 rounded-xl bg-white/8 border border-white/15 text-slate-300 text-xs font-medium hover:bg-white/12 transition-all">
+                  ล้างตัวกรอง
+                </button>
+              )}
+              <span className="text-xs text-slate-500 ml-auto">{dispHist.length} รายการ{dispHist.length !== historyReqs.length ? ` / ${historyReqs.length}` : ""}</span>
+            </div>
+
+            <div className="bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-[24px] overflow-hidden relative">
+              <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+              {historyReqs.length === 0 ? (
+                <p className="px-6 py-14 text-center text-slate-600">ยังไม่มีประวัติ</p>
+              ) : dispHist.length === 0 ? (
+                <p className="px-6 py-12 text-center text-slate-600 text-sm">ไม่พบรายการที่ตรงกับตัวกรอง</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-white/5">
+                        <th className="px-4 py-3.5 hidden sm:table-cell">Request ID</th>
+                        <th className="px-4 py-3.5">สินค้า</th>
+                        <th className="px-4 py-3.5">สาขา</th>
+                        <th className="px-4 py-3.5 text-right">ขอ</th>
+                        <th className="px-4 py-3.5 text-right hidden sm:table-cell">อนุมัติ</th>
+                        <th className="px-4 py-3.5 hidden md:table-cell">Lot</th>
+                        <th className="px-4 py-3.5">สถานะ</th>
+                        <th className="px-4 py-3.5 hidden sm:table-cell">วันที่</th>
+                        <th className="px-4 py-3.5"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dispHist.map((r) => (
+                        <tr key={r.request_id} className="border-t border-white/5 hover:bg-white/[0.02] transition-colors">
+                          <td className="px-4 py-3.5 font-mono text-xs text-slate-500 hidden sm:table-cell">{r.request_id}</td>
+                          <td className="px-4 py-3.5 text-white font-medium text-sm">{r.product_name}</td>
+                          <td className="px-4 py-3.5 text-slate-400 text-xs">{r.branch_name}</td>
+                          <td className="px-4 py-3.5 text-right text-slate-400">{r.qty_requested} <span className="text-slate-600 text-xs">{r.unit}</span></td>
+                          <td className="px-4 py-3.5 text-right hidden sm:table-cell">
+                            {r.qty_approved
+                              ? <span className="text-emerald-400 font-semibold">{r.qty_approved} <span className="text-slate-600 text-xs font-normal">{r.unit}</span></span>
+                              : <span className="text-slate-600">—</span>}
+                          </td>
+                          <td className="px-4 py-3.5 font-mono text-xs text-slate-600 hidden md:table-cell">{r.lot_id || "—"}</td>
+                          <td className="px-4 py-3.5">
+                            <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold border ${statusBadge(r.status)}`}>{r.status}</span>
+                          </td>
+                          <td className="px-4 py-3.5 text-xs text-slate-600 hidden sm:table-cell">{r.requested_at}</td>
+                          <td className="px-5 py-3.5">
+                            {r.status === "APPROVED" && (
+                              <button onClick={() => { setUndoReq(r); setUndoMsg(""); }}
+                                className="px-3 py-1.5 rounded-lg bg-slate-500/15 border border-slate-500/20 text-slate-400 hover:bg-orange-500/15 hover:border-orange-500/20 hover:text-orange-400 text-xs font-medium transition-all">
+                                ↩ Undo
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
-        )}
+          );
+        })()}
       </main>
 
       {/* ── Approve Modal ── */}
@@ -908,6 +1312,203 @@ export default function InvCentralPage() {
           </div>
         </div>
       )}
+
+      {/* ══ LOST MODAL (ยาหาย) ═══════════════════════════════════════════════ */}
+      {lostLot && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={(e) => { if (e.target === e.currentTarget && !lostSaving) setLostLot(null); }}>
+          <div className="bg-[#0d1526] border border-white/10 rounded-[28px] w-full max-w-md p-6 relative overflow-hidden shadow-2xl">
+            <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-red-400/30 to-transparent" />
+
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="text-white font-bold flex items-center gap-2">
+                  <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                  บันทึกยาหาย
+                </h3>
+                <p className="text-slate-500 text-xs mt-0.5">ตัดสต๊อคออกจากคลังกลาง + บันทึก log</p>
+              </div>
+              <button onClick={() => setLostLot(null)} disabled={lostSaving}
+                className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-all">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+
+            {/* Lot summary */}
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-5 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Lot</span>
+                <span className="font-mono text-emerald-400">{lostLot.lot_id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">สินค้า</span>
+                <span className="text-white font-semibold">{lostLot.product_name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">คงเหลือ</span>
+                <span className="text-white font-bold">{lostLot.qty_remaining} {lostLot.unit}</span>
+              </div>
+            </div>
+
+            <div className="space-y-4 mb-5">
+              <div>
+                <label className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1.5 block">
+                  จำนวนที่หาย ({lostLot.unit}) * <span className="text-slate-600 font-normal normal-case">สูงสุด {lostLot.qty_remaining}</span>
+                </label>
+                <input
+                  type="number" min="1" max={lostLot.qty_remaining}
+                  value={lostForm.qty}
+                  onChange={(e) => setLostForm({ ...lostForm, qty: e.target.value })}
+                  className={inputCls}
+                />
+                {Number(lostForm.qty) > lostLot.qty_remaining && (
+                  <p className="text-red-400 text-xs mt-1">❌ เกินจำนวนที่มีใน Lot</p>
+                )}
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1.5 block">สาเหตุ / หมายเหตุ *</label>
+                <input
+                  type="text"
+                  value={lostForm.note}
+                  onChange={(e) => setLostForm({ ...lostForm, note: e.target.value })}
+                  placeholder="เช่น ของหายระหว่างขนส่ง, นับสต๊อคไม่ตรง..."
+                  className={inputCls}
+                />
+              </div>
+            </div>
+
+            {lostMsg && (
+              <p className={`mb-4 text-sm px-4 py-2.5 rounded-xl border ${
+                lostMsg.startsWith("✓") ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                : "bg-red-500/10 text-red-400 border-red-500/20"
+              }`}>{lostMsg}</p>
+            )}
+
+            <div className="flex gap-3">
+              <button onClick={() => setLostLot(null)} disabled={lostSaving}
+                className="flex-1 py-2.5 bg-white/5 border border-white/10 text-slate-400 rounded-xl text-sm font-semibold hover:bg-white/10 disabled:opacity-40 transition-all">
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleLost}
+                disabled={lostSaving || !lostForm.qty || Number(lostForm.qty) <= 0 || Number(lostForm.qty) > lostLot.qty_remaining || !lostForm.note.trim()}
+                className="flex-1 py-2.5 bg-gradient-to-r from-red-500 to-rose-400 text-white rounded-xl text-sm font-semibold hover:opacity-90 disabled:opacity-40 transition-all">
+                {lostSaving ? "กำลังบันทึก..." : "⚠ ยืนยันยาหาย"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ DISPENSE MODAL ════════════════════════════════════════════════════ */}
+      {dispenseLot && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={(e) => { if (e.target === e.currentTarget && !dispensing) setDispenseLot(null); }}>
+          <div className="bg-[#0d1526] border border-white/10 rounded-[28px] w-full max-w-md p-6 relative overflow-hidden shadow-2xl">
+            <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-emerald-400/30 to-transparent" />
+
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="text-white font-bold">จ่ายออกสู่สาขา</h3>
+                <p className="text-slate-500 text-xs mt-0.5">จ่ายตรงโดยไม่ต้องรอ Request</p>
+              </div>
+              <button onClick={() => setDispenseLot(null)} disabled={dispensing}
+                className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-all">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+
+            {/* Lot summary */}
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-5 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Lot</span>
+                <span className="font-mono text-emerald-400">{dispenseLot.lot_id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">สินค้า</span>
+                <span className="text-white font-semibold">{dispenseLot.product_name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">คงเหลือ</span>
+                <span className="text-white font-bold">{dispenseLot.qty_remaining} {dispenseLot.unit}</span>
+              </div>
+              {dispenseLot.expiry_date && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">หมดอายุ</span>
+                  <span className="text-slate-300">{dispenseLot.expiry_date}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-4 mb-5">
+              {/* Branch select */}
+              <div>
+                <label className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1.5 block">สาขาปลายทาง *</label>
+                <select
+                  value={dispenseForm.branch_id}
+                  onChange={(e) => setDispenseForm({ ...dispenseForm, branch_id: e.target.value })}
+                  className={`${selectCls} ${!dispenseForm.branch_id ? "text-slate-600" : ""}`}>
+                  <option value="">— เลือกสาขา —</option>
+                  {branches.map((b) => (
+                    <option key={b.branchId} value={b.branchId}>{b.branchName}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Qty */}
+              <div>
+                <label className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1.5 block">
+                  จำนวน ({dispenseLot.unit}) * <span className="text-slate-600 font-normal normal-case">สูงสุด {dispenseLot.qty_remaining}</span>
+                </label>
+                <input
+                  type="number" min="1" max={dispenseLot.qty_remaining}
+                  value={dispenseForm.qty}
+                  onChange={(e) => setDispenseForm({ ...dispenseForm, qty: e.target.value })}
+                  className={inputCls}
+                />
+                {Number(dispenseForm.qty) > dispenseLot.qty_remaining && (
+                  <p className="text-red-400 text-xs mt-1">❌ เกินจำนวนที่มีใน Lot</p>
+                )}
+              </div>
+
+              {/* Note */}
+              <div>
+                <label className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1.5 block">หมายเหตุ</label>
+                <input
+                  type="text"
+                  value={dispenseForm.note}
+                  onChange={(e) => setDispenseForm({ ...dispenseForm, note: e.target.value })}
+                  placeholder="หมายเหตุ (ถ้ามี)"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+
+            {dispenseMsg && (
+              <p className={`mb-4 text-sm px-4 py-2.5 rounded-xl border ${
+                dispenseMsg.startsWith("✓") ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                : "bg-red-500/10 text-red-400 border-red-500/20"
+              }`}>{dispenseMsg}</p>
+            )}
+
+            <div className="flex gap-3">
+              <button onClick={() => setDispenseLot(null)} disabled={dispensing}
+                className="flex-1 py-2.5 bg-white/5 border border-white/10 text-slate-400 rounded-xl text-sm font-semibold hover:bg-white/10 disabled:opacity-40 transition-all">
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleDispense}
+                disabled={dispensing || !dispenseForm.branch_id || !dispenseForm.qty || Number(dispenseForm.qty) <= 0 || Number(dispenseForm.qty) > dispenseLot.qty_remaining}
+                className="flex-1 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-400 text-white rounded-xl text-sm font-semibold hover:opacity-90 disabled:opacity-40 transition-all flex items-center justify-center gap-2"
+                style={{ boxShadow: "0 4px 16px rgba(16,185,129,0.25)" }}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                {dispensing ? "กำลังจ่าย..." : "ยืนยันจ่ายออก"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <QuickNavDemo isOpen={navOpen} onClose={() => setNavOpen(false)} />
     </div>
   );
 }

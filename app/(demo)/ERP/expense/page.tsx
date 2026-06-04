@@ -4,6 +4,7 @@ import { useEffect, useRef, useMemo, useState, useCallback, Suspense } from "rea
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ImageUpload from "@/app/components/ImageUpload";
+import QuickNavDemo, { QuickNavDemoTrigger } from "@/app/components/QuickNavDemo";
 
 interface FormField {
   fieldName:   string;
@@ -49,6 +50,8 @@ function ExpensePage() {
   const sheetName     = searchParams.get("sheetName")     || "Expense_Data";
   const histSheetName = searchParams.get("histSheet")     || "Expense Transaction";
   const moduleTitle   = searchParams.get("title")         || "ค่าใช้จ่าย";
+
+  const [navOpen, setNavOpen] = useState(false);
 
   // ── Branch state ─────────────────────────────────────────────────────────────
   const [branchId,          setBranchId]          = useState<string | null>(null);
@@ -828,6 +831,7 @@ function ExpensePage() {
       <div className="relative z-20 bg-white/[0.02] backdrop-blur-xl border-b border-white/5 sticky top-0">
         <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex items-center h-14 gap-3">
+            <QuickNavDemoTrigger onClick={() => setNavOpen(true)} />
             <button onClick={() => router.push("/ERP/home-demo")}
               className="p-2 hover:bg-white/10 rounded-xl transition-colors shrink-0">
               <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1799,6 +1803,7 @@ function ExpensePage() {
           </div>
         </div>
       )}
+      <QuickNavDemo isOpen={navOpen} onClose={() => setNavOpen(false)} />
     </div>
   );
 }

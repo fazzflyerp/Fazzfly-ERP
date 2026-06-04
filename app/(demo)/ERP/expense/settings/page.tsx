@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import QuickNavDemo, { QuickNavDemoTrigger } from "@/app/components/QuickNavDemo";
 
 interface FeeConfigItem {
   field_name: string;
@@ -32,6 +33,7 @@ function SettingsPage() {
   const configNameParam = searchParams.get("configName")       || "";
   const salesConfigName = searchParams.get("salesConfigName")  || "Helper_Sales_config";
 
+  const [navOpen, setNavOpen] = useState(false);
   const [userRole,    setUserRole]    = useState<string>("STAFF");
   const [allBranches, setAllBranches] = useState<{ branchId: string; branchName: string }[]>([]);
   const [branches,    setBranches]    = useState<BranchConfig[]>([]);
@@ -189,6 +191,7 @@ function SettingsPage() {
 
       {/* ── Sticky top bar ─────────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-20 h-14 bg-[#070d1f]/95 backdrop-blur border-b border-white/[0.06] flex items-center px-4 gap-3">
+        <QuickNavDemoTrigger onClick={() => setNavOpen(true)} />
         <button
           onClick={() => router.push(backUrl)}
           className="p-2 rounded-xl hover:bg-white/10 transition-colors text-slate-400 hover:text-white">
@@ -307,6 +310,7 @@ function SettingsPage() {
           />
         ))}
       </div>
+      <QuickNavDemo isOpen={navOpen} onClose={() => setNavOpen(false)} />
     </div>
   );
 }

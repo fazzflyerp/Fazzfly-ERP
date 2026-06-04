@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import Link from "next/link";
+import QuickNavDemo, { QuickNavDemoTrigger } from "@/app/components/QuickNavDemo";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 interface CalcResult {
@@ -276,6 +277,7 @@ function PayrollBranchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const [navOpen, setNavOpen] = useState(false);
   const [activeSheetId,      setActiveSheetId]      = useState(searchParams.get("spreadsheetId") || "");
   const [activeSalesSheetId, setActiveSalesSheetId] = useState(searchParams.get("salesSpreadsheetId") || searchParams.get("spreadsheetId") || "");
   const [activeSalesSheet,   setActiveSalesSheet]   = useState(searchParams.get("salesSheetName") || "Helper");
@@ -447,6 +449,7 @@ function PayrollBranchContent() {
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-1">
+            <QuickNavDemoTrigger onClick={() => setNavOpen(true)} />
             <button
               onClick={() => router.push("/ERP/home-demo")}
               className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-colors"
@@ -812,6 +815,7 @@ function PayrollBranchContent() {
         )}
       </div>
     </div>
+    <QuickNavDemo isOpen={navOpen} onClose={() => setNavOpen(false)} />
   </>);
 }
 

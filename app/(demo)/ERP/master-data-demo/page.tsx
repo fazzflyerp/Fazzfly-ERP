@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import QuickNavDemo, { QuickNavDemoTrigger } from "@/app/components/QuickNavDemo";
 
 interface Field {
   fieldName: string;
@@ -45,6 +46,7 @@ export default function MasterDataDemoPage() {
   const moduleName    = sp.get("moduleName")     || "จัดการข้อมูล";
   const defaultTab    = sp.get("tab") === "add" ? "add" : "edit";
 
+  const [navOpen, setNavOpen] = useState(false);
   const [tab, setTab]           = useState<"add" | "edit">(defaultTab as "add" | "edit");
   const [fields, setFields]     = useState<Field[]>([]);
   const [helpers, setHelpers]   = useState<Record<string, { value: string; label: string }[]>>({});
@@ -311,6 +313,7 @@ export default function MasterDataDemoPage() {
       {/* Top Bar */}
       <div className="bg-[#0d1425]/90 backdrop-blur-xl border-b border-white/10 sticky top-0 z-30">
         <div className="px-4 h-16 flex items-center gap-4">
+          <QuickNavDemoTrigger onClick={() => setNavOpen(true)} />
           <Link href="/ERP/home-demo" className="p-2 hover:bg-white/10 rounded-lg transition-colors">
             <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -514,6 +517,7 @@ export default function MasterDataDemoPage() {
           </div>
         </div>
       )}
+      <QuickNavDemo isOpen={navOpen} onClose={() => setNavOpen(false)} />
     </div>
   );
 }

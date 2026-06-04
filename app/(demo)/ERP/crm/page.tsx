@@ -31,6 +31,7 @@ import {
 import CalTab    from "./tabs/CalTab";
 import CustTab   from "./tabs/CustTab";
 import FollowTab from "./tabs/FollowTab";
+import QuickNavDemo, { QuickNavDemoTrigger } from "@/app/components/QuickNavDemo";
 
 // ── Demo API paths ─────────────────────────────────────────────────────────────
 const APT_API    = "/api/crm-demo/appointments";
@@ -345,6 +346,7 @@ function CRMDemoPage() {
     followSid:  urlSpreadsheet, followSheet: "followup_tasks",
     txSid:      "",             txSheet:     "Sales Transactions", txConfig: "Sales_Config",
   });
+  const [navOpen, setNavOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [draftCfg,     setDraftCfg]     = useState<CRMConfig>(cfg);
 
@@ -691,6 +693,7 @@ function CRMDemoPage() {
         <div className="max-w-7xl mx-auto px-4 lg:px-6 h-14 flex items-center justify-between gap-4">
           {/* Left: back + title */}
           <div className="flex items-center gap-2">
+            <QuickNavDemoTrigger onClick={() => setNavOpen(true)} />
             <button onClick={() => router.back()} title="ย้อนกลับ"
               className="w-8 h-8 rounded-xl bg-white/[0.06] hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors flex-shrink-0">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg>
@@ -909,6 +912,7 @@ function CRMDemoPage() {
         branchId={activeBranchId}
         isSuperAdmin={isSuperAdmin} allBranches={allBranches} activeBranchName={activeBranchName}
         onSave={saveFollow} />
+      <QuickNavDemo isOpen={navOpen} onClose={() => setNavOpen(false)} />
     </div>
   );
 }

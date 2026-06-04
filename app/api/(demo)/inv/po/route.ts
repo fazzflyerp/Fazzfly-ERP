@@ -1,21 +1,20 @@
 /**
  * GET    /api/inv/po — list all POs (Super Admin only)
- * POST   /api/inv/po — create PO
- * PATCH  /api/inv/po — action: approve | cancel | stock-in
- * DELETE /api/inv/po — delete PENDING or CANCELLED PO
+ * POST   /api/inv/po — create PO (สินค้า + จำนวน + ราคารวม เท่านั้น → PENDING)
+ * PATCH  /api/inv/po — action: approve | confirm | cancel | stock-in
  *
- * Payment methods:
- *   FULL    — ชำระเต็มจำนวนทันที
- *   NET     — เครดิต (ชำระครั้งเดียว + กำหนดวันครบ เช่น Net30)
- *   EQUAL   — ผ่อนเท่าๆ กัน (WAC standard)
- *   DEPOSIT — มัดจำ % ทันที + ส่วนที่เหลือหลัง n เดือน
- *   CUSTOM  — กำหนดจำนวนเงิน + วันครบกำหนดเองแต่ละงวด
+ * Flow: PENDING → (approve) → APPROVED → (confirm: payment+delivery) → ORDERED → (stock-in: expiry) → RECEIVED
+ *
+ * "confirm" action sets payment method + config + expected_delivery + optional signed_po_url
+ * and creates liabilities at that point.
  *
  * payment_config (JSON) stored at column AC (index 28):
  *   NET:     { net_days: 30 }
  *   EQUAL:   { installments: 6, interval_months: 1 }
  *   DEPOSIT: { deposit_pct: 30, interval_months: 1 }
  *   CUSTOM:  { installments: [{due_date, amount, note?}, ...] }
+ *
+ * Column AD (index 29) = signed_po_url
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -28,7 +27,7 @@ import { getInvAccess, genId, thaiTimestamp } from "@/lib/inv-access";
 import { recordStockLedger } from "@/lib/inv-stock-ledger";
 
 const PO_SHEET = "PO";
-const PO_RANGE = "PO!A:AC"; // 29 columns (A–AC)
+const PO_RANGE = "PO!A:AD"; // 30 columns (A–AD)
 const LIA_SHEET = "Liabilities";
 
 function parsePoRow(r: any[]) {
@@ -46,7 +45,7 @@ function parsePoRow(r: any[]) {
     cost_per_unit:          String(r[10] ?? ""),
     cost_total:             String(r[11] ?? ""),
     supplier_name:          String(r[12] ?? ""),
-    payment_method:         String(r[13] ?? "FULL"),
+    payment_method:         String(r[13] ?? ""),
     installments_count:     String(r[14] ?? "0"),
     amount_per_installment: String(r[15] ?? "0"),
     paid_amount:            String(r[16] ?? "0"),
@@ -62,6 +61,7 @@ function parsePoRow(r: any[]) {
     approved_by:            String(r[26] ?? ""),
     approved_at:            String(r[27] ?? ""),
     payment_config:         String(r[28] ?? ""),
+    signed_po_url:          String(r[29] ?? ""),
   };
 }
 
@@ -105,7 +105,7 @@ const PO_HEADERS = [
   "qty_ordered","qty_unit","cost_per_unit","cost_total","supplier_name","payment_method",
   "installments_count","amount_per_installment","paid_amount","outstanding_amount",
   "expected_delivery","received_date","lot_id","expiry_date","status","note",
-  "created_by","created_at","approved_by","approved_at","payment_config",
+  "created_by","created_at","approved_by","approved_at","payment_config","signed_po_url",
 ];
 
 const LIA_HEADERS = [
@@ -132,8 +132,8 @@ async function ensureSheet(sid: string, sheetName: string, headers: string[], la
   }
 }
 
-const ensurePoSheet  = (sid: string) => ensureSheet(sid, PO_SHEET,   PO_HEADERS,   "AC");
-const ensureLiaSheet = (sid: string) => ensureSheet(sid, LIA_SHEET,  LIA_HEADERS,  "J");
+const ensurePoSheet   = (sid: string) => ensureSheet(sid, PO_SHEET,   PO_HEADERS,   "AD");
+const ensureLiaSheet  = (sid: string) => ensureSheet(sid, LIA_SHEET,  LIA_HEADERS,  "J");
 const ensureLotsSheet = (sid: string) => ensureSheet(sid, LOTS_SHEET, LOTS_HEADERS, "P");
 
 async function auth(request: NextRequest) {
@@ -158,7 +158,6 @@ export async function GET(request: NextRequest) {
     } catch (err: any) {
       const msg = String(err?.message ?? err);
       if (!msg.includes("Unable to parse range") && !msg.includes("not found")) throw err;
-      // Sheet not yet created — return empty list
     }
     const pos = rows.slice(1).filter((r) => r[0]).map(parsePoRow);
     return NextResponse.json({ pos });
@@ -167,23 +166,15 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// ─── POST: create PO (minimal fields only) ───────────────────────────────────
 export async function POST(request: NextRequest) {
   try {
     const ctx = await auth(request);
     if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await request.json();
-    const {
-      product_id, product_name, category, brand, unit, unit_pkg, qty_per_pkg,
-      qty_ordered, cost_total, supplier_name,
-      payment_method    = "FULL",
-      net_days          = 30,
-      installments_count = 3,
-      interval_months   = 1,
-      deposit_pct       = 30,
-      custom_installments = [],
-      expected_delivery, note,
-    } = body;
+    const { product_id, product_name, category, brand, unit, unit_pkg, qty_per_pkg,
+            qty_ordered, cost_total, supplier_name, note } = body;
 
     if (!product_name || !qty_ordered || !cost_total)
       return NextResponse.json({ error: "กรุณากรอก: product_name, qty_ordered, cost_total" }, { status: 400 });
@@ -199,49 +190,7 @@ export async function POST(request: NextRequest) {
     const costTotal   = Number(cost_total);
     const costPerUnit = qtyUnit > 0 ? costTotal / qtyUnit : 0;
 
-    // ── Build payment_config + effective installments ─────────────
-    let paymentConfig: any    = {};
-    let effectiveInstCount    = 0;
-    let effectiveAmtPerInst   = 0;
-
-    switch (payment_method) {
-      case "NET": {
-        const nd = Math.max(1, Number(net_days) || 30);
-        paymentConfig         = { net_days: nd };
-        effectiveInstCount    = 1;
-        effectiveAmtPerInst   = costTotal;
-        break;
-      }
-      case "EQUAL":
-      case "INSTALLMENT": {
-        const ic = Math.max(1, Number(installments_count) || 1);
-        const im = Math.max(1, Number(interval_months)    || 1);
-        paymentConfig         = { installments: ic, interval_months: im };
-        effectiveInstCount    = ic;
-        effectiveAmtPerInst   = Math.round((costTotal / ic) * 100) / 100;
-        break;
-      }
-      case "DEPOSIT": {
-        const dp = Math.min(99, Math.max(1, Number(deposit_pct)   || 30));
-        const im = Math.max(1,              Number(interval_months) || 1);
-        paymentConfig         = { deposit_pct: dp, interval_months: im };
-        effectiveInstCount    = 2;
-        effectiveAmtPerInst   = Math.round((costTotal * dp / 100) * 100) / 100;
-        break;
-      }
-      case "CUSTOM":
-      case "PARTIAL": {
-        const schedule        = Array.isArray(custom_installments) ? custom_installments : [];
-        paymentConfig         = { installments: schedule };
-        effectiveInstCount    = schedule.length;
-        effectiveAmtPerInst   = schedule.length > 0 ? Number(schedule[0].amount) : 0;
-        break;
-      }
-      default: // FULL
-        break;
-    }
-
-    await saAppendRow(sid, `${PO_SHEET}!A:AC`, [
+    await saAppendRow(sid, `${PO_SHEET}!A:AD`, [
       poId,
       product_id       ?? "",
       product_name,
@@ -255,22 +204,23 @@ export async function POST(request: NextRequest) {
       costPerUnit,
       costTotal,
       supplier_name    ?? "",
-      payment_method,
-      effectiveInstCount,
-      effectiveAmtPerInst,
-      0,          // paid_amount
-      costTotal,  // outstanding_amount
-      expected_delivery ?? "",
-      "",         // received_date
-      "",         // lot_id
-      "",         // expiry_date
+      "",   // payment_method (set at confirm)
+      0,    // installments_count
+      0,    // amount_per_installment
+      0,    // paid_amount
+      costTotal, // outstanding_amount
+      "",   // expected_delivery (set at confirm)
+      "",   // received_date
+      "",   // lot_id
+      "",   // expiry_date
       "PENDING",
       note ?? "",
       ctx.email,
       ts,
-      "",         // approved_by
-      "",         // approved_at
-      Object.keys(paymentConfig).length > 0 ? JSON.stringify(paymentConfig) : "",
+      "",   // approved_by
+      "",   // approved_at
+      "",   // payment_config (set at confirm)
+      "",   // signed_po_url (set at confirm)
     ]);
 
     saInvalidateCache(sid);
@@ -280,13 +230,14 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// ─── PATCH: approve | confirm | cancel | stock-in ────────────────────────────
 export async function PATCH(request: NextRequest) {
   try {
     const ctx = await auth(request);
     if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await request.json();
-    const { po_id, action, expiry_date, note } = body;
+    const { po_id, action } = body;
     if (!po_id || !action) return NextResponse.json({ error: "po_id and action required" }, { status: 400 });
 
     const sid = ctx.sid;
@@ -297,88 +248,125 @@ export async function PATCH(request: NextRequest) {
     if (rowIdx < 1) return NextResponse.json({ error: "PO not found" }, { status: 404 });
 
     const row = [...rows[rowIdx]];
-    while (row.length < 29) row.push("");
+    while (row.length < 30) row.push("");
     const currentStatus = String(row[22] ?? "");
 
-    // ─── APPROVE ──────────────────────────────────────────────────
+    // ─── APPROVE: PENDING → APPROVED ─────────────────────────────────────
     if (action === "approve") {
       if (currentStatus !== "PENDING")
         return NextResponse.json({ error: "PO ต้องมีสถานะ PENDING เพื่ออนุมัติ" }, { status: 400 });
 
-      await ensureLiaSheet(sid);
+      row[22] = "APPROVED";
+      row[26] = ctx.email;
+      row[27] = ts;
+      await saUpdateRow(sid, `${PO_SHEET}!A${rowIdx + 1}`, row);
+      saInvalidateCache(sid);
+      return NextResponse.json({ ok: true, po_id, status: "APPROVED" });
+    }
 
-      const paymentMethod = String(row[13] ?? "FULL");
-      const costTotal     = Number(row[11] ?? 0);
-      const supplierName  = String(row[12] ?? "");
-      const now           = bangkokNow();
-      const cfg           = parseConfig(String(row[28] ?? ""));
-      const liabRows: any[][] = [];
+    // ─── CONFIRM: APPROVED → ORDERED (ตั้งวิธีชำระ + สร้าง Liabilities) ──
+    if (action === "confirm") {
+      if (currentStatus !== "APPROVED")
+        return NextResponse.json({ error: "PO ต้องมีสถานะ APPROVED เพื่อยืนยันการสั่งซื้อ" }, { status: 400 });
 
-      switch (paymentMethod) {
+      const {
+        payment_method    = "FULL",
+        net_days          = 30,
+        installments_count = 3,
+        interval_months   = 1,
+        deposit_pct       = 30,
+        custom_installments = [],
+        expected_delivery = "",
+        signed_po_url     = "",
+      } = body;
+
+      const costTotal    = Number(row[11] ?? 0);
+      const supplierName = String(row[12] ?? "");
+      const now          = bangkokNow();
+
+      // Build payment_config
+      let paymentConfig: any = {};
+      let effectiveInstCount   = 0;
+      let effectiveAmtPerInst  = 0;
+
+      switch (payment_method) {
         case "NET": {
-          const netDays = Number(cfg.net_days ?? 30);
-          const liaId   = await genId("LIA", sid, LIA_SHEET);
-          liabRows.push([
-            liaId, po_id, supplierName, 1,
-            addDays(now, netDays),
-            costTotal,
-            "", "PENDING", `Net ${netDays} วัน`, ts,
-          ]);
+          const nd = Math.max(1, Number(net_days) || 30);
+          paymentConfig        = { net_days: nd };
+          effectiveInstCount   = 1;
+          effectiveAmtPerInst  = costTotal;
           break;
         }
         case "EQUAL":
         case "INSTALLMENT": {
-          const count      = Math.max(1, Number(cfg.installments ?? row[14] ?? 1));
-          const intervalMo = Math.max(1, Number(cfg.interval_months ?? 1));
-          const normalAmt  = Math.round((costTotal / count) * 100) / 100;
-          const lastAmt    = Math.round((costTotal - normalAmt * (count - 1)) * 100) / 100;
-          const baseId     = await genId("LIA", sid, LIA_SHEET);
-          const liaIds     = nextLiaIds(baseId, count);
-          liaIds.forEach((lid, i) => liabRows.push([
-            lid, po_id, supplierName, i + 1,
-            addMonths(now, (i + 1) * intervalMo),
-            i === count - 1 ? lastAmt : normalAmt,
-            "", "PENDING", "", ts,
-          ]));
+          const ic = Math.max(1, Number(installments_count) || 1);
+          const im = Math.max(1, Number(interval_months) || 1);
+          paymentConfig        = { installments: ic, interval_months: im };
+          effectiveInstCount   = ic;
+          effectiveAmtPerInst  = Math.round((costTotal / ic) * 100) / 100;
           break;
         }
         case "DEPOSIT": {
-          const depositPct = Number(cfg.deposit_pct   ?? 30);
-          const intervalMo = Number(cfg.interval_months ?? 1);
-          const depositAmt = Math.round((costTotal * depositPct / 100) * 100) / 100;
-          const remainAmt  = Math.round((costTotal - depositAmt) * 100) / 100;
-          const baseId     = await genId("LIA", sid, LIA_SHEET);
-          const [lid1, lid2] = nextLiaIds(baseId, 2);
-          liabRows.push([lid1, po_id, supplierName, 1, bangkokToday(), depositAmt, "", "PENDING", `มัดจำ ${depositPct}%`, ts]);
-          liabRows.push([lid2, po_id, supplierName, 2, addMonths(now, intervalMo), remainAmt, "", "PENDING", "ส่วนที่เหลือ", ts]);
+          const dp = Math.min(99, Math.max(1, Number(deposit_pct) || 30));
+          const im = Math.max(1, Number(interval_months) || 1);
+          paymentConfig        = { deposit_pct: dp, interval_months: im };
+          effectiveInstCount   = 2;
+          effectiveAmtPerInst  = Math.round((costTotal * dp / 100) * 100) / 100;
           break;
         }
         case "CUSTOM":
         case "PARTIAL": {
-          const schedule: any[] = cfg.installments ?? [];
+          const schedule       = Array.isArray(custom_installments) ? custom_installments : [];
+          paymentConfig        = { installments: schedule };
+          effectiveInstCount   = schedule.length;
+          effectiveAmtPerInst  = schedule.length > 0 ? Number(schedule[0].amount) : 0;
+          break;
+        }
+        default: // FULL
+          break;
+      }
+
+      // Create liabilities
+      await ensureLiaSheet(sid);
+      const liabRows: any[][] = [];
+
+      switch (payment_method) {
+        case "NET": {
+          const liaId = await genId("LIA", sid, LIA_SHEET);
+          liabRows.push([liaId, po_id, supplierName, 1, addDays(now, Number(net_days) || 30), costTotal, "", "PENDING", `Net ${net_days} วัน`, ts]);
+          break;
+        }
+        case "EQUAL":
+        case "INSTALLMENT": {
+          const count = Math.max(1, Number(installments_count) || 1);
+          const im    = Math.max(1, Number(interval_months) || 1);
+          const base  = Math.round((costTotal / count) * 100) / 100;
+          const last  = Math.round((costTotal - base * (count - 1)) * 100) / 100;
+          const baseId = await genId("LIA", sid, LIA_SHEET);
+          nextLiaIds(baseId, count).forEach((lid, i) =>
+            liabRows.push([lid, po_id, supplierName, i + 1, addMonths(now, (i + 1) * im), i === count - 1 ? last : base, "", "PENDING", "", ts])
+          );
+          break;
+        }
+        case "DEPOSIT": {
+          const dp = Number(deposit_pct) || 30;
+          const im = Number(interval_months) || 1;
+          const dAmt = Math.round((costTotal * dp / 100) * 100) / 100;
+          const remain = Math.round((costTotal - dAmt) * 100) / 100;
+          const baseId = await genId("LIA", sid, LIA_SHEET);
+          const [l1, l2] = nextLiaIds(baseId, 2);
+          liabRows.push([l1, po_id, supplierName, 1, bangkokToday(), dAmt, "", "PENDING", `มัดจำ ${dp}%`, ts]);
+          liabRows.push([l2, po_id, supplierName, 2, addMonths(now, im), remain, "", "PENDING", "ส่วนที่เหลือ", ts]);
+          break;
+        }
+        case "CUSTOM":
+        case "PARTIAL": {
+          const schedule: any[] = Array.isArray(custom_installments) ? custom_installments : [];
           if (schedule.length > 0) {
             const baseId = await genId("LIA", sid, LIA_SHEET);
-            const liaIds = nextLiaIds(baseId, schedule.length);
-            schedule.forEach((item: any, i: number) => liabRows.push([
-              liaIds[i], po_id, supplierName, i + 1,
-              item.due_date, Number(item.amount),
-              "", "PENDING", item.note || "", ts,
-            ]));
-          } else {
-            // fallback: equal installments from row[14]
-            const count = Number(row[14] ?? 0);
-            if (count > 0) {
-              const normalAmt = Math.round((costTotal / count) * 100) / 100;
-              const lastAmt   = Math.round((costTotal - normalAmt * (count - 1)) * 100) / 100;
-              const baseId    = await genId("LIA", sid, LIA_SHEET);
-              const liaIds    = nextLiaIds(baseId, count);
-              liaIds.forEach((lid, i) => liabRows.push([
-                lid, po_id, supplierName, i + 1,
-                addMonths(now, i + 1),
-                i === count - 1 ? lastAmt : normalAmt,
-                "", "PENDING", "", ts,
-              ]));
-            }
+            nextLiaIds(baseId, schedule.length).forEach((lid, i) =>
+              liabRows.push([lid, po_id, supplierName, i + 1, schedule[i].due_date, Number(schedule[i].amount), "", "PENDING", schedule[i].note || "", ts])
+            );
           }
           break;
         }
@@ -387,84 +375,82 @@ export async function PATCH(request: NextRequest) {
 
       if (liabRows.length > 0) await saAppendRows(sid, `${LIA_SHEET}!A:J`, liabRows);
 
-      // Update PO status AFTER liabilities are written (prevents stuck-APPROVED if LIA fails)
-      row[22] = "APPROVED";
-      row[26] = ctx.email;
-      row[27] = ts;
+      // Update PO row
+      row[13] = payment_method;
+      row[14] = effectiveInstCount;
+      row[15] = effectiveAmtPerInst;
+      row[18] = expected_delivery;
+      row[22] = "ORDERED";
+      row[28] = Object.keys(paymentConfig).length > 0 ? JSON.stringify(paymentConfig) : "";
+      row[29] = signed_po_url;
       await saUpdateRow(sid, `${PO_SHEET}!A${rowIdx + 1}`, row);
 
       saInvalidateCache(sid);
-      return NextResponse.json({ ok: true, po_id, status: "APPROVED", liabilities_created: liabRows.length });
+      return NextResponse.json({ ok: true, po_id, status: "ORDERED", liabilities_created: liabRows.length });
     }
 
-    // ─── CANCEL ───────────────────────────────────────────────────
+    // ─── CANCEL ───────────────────────────────────────────────────────────
     if (action === "cancel") {
-      if (!["PENDING", "APPROVED"].includes(currentStatus))
-        return NextResponse.json({ error: "ยกเลิกได้เฉพาะ PENDING หรือ APPROVED" }, { status: 400 });
-
+      if (!["PENDING", "APPROVED", "ORDERED"].includes(currentStatus))
+        return NextResponse.json({ error: "ยกเลิกได้เฉพาะ PENDING, APPROVED หรือ ORDERED" }, { status: 400 });
       row[22] = "CANCELLED";
-      if (note) row[23] = note;
+      if (body.note) row[23] = body.note;
       await saUpdateRow(sid, `${PO_SHEET}!A${rowIdx + 1}`, row);
       saInvalidateCache(sid);
       return NextResponse.json({ ok: true, po_id, status: "CANCELLED" });
     }
 
-    // ─── STOCK-IN ─────────────────────────────────────────────────
+    // ─── STOCK-IN: ORDERED → RECEIVED ────────────────────────────────────
     if (action === "stock-in") {
-      if (currentStatus !== "APPROVED")
-        return NextResponse.json({ error: "PO ต้องมีสถานะ APPROVED เพื่อรับสินค้า" }, { status: 400 });
-      if (!expiry_date)
+      if (currentStatus !== "ORDERED")
+        return NextResponse.json({ error: "PO ต้องมีสถานะ ORDERED เพื่อรับสินค้า" }, { status: 400 });
+      if (!body.expiry_date)
         return NextResponse.json({ error: "กรุณาระบุวันหมดอายุ (expiry_date)" }, { status: 400 });
 
-      const productId     = String(row[1]  ?? "");
-      const productName   = String(row[2]  ?? "");
-      const category      = String(row[3]  ?? "");
-      const brand         = String(row[4]  ?? "");
-      const unit          = String(row[5]  ?? "");
-      const unitPkg       = String(row[6]  ?? "");
-      const qtyPerPkg     = Number(row[7]  ?? 1);
-      const qtyUnit       = Number(row[9]  ?? 0);
-      const costTotal     = Number(row[11] ?? 0);
-      const supplierName  = String(row[12] ?? "");
+      const productId    = String(row[1]  ?? "");
+      const productName  = String(row[2]  ?? "");
+      const category     = String(row[3]  ?? "");
+      const brand        = String(row[4]  ?? "");
+      const unit         = String(row[5]  ?? "");
+      const unitPkg      = String(row[6]  ?? "");
+      const qtyPerPkg    = Number(row[7]  ?? 1);
+      const qtyUnit      = Number(row[9]  ?? 0);
+      const costTotal    = Number(row[11] ?? 0);
+      const supplierName = String(row[12] ?? "");
       const paymentMethod = String(row[13] ?? "FULL");
-      const costPerUnit   = qtyUnit > 0 ? costTotal / qtyUnit : 0;
-      const today         = bangkokToday();
+      const costPerUnit  = qtyUnit > 0 ? costTotal / qtyUnit : 0;
+      const today        = bangkokToday();
+
       await ensureLotsSheet(sid);
       const lotId = await genId("LOT", sid, LOTS_SHEET);
 
       await saAppendRow(sid, `${LOTS_SHEET}!A:P`, [
         lotId, productId, productName, category, brand, unit, unitPkg,
-        qtyPerPkg, qtyUnit, qtyUnit,   // qty_original, qty_remaining
-        expiry_date, today, po_id, supplierName, ts, costPerUnit,
+        qtyPerPkg, qtyUnit, qtyUnit,
+        body.expiry_date, today, po_id, supplierName, ts, costPerUnit,
       ]);
 
-      // Record ledger BEFORE updating PO status (prevents stuck-RECEIVED if ledger fails)
       await recordStockLedger({
         sid, productName, category, brand, unit,
         txnType: "IN", qty: qtyUnit, unitCost: costPerUnit,
         referenceId: po_id,
-        note: note || `รับเข้า Lot ${lotId}`,
+        note: body.note || `รับเข้า Lot ${lotId}`,
         createdBy: ctx.email,
       });
 
       row[19] = today;
       row[20] = lotId;
-      row[21] = expiry_date;
+      row[21] = body.expiry_date;
       row[22] = "RECEIVED";
-      if (note) row[23] = note;
-
-      if (paymentMethod === "FULL") {
-        row[16] = costTotal; // paid_amount
-        row[17] = 0;         // outstanding_amount
-      }
+      if (body.note) row[23] = body.note;
+      if (paymentMethod === "FULL") { row[16] = costTotal; row[17] = 0; }
 
       await saUpdateRow(sid, `${PO_SHEET}!A${rowIdx + 1}`, row);
-
       saInvalidateCache(sid);
       return NextResponse.json({ ok: true, po_id, lot_id: lotId, status: "RECEIVED" });
     }
 
-    return NextResponse.json({ error: "action ไม่ถูกต้อง: approve | cancel | stock-in" }, { status: 400 });
+    return NextResponse.json({ error: "action ไม่ถูกต้อง: approve | confirm | cancel | stock-in" }, { status: 400 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

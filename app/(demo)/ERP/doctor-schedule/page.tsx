@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import QuickNavDemo, { QuickNavDemoTrigger } from "@/app/components/QuickNavDemo";
 
 const THAI_MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 
@@ -59,6 +60,7 @@ function DoctorScheduleContent() {
 
   const spreadsheetId = searchParams.get("spreadsheetId") || "";
 
+  const [navOpen, setNavOpen] = useState(false);
   const [branchId,   setBranchId]   = useState<string | null>(null);
   const [branchName, setBranchName] = useState<string | null>(null);
   const [isCentral,  setIsCentral]  = useState(false);
@@ -195,6 +197,7 @@ function DoctorScheduleContent() {
 
         {/* Header */}
         <div className="mb-6 flex items-center gap-3">
+          <QuickNavDemoTrigger onClick={() => setNavOpen(true)} />
           <button onClick={() => spreadsheetId ? router.push(`/ERP/payroll-branch?spreadsheetId=${spreadsheetId}`) : router.back()}
             className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-colors">
             <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -349,6 +352,7 @@ function DoctorScheduleContent() {
           </>
         )}
       </div>
+      <QuickNavDemo isOpen={navOpen} onClose={() => setNavOpen(false)} />
     </div>
   );
 }
