@@ -198,6 +198,32 @@ function buildCards(modules: Module[]): ModuleCard[] {
       continue;
     }
 
+    // ── CRM ──────────────────────────────────────────────────────────
+    if (name.includes("CRM") || config.includes("CRM") || name === "APPOINTMENTS" || name === "CUSTOMERS") {
+      cards.push({
+        key:        m.moduleId,
+        group:      "CRM",
+        label:      m.moduleName || "CRM",
+        sublabel:   notes || "นัดหมาย · ลูกค้า · ติดตาม",
+        gradient:   "from-rose-500 to-pink-400",
+        shadowColor:"rgba(244,63,94,0.35)",
+        icon: (
+          <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+        ),
+        actions: [
+          {
+            label: "เปิด CRM",
+            href:  `/ERP/crm?spreadsheetId=${m.spreadsheetId}&aptSheet=${encodeURIComponent(m.sheetName || "appointments")}&title=${encodeURIComponent(m.moduleName || "CRM")}`,
+            primary: true,
+          },
+        ],
+      });
+      continue;
+    }
+
     // ── Generic fallback ─────────────────────────────────────────────
     cards.push({
       key:        m.moduleId,

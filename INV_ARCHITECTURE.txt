@@ -1,0 +1,240 @@
+================================================================
+INVENTORY SYSTEM ARCHITECTURE — FazzFly ERP
+================================================================
+วันที่สรุป: 2026-05-21
+================================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. OVERVIEW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ระบบสต๊อค 2 tier:
+  - คลังกลาง (Central)  → Super Admin จัดการเท่านั้น
+  - สต๊อคสาขา (Branch)  → แต่ละสาขาจัดการของตัวเอง
+
+Super Admin เห็นได้ทุก module ของทุกสาขา
+  มีแถบสลับสาขาด้านบน (Branch Switcher)
+
+สิทธิ์ตาม role:
+  SUPER_ADMIN → Purchase, Central Stock, Request Approval,
+                 ดู INV ทุกสาขา, Add Stock ทุกสาขา
+  BRANCH_MANAGER/STAFF → Add Stock (ขอของจากคลังกลาง),
+                          INV สาขาตัวเอง, Usage สาขาตัวเอง
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. WORKFLOW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[Purchase] Super Admin สั่งของเข้าคลังกลาง
+    └→ สร้าง Lot อัตโนมัติ (LOT-YYYYMMDD-XXX)
+       ระบุ expiry date + จำนวน + สินค้า
+    └→ เพิ่ม stock ใน INV_Central
+
+[Add Stock] สาขา ส่ง Request ขอสินค้าจากคลังกลาง
+    └→ เลือกสินค้า + จำนวนที่ต้องการ
+    └→ สถานะ: PENDING
+
+[Request Approval] Super Admin เห็น pending requests
+    └→ เลือก lot ที่จะส่ง (เห็น expiry แต่ละ lot)
+    └→ กรอกจำนวนที่อนุมัติ (อาจน้อยกว่าที่ขอ = partial ok)
+    └→ กด Approve → ตัด INV_Central + เพิ่ม INV_Branch
+       (expiry date ติดตามจาก lot ไปยังสาขา)
+    └→ หรือ Reject พร้อม note
+
+[INV - Branch Stock] สาขาดูสต๊อคตัวเองได้
+    └→ เห็น lot + expiry + จำนวนคงเหลือ
+    └→ แจ้งเตือนสินค้าใกล้หมดอายุ (กระดิ่ง)
+
+[Usage] สาขาบันทึกการใช้สินค้า
+    └→ เลือกสินค้า + จำนวน
+    └→ ระบบ FIFO อัตโนมัติ (lot หมดอายุก่อน ตัดก่อน)
+    └→ ตัด INV_Branch
+
+[Notification - กระดิ่ง]
+    └→ สาขาได้รับเมื่อ: request approved / rejected
+    └→ ทุกคนได้รับเมื่อ: สินค้าในสาขาตัวเองใกล้หมดอายุ (≤ 30 วัน)
+    └→ Super Admin ได้รับเมื่อ: มี pending request ใหม่
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. GOOGLE SHEETS STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Product Master อยู่ใน clients DB spreadsheet → sheet "Product"
+  (URL ดึงจาก clients DB ไม่ hardcode)
+
+---- CENTRAL SPREADSHEET (Super Admin's INV spreadsheet) ----
+
+[INV_Lots]  ← ทุก lot ที่เคย purchase
+  A  lot_id          LOT-20260521-001 (auto-gen)
+  B  product_id
+  C  product_name
+  D  unit
+  E  qty_original    จำนวนเมื่อ purchase
+  F  qty_remaining   จำนวนคงเหลือในคลังกลาง
+  G  expiry_date     YYYY-MM-DD
+  H  purchase_date   YYYY-MM-DD
+  I  purchase_id     ref ไปที่ INV_Purchase
+  J  created_at      Timestamp
+
+[INV_Purchase]  ← Super Admin only
+  A  purchase_id     PO-20260521-001 (auto-gen)
+  B  product_id
+  C  product_name
+  D  unit
+  E  qty
+  F  cost_per_unit
+  G  supplier
+  H  purchase_date
+  I  expiry_date     วันหมดอายุที่ระบุตอน purchase
+  J  lot_id          ← สร้างพร้อมกัน
+  K  status          ordered / received
+  L  created_at      Timestamp
+
+[INV_Request]  ← คำขอจากสาขา
+  A  request_id      REQ-20260521-001 (auto-gen)
+  B  branch_id
+  C  branch_name
+  D  product_id
+  E  product_name
+  F  unit
+  G  qty_requested
+  H  qty_approved    ← กรอกตอน approve (อาจน้อยกว่า G)
+  I  lot_id          ← เลือกตอน approve
+  J  expiry_date     ← ดึงจาก lot ตอน approve
+  K  status          PENDING / APPROVED / REJECTED
+  L  note
+  M  requested_by    email
+  N  requested_at    Timestamp
+  O  reviewed_by     email
+  P  reviewed_at     Timestamp
+
+[INV_Transfer]  ← log ทุก transfer ที่ approved แล้ว
+  A  transfer_id     TRF-20260521-001 (auto-gen)
+  B  request_id
+  C  branch_id
+  D  product_id
+  E  lot_id
+  F  expiry_date
+  G  qty
+  H  transferred_at  Timestamp
+
+---- BRANCH SPREADSHEET (แต่ละสาขา) ----
+
+[INV_Stock]  ← stock ปัจจุบันของสาขา แยก lot
+  A  stock_id        STK-20260521-001 (auto-gen)
+  B  product_id
+  C  product_name
+  D  unit
+  E  lot_id          ← ติดตามมาจาก central
+  F  qty_received
+  G  qty_remaining
+  H  expiry_date     ← ติดตามมาจาก lot
+  I  transfer_id     ref
+  J  received_at     Timestamp
+
+[INV_Usage]  ← log การใช้ FIFO
+  A  usage_id        USE-20260521-001 (auto-gen)
+  B  product_id
+  C  product_name
+  D  unit
+  E  lot_id          ← FIFO เลือกอัตโนมัติ
+  F  expiry_date
+  G  qty_used
+  H  used_by         nickname
+  I  note
+  J  used_at         Timestamp
+
+---- MASTER DB SPREADSHEET ----
+
+[INV_Notification]  ← กระดิ่ง
+  A  notif_id
+  B  target_email    (หรือ branch_id ถ้าแจ้งทั้งสาขา)
+  C  type            request_approved / request_rejected /
+                     expiry_warning / new_request
+  D  message
+  E  ref_id          request_id หรือ stock_id
+  F  is_read         FALSE / TRUE
+  G  created_at      Timestamp
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. PAGES (Next.js App Router)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/ERP/inv/purchase      Super Admin only
+                       สั่งซื้อของเข้าคลังกลาง + สร้าง lot
+
+/ERP/inv/central       Super Admin only
+                       ดูสต๊อคคลังกลาง + รายการ lot + expiry
+                       อนุมัติ/ปฏิเสธ request จากสาขา
+
+/ERP/inv/add-stock     Branch (+ Super Admin สลับสาขาได้)
+                       เลือกสินค้า + จำนวน → ส่ง request
+
+/ERP/inv/stock         ดูสต๊อคสาขา
+                       Super Admin → tab: Central / สาขา A / สาขา B
+                       Branch → เห็นแค่สาขาตัวเอง
+                       แสดง lot + expiry + คงเหลือ + แจ้งเตือนใกล้หมด
+
+/ERP/inv/usage         บันทึกการใช้สินค้า (FIFO auto)
+                       Branch (+ Super Admin สลับสาขาได้)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. API ROUTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/api/inv/purchase       GET list, POST create PO + lot
+/api/inv/lots           GET lots (กรอง by product / branch)
+/api/inv/request        GET list, POST create request (branch)
+/api/inv/approve        POST approve/reject (Super Admin)
+/api/inv/stock          GET stock levels (central or branch)
+/api/inv/usage          POST record usage (FIFO)
+/api/inv/notifications  GET unread, POST mark-read
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. AUTO-GEN ID FORMAT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+LOT-YYYYMMDD-XXX   (XXX = running number ต่อวัน)
+PO-YYYYMMDD-XXX
+REQ-YYYYMMDD-XXX
+TRF-YYYYMMDD-XXX
+STK-YYYYMMDD-XXX
+USE-YYYYMMDD-XXX
+
+วิธี gen: อ่าน sheet → นับ rows ที่มี prefix+วันนี้ → +1
+ถ้าไม่มีวันนี้เลย → เริ่มที่ 001
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. TIMESTAMP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ทุก sheet ที่มี workflow หรือ log ต้องมี Timestamp ครับ
+format: "DD/MM/YYYY HH:mm:ss" (Thai-friendly)
+เขียนจาก API ด้วย new Date() ตอน create/update row
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8. OPEN QUESTIONS (ต้องถามก่อน build แต่ละ module)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Q1: INV module ของสาขาแต่ละสาขา อยู่ใน spreadsheet เดียวกับ
+    HR Payroll หรือเป็น spreadsheet แยกต่างหาก?
+    (ส่งผลต่อว่า INV_Stock และ INV_Usage จะอยู่ใน sheet ไหน)
+
+Q2: Central INV spreadsheet คือ spreadsheet เดียวกับ
+    HR payroll ของ central หรือแยกใหม่?
+
+Q3: Product sheet ใน clients DB มีหัวคอลัมน์ว่าอะไรบ้าง?
+    (ต้องอ่านก่อน build)
+
+Q4: แจ้งเตือนใกล้หมดอายุ — เตือนกี่วันล่วงหน้า? (default 30 วัน?)
+
+Q5: Usage — ต้องการให้ระบุ "ใครใช้" (ชื่อพนักงาน) หรือแค่บันทึก
+    ว่าสาขาใช้ไป?
+================================================================

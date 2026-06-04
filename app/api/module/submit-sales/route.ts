@@ -101,6 +101,9 @@ async function insertRowsWithDateSort(params: {
       }
     }
 
+    // Safety: ห้ามเขียนทับ header row (row 1)
+    if (insertIndex < 2) insertIndex = lastRow + 1;
+
     if (insertIndex > currentRowCount) {
       const newRowCount = insertIndex + 100;
       await saStructuralBatchUpdate(spreadsheetId, [{

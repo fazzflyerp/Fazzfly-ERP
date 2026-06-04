@@ -5,7 +5,7 @@ import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
-const SYSTEMS = [
+const BASE_SYSTEMS = [
   {
     key: "erp",
     label: "Fazzfly ERP",
@@ -25,11 +25,11 @@ const SYSTEMS = [
     key: "crm",
     label: "Fazzfly CRM",
     sub: "ระบบบริหารลูกค้าสัมพันธ์",
-    route: "/CRM/home",
-    gradient: "from-purple-500 via-fuchsia-500 to-pink-400",
-    glowColor: "rgba(168,85,247,0.35)",
-    border: "border-purple-200/60",
-    demoLocked: true,
+    route: "", // ── set dynamically after fetching CRM config ──
+    gradient: "from-rose-500 via-pink-500 to-fuchsia-400",
+    glowColor: "rgba(244,63,94,0.35)",
+    border: "border-rose-200/60",
+    demoLocked: true, // ── unlocked dynamically if CRM config found ──
     icon: (
       <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -63,6 +63,7 @@ export default function SelectSystemDemoPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [systems, setSystems] = useState(BASE_SYSTEMS);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -73,7 +74,7 @@ export default function SelectSystemDemoPage() {
   useEffect(() => {
     if (!session) return;
     Promise.all([
-      fetch("/api/user/modules").then(async (r) => {
+      fetch("/api/user/modules-demo").then(async (r) => {
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
         return data;
@@ -84,6 +85,42 @@ export default function SelectSystemDemoPage() {
         setUserData({ clientName: modules.clientName || "Guest" });
         setBranchName(branch.branchName || null);
         setRole(branch.role || null);
+
+        // ── ดึง CRM config จาก client_crm sheet ────────────────────────
+        const clientId: string = modules.clientId || "";
+        if (clientId) {
+          fetch(`/api/crm/modules?clientId=${clientId}`)
+            .then(r => r.json())
+            .then(crm => {
+              if (!crm.hasCRM) return;
+              const aptSid  = crm.appointments?.spreadsheetId || "";
+              const custSid = crm.Master?.spreadsheetId       || "";
+              const flwSid  = crm.followup?.spreadsheetId     || "";
+              const aptSheet = crm.appointments?.sheetName    || "appointments";
+              const custSheet = crm.Master?.sheetName         || "Customers";
+              const flwSheet  = crm.followup?.sheetName       || "followup_tasks";
+              if (!aptSid) return;
+
+              const txSid    = crm.transaction?.spreadsheetId || "";
+              const txSheet  = crm.transaction?.sheetName     || "";
+              const txConfig = crm.transaction?.configName    || "Sales_Config";
+
+              const params = new URLSearchParams({ spreadsheetId: aptSid, aptSheet, clientId });
+              if (custSid && custSid !== aptSid) params.set("custSid",    custSid);
+              if (flwSid  && flwSid  !== aptSid) params.set("followSid",  flwSid);
+              if (custSheet !== "Customers")      params.set("custSheet",  custSheet);
+              if (flwSheet  !== "followup_tasks") params.set("followSheet",flwSheet);
+              if (txSid)   params.set("txSid",    txSid);
+              if (txSheet) params.set("txSheet",  txSheet);
+              if (txConfig && txConfig !== "Sales_Config") params.set("txConfig", txConfig);
+
+              const crmRoute = `/ERP/crm?${params.toString()}`;
+              setSystems(prev => prev.map(s =>
+                s.key === "crm" ? { ...s, route: crmRoute, demoLocked: false } : s
+              ));
+            })
+            .catch(() => { /* CRM ไม่มี config — ทิ้งไว้ locked */ });
+        }
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -201,7 +238,7 @@ export default function SelectSystemDemoPage() {
 
         {/* Cards */}
         <div className={`grid gap-5 w-full max-w-4xl transition-all duration-700 delay-150 sm:grid-cols-2 lg:grid-cols-3 ${mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-          {SYSTEMS.map((sys, i) => {
+          {systems.map((sys, i) => {
             const locked = sys.demoLocked;
             return locked ? (
               /* ── Locked card ── */

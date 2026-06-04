@@ -1,0 +1,140 @@
+/**
+ * GET  /api/crm-demo/photos?clientId=&action=root&branchName=&customerId=&customerName=
+ *      → หา/สร้าง customer root folder ใน CRM_Photos/{branchName}/{cust}
+ *
+ * GET  /api/crm-demo/photos?clientId=&action=list&folderId=
+ *      → list subfolders + image files
+ *
+ * POST /api/crm-demo/photos  (multipart/form-data)
+ *      fields: clientId, branchName, customerId, customerName, date, label, file
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import { getToken } from "next-auth/jwt";
+import { adminFindOrCreateFolder, adminDriveUpload, getAdminAccessToken } from "@/lib/admin-drive";
+
+const CRM_ROOT_NAME = "CRM_Photos";
+
+async function ensurePath(
+  clientId: string,
+  branchName: string,
+  customerId: string,
+  customerName: string,
+  date: string // YYYY-MM-DD
+): Promise<string> {
+  const [yyyy, mm, dd] = date.split("-");
+
+  // 1. CRM_Photos
+  const crmRoot = await adminFindOrCreateFolder(clientId, CRM_ROOT_NAME, "root");
+
+  // 2. {branchName}
+  const safeBranch   = branchName.replace(/[/\\?%*:|"<>]/g, "_") || "default";
+  const branchFolder = await adminFindOrCreateFolder(clientId, safeBranch, crmRoot);
+
+  // 3. {customerId}_{customerName}
+  const safeName   = `${customerId}_${customerName.replace(/[/\\?%*:|"<>]/g, "_")}`;
+  const custFolder = await adminFindOrCreateFolder(clientId, safeName, branchFolder);
+
+  // 4. YYYY → MM → DD
+  const yearFolder  = await adminFindOrCreateFolder(clientId, yyyy, custFolder);
+  const monthFolder = await adminFindOrCreateFolder(clientId, mm,   yearFolder);
+  const dayFolder   = await adminFindOrCreateFolder(clientId, dd,   monthFolder);
+
+  return dayFolder;
+}
+
+// ── GET ───────────────────────────────────────────────────────────────────────
+export async function GET(request: NextRequest) {
+  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+  if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const sp           = request.nextUrl.searchParams;
+  const clientId     = sp.get("clientId")     || "";
+  const action       = sp.get("action")       || "list";
+  const folderId     = sp.get("folderId")     || "";
+  const customerId   = sp.get("customerId")   || "";
+  const customerName = sp.get("customerName") || "";
+  const branchName   = sp.get("branchName")   || "default";
+
+  if (!clientId) return NextResponse.json({ error: "Missing clientId" }, { status: 400 });
+
+  try {
+    if (action === "root") {
+      if (!customerId) return NextResponse.json({ error: "Missing customerId" }, { status: 400 });
+      const crmRoot    = await adminFindOrCreateFolder(clientId, CRM_ROOT_NAME, "root");
+      const safeBranch = branchName.replace(/[/\\?%*:|"<>]/g, "_") || "default";
+      const branchF    = await adminFindOrCreateFolder(clientId, safeBranch, crmRoot);
+      const safeName   = `${customerId}_${customerName.replace(/[/\\?%*:|"<>]/g, "_")}`;
+      const custId     = await adminFindOrCreateFolder(clientId, safeName, branchF);
+      return NextResponse.json({ success: true, folderId: custId });
+    }
+
+    if (action === "list") {
+      if (!folderId) return NextResponse.json({ error: "Missing folderId" }, { status: 400 });
+      const accessToken = await getAdminAccessToken(clientId);
+      const q      = `'${folderId}' in parents and trashed=false`;
+      const fields = "files(id,name,mimeType,thumbnailLink,webViewLink,createdTime,size)";
+      const url    = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=${encodeURIComponent(fields)}&orderBy=name&pageSize=200`;
+
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!res.ok) throw new Error(`Drive list failed: ${await res.text()}`);
+
+      const data  = await res.json();
+      const files: any[] = data.files || [];
+
+      const folders = files.filter(f => f.mimeType === "application/vnd.google-apps.folder")
+        .map(f => ({ id: f.id, name: f.name }));
+      const images  = files.filter(f => f.mimeType?.startsWith("image/"))
+        .map(f => ({ id: f.id, name: f.name, mimeType: f.mimeType, thumbnailLink: f.thumbnailLink || null, webViewLink: f.webViewLink || null, createdTime: f.createdTime || null, size: f.size || null }));
+
+      return NextResponse.json({ success: true, folders, images });
+    }
+
+    return NextResponse.json({ error: `Unknown action "${action}"` }, { status: 400 });
+
+  } catch (err: any) {
+    console.error("❌ crm-demo/photos GET:", err.message);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+// ── POST ──────────────────────────────────────────────────────────────────────
+export async function POST(request: NextRequest) {
+  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+  if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    const form         = await request.formData();
+    const clientId     = (form.get("clientId")     as string) || "";
+    const branchName   = (form.get("branchName")   as string) || "default";
+    const customerId   = (form.get("customerId")   as string) || "";
+    const customerName = (form.get("customerName") as string) || "";
+    const date         = (form.get("date")         as string) || new Date().toISOString().slice(0, 10);
+    const label        = (form.get("label")        as string) || "photo";
+    const file         = form.get("file") as File | null;
+
+    if (!clientId)   return NextResponse.json({ error: "Missing clientId" }, { status: 400 });
+    if (!customerId) return NextResponse.json({ error: "Missing customerId" }, { status: 400 });
+    if (!file)       return NextResponse.json({ error: "Missing file" }, { status: 400 });
+
+    const dayFolderId = await ensurePath(clientId, branchName, customerId, customerName, date);
+
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer      = Buffer.from(arrayBuffer);
+    const ext         = file.name.split(".").pop() || "jpg";
+    const fileName    = `${Date.now()}_${label}.${ext}`;
+
+    const result = await adminDriveUpload({
+      clientId, fileName,
+      mimeType:       file.type || "image/jpeg",
+      buffer,
+      parentFolderId: dayFolderId,
+    });
+
+    return NextResponse.json({ success: true, fileId: result.fileId, webViewLink: result.webViewLink, fileName });
+
+  } catch (err: any) {
+    console.error("❌ crm-demo/photos POST:", err.message);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}

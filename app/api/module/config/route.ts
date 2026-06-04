@@ -41,12 +41,16 @@ async function _GET(request: NextRequest) {
       rows = await saReadRange(spreadsheetId, `${configName}!A1:K100`);
     } catch (error: any) {
       const httpStatus = error?.response?.status;
-      const msg = httpStatus === 404
+      const rawMsg     = (error.message ?? "").toString();
+      const isNotFound = httpStatus === 404
+        || rawMsg.includes("Unable to parse range")
+        || rawMsg.includes("not found");
+      const msg = isNotFound
         ? `ไม่พบ Sheet ชื่อ "${configName}" ใน Spreadsheet`
         : httpStatus === 403
         ? "Service Account ไม่มีสิทธิ์เข้าถึง Spreadsheet นี้"
-        : error.message;
-      console.error(`❌ [${requestId}] saReadRange failed (HTTP ${httpStatus ?? "?"}) :`, error.message);
+        : rawMsg;
+      console.error(`❌ [${requestId}] saReadRange failed (HTTP ${httpStatus ?? "?"}) :`, rawMsg);
       return NextResponse.json({ error: "Failed to fetch config", code: "FETCH_ERROR", message: msg }, { status: 500 });
     }
 
