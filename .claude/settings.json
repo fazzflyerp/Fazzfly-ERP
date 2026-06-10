@@ -3,7 +3,9 @@
     "allow": [
       "Bash(npm list *)",
       "Bash(npm i *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(grep -c \"error\\\\|Error\" /dev/null; npx tsc --noEmit --jsx react 2>&1 | grep \"page.tsx\" | head -10)",
+      "Read(//dev/**)"
     ]
   }
 }
