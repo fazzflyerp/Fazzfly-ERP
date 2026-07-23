@@ -171,7 +171,7 @@ function Hero() {
           >
             {locale === "th" ? "EN" : "ไทย"}
           </button>
-          <a href="/login" className="rounded-full px-6 py-2 font-semibold text-white shadow-lg transition-all hover:opacity-90" style={{ ...fcSubject, fontSize: "16px", background: "linear-gradient(90deg,#ff2f9f,#8b5cf6,#2563ff)" }}>
+          <a href="https://app.fazzfly.com" className="rounded-full px-6 py-2 font-semibold text-white shadow-lg transition-all hover:opacity-90" style={{ ...fcSubject, fontSize: "16px", background: "linear-gradient(90deg,#ff2f9f,#8b5cf6,#2563ff)" }}>
             {tn.launch}
           </a>
         </div>
@@ -196,7 +196,7 @@ function Hero() {
             <button onClick={toggleLocale} className="flex-1 rounded-full border border-[#e8e0ff] py-2 text-center text-sm font-bold text-[#6d28d9]" style={fcMinimal}>
               {locale === "th" ? "EN" : "ไทย"}
             </button>
-            <a href="/login" className="flex-1 rounded-full py-3 text-center font-semibold text-white transition-all hover:opacity-90" style={{ ...fcSubject, fontSize: "16px", background: "linear-gradient(90deg,#ff2f9f,#8b5cf6,#2563ff)" }} onClick={() => setOpen(false)}>
+            <a href="https://app.fazzfly.com" className="flex-1 rounded-full py-3 text-center font-semibold text-white transition-all hover:opacity-90" style={{ ...fcSubject, fontSize: "16px", background: "linear-gradient(90deg,#ff2f9f,#8b5cf6,#2563ff)" }} onClick={() => setOpen(false)}>
               {tn.launch}
             </a>
           </div>
