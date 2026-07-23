@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
 
     const [userRows, masterRows, modulesRows, dashboardRows] = await Promise.all([
       saGetCachedRows("client_user!A:E",        5 * 60 * 1000),
-      saGetCachedRows("client_master!A:H",     10 * 60 * 1000),
+      saGetCachedRows("client_master!A:K",     10 * 60 * 1000),
       saGetCachedRows("client_modules!A:H",     5 * 60 * 1000),
       saGetCachedRows("client_dashboard!A:I",   5 * 60 * 1000).catch(() => [] as any[][]),
     ]);
@@ -98,6 +98,7 @@ export async function GET(request: NextRequest) {
     const clientName = (clientRow[1] ?? "").toString();
     const status     = (clientRow[4] ?? "").toString();
     const expiresAt  = (clientRow[6] ?? "").toString();
+    const clientType = parseInt((clientRow[10] ?? "1").toString().trim()) || 1;
 
     if (status.toUpperCase() !== "TRUE" && status.toUpperCase() !== "ACTIVE")
       return NextResponse.json({ error: "Account is inactive", code: "ACCOUNT_INACTIVE" }, { status: 403 });
@@ -146,7 +147,7 @@ export async function GET(request: NextRequest) {
       }));
 
     return NextResponse.json(
-      { clientId, clientName, expiresAt, modules, dashboardItems },
+      { clientId, clientName, expiresAt, clientType, modules, dashboardItems },
       { headers: { "Cache-Control": "private, no-store" } }
     );
   } catch (error: any) {

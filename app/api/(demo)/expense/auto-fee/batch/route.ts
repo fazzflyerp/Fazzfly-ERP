@@ -20,6 +20,7 @@ import {
   saGetSheetMeta,
   saStructuralBatchUpdate,
   saWriteRange,
+  saBatchUpdate,
   saInvalidateCache,
 } from "@/lib/google-sa";
 
@@ -280,24 +281,24 @@ export async function POST(request: NextRequest) {
     //     ใช้วันที่จาก expDateCol (col B) ตรงๆ ไม่รวมเป็น period อีกต่อไป
     //     เก็บ expRowCount ไว้สำหรับ write step (ไม่ต้อง read ซ้ำ)
     // ═══════════════════════════════════════════════════════════════════════════
-    const existingSet = new Set<string>();
+    // key → { rowIdx (1-based, +1 for header), oldAmt }
+    const existingMap = new Map<string, { rowIdx: number; oldAmt: number }>();
     let expRowCount = 0;
     {
       const allRows = await saReadRange(spreadsheetId, `${histSheetName}!A:Z`, 0).catch(() => [] as any[][]);
       expRowCount = allRows.length; // includes header row
-      for (const r of allRows.slice(1)) {
+      for (let i = 0; i < allRows.length - 1; i++) {
+        const r = allRows[i + 1]; // data rows (skip header)
         const lbl = (r[catCol.idx] ?? "").toString().trim();
         if (!lbl) continue;
-
         const dateStr = normalizeDateStr(r[expDateCol.idx]);
         if (!dateStr) continue;
-
         const rawBranch = (r[branchColIdx] ?? "").toString().trim().toLowerCase();
-        const branchId  = nameToId.get(rawBranch) ?? rawBranch;
-
-        existingSet.add(`${dateStr}|${branchId}|${normLabel(lbl)}`);
+        const bid = nameToId.get(rawBranch) ?? rawBranch;
+        const oldAmt = Number((r[amtCol.idx] ?? "").toString().replace(/,/g, "")) || 0;
+        existingMap.set(`${dateStr}|${bid}|${normLabel(lbl)}`, { rowIdx: i + 2, oldAmt });
       }
-      console.log(`[batch] existingSet: ${existingSet.size} entries`);
+      console.log(`[batch] existingMap: ${existingMap.size} entries`);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -308,21 +309,21 @@ export async function POST(request: NextRequest) {
     const maxCols = Math.max(
       expHeaders.length,
       branchColIdx + 1,
-      (periodCol?.idx ?? 0) + 1,
       expDateCol.idx + 1,
     );
 
-    type ResultRow = { date: string; branchId: string; saved: number; skipped: number; zeroAmt: number };
+    type ResultRow = { date: string; branchId: string; saved: number; updated: number; skipped: number; zeroAmt: number };
     const results: ResultRow[] = [];
 
     type PreviewRow = {
       dateStr: string; period: string; branchId: string; branchName: string;
       label: string; amount: number; channel: string; salesBase: number; feePct: number;
-      status: "append" | "skip_existing" | "zero_sales" | "zero_pct";
+      status: "append" | "update_existing" | "skip_existing" | "zero_sales" | "zero_pct";
     };
     const previewRows: PreviewRow[] = [];
     const rowsToInsert: { row: any[]; dateMs: number }[] = [];
-    let totalSaved = 0, totalSkipped = 0;
+    const rowsToUpdate: { range: string; values: any[][] }[] = [];
+    let totalSaved = 0, totalUpdated = 0, totalSkipped = 0;
 
     // เรียงจาก earliest → latest
     // daily: sort by date string; monthly: sort by period string "MM/YYYY"
@@ -394,7 +395,7 @@ export async function POST(request: NextRequest) {
           if (paySum > 0) branchSums = { ...branchSums, total_sales: paySum };
         }
 
-        let saved = 0, skipped = 0, zeroAmt = 0;
+        let saved = 0, updated = 0, skipped = 0, zeroAmt = 0;
 
         for (const fc of feeConfigs) {
           const isVat     = fc.field_name === "__vat__";
@@ -403,11 +404,17 @@ export async function POST(request: NextRequest) {
           const existKey  = `${dateStr}|${normBid}|${normLabel(fc.label)}`;
 
           if (dryRun) {
-            let status: "append" | "skip_existing" | "zero_sales" | "zero_pct";
-            if (fc.fee_pct <= 0)                status = "zero_pct";
-            else if (feeAmt <= 0)               status = "zero_sales";
-            else if (existingSet.has(existKey)) status = "skip_existing";
-            else                                status = "append";
+            let status: "append" | "update_existing" | "skip_existing" | "zero_sales" | "zero_pct";
+            if (fc.fee_pct <= 0) {
+              status = "zero_pct";
+            } else if (feeAmt <= 0) {
+              status = "zero_sales";
+            } else if (existingMap.has(existKey)) {
+              const { oldAmt } = existingMap.get(existKey)!;
+              status = Math.abs(oldAmt - feeAmt) >= 0.01 ? "update_existing" : "skip_existing";
+            } else {
+              status = "append";
+            }
 
             previewRows.push({
               dateStr, period, branchId,
@@ -416,35 +423,46 @@ export async function POST(request: NextRequest) {
               channel: isVat ? "VAT" : "ค่าธรรมเนียม",
               salesBase, feePct: fc.fee_pct, status,
             });
-            if (status === "append")        { existingSet.add(existKey); saved++; }
-            else if (status === "skip_existing") skipped++;
-            else                                 zeroAmt++;
+            if (status === "append")          { existingMap.set(existKey, { rowIdx: -1, oldAmt: feeAmt }); saved++; }
+            else if (status === "update_existing") updated++;
+            else if (status === "skip_existing")   skipped++;
+            else                                   zeroAmt++;
             continue;
           }
 
-          // ── non-dryRun: สร้าง row จริง ───────────────────────────────────────
+          // ── non-dryRun ────────────────────────────────────────────────────────
           if (fc.fee_pct <= 0) continue;
           if (feeAmt <= 0)     { zeroAmt++; continue; }
-          if (existingSet.has(existKey)) { skipped++; continue; }
 
-          existingSet.add(existKey);
+          if (existingMap.has(existKey)) {
+            const { rowIdx, oldAmt } = existingMap.get(existKey)!;
+            if (Math.abs(oldAmt - feeAmt) < 0.01) { skipped++; continue; }
+            // ยอดเปลี่ยน → เก็บไว้ batch update ทีหลัง
+            rowsToUpdate.push({
+              range: `${histSheetName}!${colLetter(amtCol.idx)}${rowIdx}`,
+              values: [[feeAmt]],
+            });
+            updated++;
+            continue;
+          }
+
+          existingMap.set(existKey, { rowIdx: -1, oldAmt: feeAmt });
 
           const row = new Array(maxCols).fill("");
-          // row[0] = "" (col A เว้นว่าง)
-          row[expDateCol.idx] = dateStr;   // col B = index 1
+          row[expDateCol.idx] = dateStr;
           row[branchColIdx]   = branchId;
           row[catCol.idx]     = fc.label;
           row[amtCol.idx]     = feeAmt;
-          if (chanCol)   row[chanCol.idx]   = isVat ? "VAT" : "ค่าธรรมเนียม";
-          if (periodCol) row[periodCol.idx] = period;
+          if (chanCol) row[chanCol.idx] = isVat ? "VAT" : "ค่าธรรมเนียม";
 
           rowsToInsert.push({ row, dateMs: dateToMs(dateStr) });
           saved++;
         }
 
-        if (saved + skipped + zeroAmt > 0)
-          results.push({ date: dateStr, branchId, saved, skipped, zeroAmt });
+        if (saved + updated + skipped + zeroAmt > 0)
+          results.push({ date: dateStr, branchId, saved, updated, skipped, zeroAmt });
         totalSaved   += saved;
+        totalUpdated += updated;
         totalSkipped += skipped;
       }
     }
@@ -465,11 +483,11 @@ export async function POST(request: NextRequest) {
       const endRow      = startRow + allNewRows.length - 1;
       const writeEndCol = colLetter(maxCols - 1);
 
-      // ① เขียนทุกแถวพร้อมกัน 1 call — col A ว่าง (row[0] = "")
+      // ① เขียนตั้งแต่ col B — ข้าม col A (Period formula) ไม่ overwrite
       await saWriteRange(
         spreadsheetId,
-        `${histSheetName}!A${startRow}:${writeEndCol}${endRow}`,
-        allNewRows,
+        `${histSheetName}!B${startRow}:${writeEndCol}${endRow}`,
+        allNewRows.map((r: any[]) => r.slice(1)),
       );
 
       // ② sort ทั้ง sheet ตาม date column (ข้าม header row 1) — 1 call
@@ -485,11 +503,19 @@ export async function POST(request: NextRequest) {
       console.log(`[batch] done — wrote rows ${startRow}–${endRow}, sorted by col ${expDateCol.name}`);
     }
 
-    console.log(`[batch] DONE totalSaved=${totalSaved} totalSkipped=${totalSkipped} dryRun=${dryRun}`);
+    // อัปเดต rows ที่ยอดเปลี่ยน (ทำหลัง insert เพื่อให้ row index ถูกต้อง)
+    if (!dryRun && rowsToUpdate.length > 0) {
+      await saBatchUpdate(spreadsheetId, rowsToUpdate);
+      saInvalidateCache(spreadsheetId);
+      console.log(`[batch] updated ${rowsToUpdate.length} existing rows`);
+    }
+
+    console.log(`[batch] DONE totalSaved=${totalSaved} totalUpdated=${totalUpdated} totalSkipped=${totalSkipped} dryRun=${dryRun}`);
 
     return NextResponse.json({
       ok: true,
       totalSaved,
+      totalUpdated,
       totalSkipped,
       dryRun,
       batchMode,
@@ -512,7 +538,7 @@ export async function POST(request: NextRequest) {
         feeConfigBranches:[...branchFeeConfigs.keys()],
         salesGroupKeys:   Object.keys(salesGroupMap).slice(0, 5),
         salesGroupBranches: [...new Set(Object.values(salesGroupMap).flatMap((d) => Object.keys(d)))],
-        existingSetSize:  existingSet.size,
+        existingMapSize:  existingMap.size,
         catCol:           catCol.name,
         amtCol:           amtCol.name,
         expDateCol:       `${expDateCol.name}(idx=${expDateCol.idx})`,

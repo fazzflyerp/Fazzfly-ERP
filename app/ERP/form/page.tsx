@@ -304,6 +304,24 @@ export default function FormPage() {
             }
         }
 
+        // ── Payment sentinel check ───────────────────────────────────────────
+        const SENTINEL = new Set(["__on__", "__selected__"]);
+        const paymentFields = formFields.filter((f) => isPaymentField(f.fieldName));
+        const hasBadPayment = lineItems.some((row) =>
+            paymentFields.some((f) => SENTINEL.has(String(row[f.fieldName] ?? "")))
+        );
+        if (hasBadPayment) {
+            setLineItems((prev) => prev.map((row) => {
+                const fixed = { ...row };
+                paymentFields.forEach((f) => {
+                    if (SENTINEL.has(String(fixed[f.fieldName] ?? ""))) fixed[f.fieldName] = "";
+                });
+                return fixed;
+            }));
+            setError("ช่องทางชำระมีปัญหา — รีเซ็ตให้แล้ว กรุณาเลือกช่องทางชำระใหม่อีกครั้ง");
+            return;
+        }
+
         setSubmitting(true);
 
         try {

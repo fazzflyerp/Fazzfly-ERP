@@ -97,8 +97,6 @@ export async function POST(request: NextRequest) {
         if (idx !== undefined) row[idx] = item[f.fieldName] ?? "";
       }
       if (branchId && branchColIdx >= 0) row[branchColIdx] = branchId;
-      // col A = period — เขียนเฉพาะตอนว่าง (ไม่ทับ formula ที่มีอยู่แล้ว)
-      if (period && row[0] === "") row[0] = period;
       return row;
     });
 
@@ -144,9 +142,9 @@ export async function POST(request: NextRequest) {
         },
       }]);
 
-      // Write — ใช้ rowSize เป็น endCol (ครอบคลุมทุก column ที่ต้องการ)
+      // ข้าม col A (Period formula) — เขียนตั้งแต่ col B เป็นต้นไป
       const endCol = colLetter(rowSize);
-      await saWriteRange(spreadsheetId, `${sheetName}!A${insertIndex}:${endCol}${insertIndex}`, [row]);
+      await saWriteRange(spreadsheetId, `${sheetName}!B${insertIndex}:${endCol}${insertIndex}`, [row.slice(1)]);
       saInvalidateCache(spreadsheetId);
 
       const insertedDate = dateColIdx !== null ? parseDate(row[dateColIdx]) : null;

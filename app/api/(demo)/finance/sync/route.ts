@@ -98,6 +98,30 @@ function aggregateByBranchId(
   return map;
 }
 
+// ── Type 2: aggregate generic sheet by date field ────────────────────────────
+function aggregateByDateCol(
+  rows: any[][],
+  amountCol: number,
+  dateCol: number,
+): Record<string, number> {
+  const map: Record<string, number> = {};
+  for (const row of rows) {
+    const dv = (row[dateCol] ?? "").toString().trim();
+    let period = "";
+    const m = dv.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (m) period = `${m[2].padStart(2, "0")}/${m[3]}`;
+    else {
+      const m2 = dv.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m2) period = `${m2[2]}/${m2[1]}`;
+    }
+    if (!period) period = normPeriod(dv);
+    if (!period) continue;
+    const v = parseNum(row[amountCol]);
+    if (v > 0) map[period] = (map[period] || 0) + v;
+  }
+  return map;
+}
+
 // ── GET ───────────────────────────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
   try {
@@ -109,20 +133,90 @@ export async function GET(request: NextRequest) {
     const sheetName     = searchParams.get("sheetName") || "Finance";
     const branchId      = searchParams.get("branchId")   || "";
     const branchName    = searchParams.get("branchName") || "";
+    const clientType    = parseInt(searchParams.get("clientType") || "1") || 1;
+
+    // type 2 — revenue/expense come from configurable sheets
+    const revSid    = searchParams.get("revSpreadsheetId")  || spreadsheetId!;
+    const revSheet  = searchParams.get("revSheetName")      || "";
+    const revCfg    = searchParams.get("revConfigName")     || "";
+    const expSid    = searchParams.get("expSpreadsheetId")  || spreadsheetId!;
+    const expSheet  = searchParams.get("expSheetName")      || "";
+    const expCfg    = searchParams.get("expConfigName")     || "";
 
     if (!spreadsheetId) return NextResponse.json({ error: "Missing spreadsheetId" }, { status: 400 });
 
-    const [finRows, helperS, helperE, helperU] = await Promise.all([
-      saReadRange(spreadsheetId, `${sheetName}!A:H`).catch(() => [] as any[][]),
-      saReadRange(spreadsheetId, "HelperS!A:AJ").catch(() => [] as any[][]),
-      saReadRange(spreadsheetId, "HelperE!A:I").catch(() => [] as any[][]),
-      saReadRange(spreadsheetId, "HelperU!A:P").catch(() => [] as any[][]),
-    ]);
+    let revenueMap: Record<string, number> = {};
+    let cogsMap:    Record<string, number> = {};
+    let expMap:     Record<string, number> = {};
 
-    // Aggregate helpers → { "04/2026": total }
-    const revenueMap = aggregateHelperS(helperS.slice(1), branchName);
-    const cogsMap    = aggregateByBranchId(helperU.slice(1), HU_PERIOD, HU_AMOUNT, HU_BRANCH, branchId);
-    const expMap     = aggregateByBranchId(helperE.slice(1), HE_PERIOD, HE_AMOUNT, HE_BRANCH, branchId);
+    if (clientType === 2) {
+      // ── Type 2: อ่านจาก Sales + Expense module ──────────────────────────────
+      const reads: Promise<any>[] = [];
+
+      // Revenue: อ่าน config เพื่อหา totalprice col + date col
+      if (revSheet && revCfg) {
+        reads.push(
+          Promise.all([
+            saReadRange(revSid, `${revCfg}!A:K`),
+            saReadRange(revSid, `${revSheet}!A:ZZ`),
+          ]).then(([cfgRows, dataRows]) => {
+            if (cfgRows.length < 2) return;
+            const hdr = cfgRows[0].map((h: any) => (h ?? "").toString().trim().toLowerCase());
+            const fnIdx  = hdr.findIndex((h: string) => h.includes("field"));
+            const ordIdx = hdr.findIndex((h: string) => h.includes("order"));
+            let salesCol = -1, dateCol = -1;
+            for (const row of cfgRows.slice(1)) {
+              const fn  = (row[fnIdx]  ?? "").toString().trim().toLowerCase();
+              const ord = parseInt((row[ordIdx] ?? "").toString()) - 1;
+              if (isNaN(ord) || ord < 0) continue;
+              if (salesCol < 0 && (fn.includes("totalprice") || fn.includes("price_after") || fn.includes("total_sales") || fn.includes("sales"))) salesCol = ord;
+              if (dateCol  < 0 && fn === "date") dateCol = ord;
+            }
+            if (salesCol < 0 || dateCol < 0) return;
+            revenueMap = aggregateByDateCol(dataRows.slice(1), salesCol, dateCol);
+          }).catch(() => {})
+        );
+      }
+
+      // Expense: อ่าน config เพื่อหา amount col + date col
+      if (expSheet && expCfg) {
+        reads.push(
+          Promise.all([
+            saReadRange(expSid, `${expCfg}!A:K`),
+            saReadRange(expSid, `${expSheet}!A:ZZ`),
+          ]).then(([cfgRows, dataRows]) => {
+            if (cfgRows.length < 2) return;
+            const hdr = cfgRows[0].map((h: any) => (h ?? "").toString().trim().toLowerCase());
+            const fnIdx  = hdr.findIndex((h: string) => h.includes("field"));
+            const ordIdx = hdr.findIndex((h: string) => h.includes("order"));
+            let amtCol = -1, dateCol = -1;
+            for (const row of cfgRows.slice(1)) {
+              const fn  = (row[fnIdx]  ?? "").toString().trim().toLowerCase();
+              const ord = parseInt((row[ordIdx] ?? "").toString()) - 1;
+              if (isNaN(ord) || ord < 0) continue;
+              if (amtCol  < 0 && (fn.includes("amount") || fn.includes("ยอด"))) amtCol = ord;
+              if (dateCol < 0 && fn === "date") dateCol = ord;
+            }
+            if (amtCol < 0 || dateCol < 0) return;
+            expMap = aggregateByDateCol(dataRows.slice(1), amtCol, dateCol);
+          }).catch(() => {})
+        );
+      }
+
+      await Promise.all(reads);
+    } else {
+      // ── Type 1: HelperS / HelperU / HelperE ─────────────────────────────────
+      const [helperS, helperE, helperU] = await Promise.all([
+        saReadRange(spreadsheetId, "HelperS!A:AJ").catch(() => [] as any[][]),
+        saReadRange(spreadsheetId, "HelperE!A:I").catch(() => [] as any[][]),
+        saReadRange(spreadsheetId, "HelperU!A:P").catch(() => [] as any[][]),
+      ]);
+      revenueMap = aggregateHelperS(helperS.slice(1), branchName);
+      cogsMap    = aggregateByBranchId(helperU.slice(1), HU_PERIOD, HU_AMOUNT, HU_BRANCH, branchId);
+      expMap     = aggregateByBranchId(helperE.slice(1), HE_PERIOD, HE_AMOUNT, HE_BRANCH, branchId);
+    }
+
+    const finRows = await saReadRange(spreadsheetId, `${sheetName}!A:H`).catch(() => [] as any[][]);
 
     // รวม periods จาก Helpers (ไม่ใช่จาก Finance sheet)
     const allPeriods = new Set<string>([
@@ -167,15 +261,9 @@ export async function GET(request: NextRequest) {
 
     // debug: แนบถ้า revenue = 0 ทุกงวด
     const totalRevenue = rows.reduce((s, r) => s + r.computed.revenue, 0);
-    const debugSync = totalRevenue === 0 && helperS.length > 1 ? {
+    const debugSync = totalRevenue === 0 ? {
       branchNameReceived: branchName,
-      helperSRows: helperS.length - 1,
-      sampleHelperS: helperS.slice(1, 4).map((r) => ({
-        period:     (r[HS_PERIOD]      ?? "").toString(),
-        periodNorm: normPeriod((r[HS_PERIOD] ?? "").toString()),
-        amount:     (r[HS_AMOUNT]      ?? "").toString(),
-        branchName: (r[HS_BRANCH_NAME] ?? "").toString(),
-      })),
+      clientType,
       revenueMapEntries: Object.entries(revenueMap).slice(0, 5),
     } : undefined;
 

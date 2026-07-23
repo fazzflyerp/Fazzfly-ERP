@@ -13,7 +13,7 @@ import {
   saReadRange,
   saGetSheetMeta,
   saStructuralBatchUpdate,
-  saWriteRange,
+  saBatchUpdate,
   saLog,
   saInvalidateCache,
 } from "@/lib/google-sa";
@@ -87,10 +87,9 @@ async function insertRowsWithDateSort(params: {
   sheetId: number;
   rowsToInsert: any[][];
   dateFieldIndex: number | null;
-  headerRow: any[];
   requestId: string;
 }) {
-  const { spreadsheetId, sheetName, sheetId, rowsToInsert, dateFieldIndex, headerRow, requestId } = params;
+  const { spreadsheetId, sheetName, sheetId, rowsToInsert, dateFieldIndex, requestId } = params;
 
   // 1. อ่านข้อมูลปัจจุบันผ่าน SA
   const existingRows = await saReadRange(spreadsheetId, sheetName);
@@ -144,9 +143,15 @@ async function insertRowsWithDateSort(params: {
       },
     }]);
 
-    // Write data
-    const endCol = getColumnLetter(headerRow.length);
-    await saWriteRange(spreadsheetId, `${sheetName}!A${insertIndex}:${endCol}${insertIndex}`, [row]);
+    // Write only config-specified cells (skip columns not in config)
+    const cellWrites = row
+      .map((val: any, colIdx: number) => ({ colIdx, val }))
+      .filter(({ val }: { val: any }) => val !== undefined && val !== null && val !== "")
+      .map(({ colIdx, val }: { colIdx: number; val: any }) => ({
+        range: `${sheetName}!${getColumnLetter(colIdx + 1)}${insertIndex}`,
+        values: [[val]],
+      }));
+    if (cellWrites.length > 0) await saBatchUpdate(spreadsheetId, cellWrites);
     saInvalidateCache(spreadsheetId);
 
     console.log(`✅ [${requestId}] Row ${i + 1} inserted at ${insertIndex}`);
@@ -212,19 +217,27 @@ export async function POST(request: NextRequest) {
     if (Object.keys(columnIndices).length === 0)
       return NextResponse.json({ error: "No fields mapped", code: "NO_MAPPING" }, { status: 400 });
 
-    // Build rows
+    // Build rows — only write columns explicitly in config (no extra columns)
+    const maxColIndex = Object.keys(columnIndices).length > 0
+      ? Math.max(...Object.values(columnIndices))
+      : headerRow.length - 1;
+
+    const SENTINEL = new Set(["__on__", "__selected__"]);
     const rowsToInsert: any[][] = lineItems.map((item: any) => {
-      const rowValues: any[] = new Array(headerRow.length).fill("");
+      const rowValues: any[] = new Array(maxColIndex + 1).fill("");
       for (const field of fields) {
         const colIndex = columnIndices[field.fieldName];
-        if (colIndex !== undefined) rowValues[colIndex] = item[field.fieldName] ?? "";
+        if (colIndex !== undefined) {
+          const raw = item[field.fieldName] ?? "";
+          rowValues[colIndex] = SENTINEL.has(String(raw)) ? "" : raw;
+        }
       }
       return rowValues;
     });
 
     const results = await withWriteLock(spreadsheetId, () =>
       insertRowsWithDateSort({
-        spreadsheetId, sheetName, sheetId, rowsToInsert, dateFieldIndex, headerRow, requestId,
+        spreadsheetId, sheetName, sheetId, rowsToInsert, dateFieldIndex, requestId,
       })
     );
 

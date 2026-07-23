@@ -446,6 +446,13 @@ export default function HomePage() {
   };
 
   // ✅ useEffect: Fetch low stock when userData is loaded
+  // Redirect Type2 clients to their dedicated home page
+  useEffect(() => {
+    if (userData?.planType === "Type2") {
+      router.replace("/ERP/home-type2");
+    }
+  }, [userData]);
+
   useEffect(() => {
     if (userData && activeTab === "modules") {
       fetchLowStockCount();
@@ -542,7 +549,11 @@ export default function HomePage() {
     }
   };
 
-  const validModules = userData?.modules.filter(m => m.configName) || [];
+  const validModules = (userData?.modules || []).filter(m => {
+    if (!m.configName) return false;
+    const n = m.moduleName;
+    return !n.includes("สต๊อค") && !n.toLowerCase().includes("rental") && !n.toLowerCase().includes("stock");
+  });
   const validDashboards = userData?.dashboardItems.filter(d => d.dashboardConfigName) || [];
 
   // ✅ CHANGED: ใช้ userDocuments จาก API แทน filter จาก modules

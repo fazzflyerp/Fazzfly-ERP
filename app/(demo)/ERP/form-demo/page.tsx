@@ -107,11 +107,18 @@ export default function FormDemoPage() {
         const results = await Promise.all(
             helperFields.map(async (field) => {
                 try {
-                    const isLineItem = field.section === "lineitem";
-                    let endpoint: string;
                     const url = new URL(window.location.origin);
+                    const isLineItem = field.section === "lineitem";
 
-                    if (isLineItem) {
+                    if (field.helper!.startsWith("rental:")) {
+                        // rental: prefix → filter dropdown to only available (not rented) items
+                        const realHelperName = field.helper!.slice("rental:".length);
+                        url.pathname = "/api/rental/available";
+                        url.searchParams.set("spreadsheetId", spreadsheetId!);
+                        url.searchParams.set("helperName", realHelperName);
+                        if (configName)  url.searchParams.set("configName", configName);
+                        if (sheetName)   url.searchParams.set("sheetName", sheetName);
+                    } else if (isLineItem) {
                         // lineitem section → branch format (A=value, B=branch_id, C=label)
                         url.pathname = "/api/helpers-branch";
                         url.searchParams.set("spreadsheetId", spreadsheetId!);
@@ -347,6 +354,25 @@ export default function FormDemoPage() {
                     .map((f) => f.label).join(", ");
                 if (missing) { setError(`รายการที่ ${i + 1} - โปรดกรอก: ${missing}`); return; }
             }
+        }
+
+        // ── Payment sentinel check ───────────────────────────────────────────
+        const SENTINEL = new Set(["__on__", "__selected__"]);
+        const paymentFields = formFields.filter((f) => isPaymentField(f.fieldName));
+        const hasBadPayment = lineItems.some((row) =>
+            paymentFields.some((f) => SENTINEL.has(String(row[f.fieldName] ?? "")))
+        );
+        if (hasBadPayment) {
+            // clear sentinel values จาก lineItems แล้วเตือน
+            setLineItems((prev) => prev.map((row) => {
+                const fixed = { ...row };
+                paymentFields.forEach((f) => {
+                    if (SENTINEL.has(String(fixed[f.fieldName] ?? ""))) fixed[f.fieldName] = "";
+                });
+                return fixed;
+            }));
+            setError("ช่องทางชำระมีปัญหา — รีเซ็ตให้แล้ว กรุณาเลือกช่องทางชำระใหม่อีกครั้ง");
+            return;
         }
 
         setSubmitting(true);

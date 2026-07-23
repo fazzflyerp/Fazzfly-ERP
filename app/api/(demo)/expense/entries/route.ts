@@ -141,7 +141,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    await saAppendRow(spreadsheetId, `${sheetName}!A:Z`, row);
+    // ข้าม col A (Period formula) — เขียนตั้งแต่ col B เป็นต้นไป
+    await saAppendRow(spreadsheetId, `${sheetName}!B:Z`, row.slice(1));
     saInvalidateCache(spreadsheetId);
 
     return NextResponse.json({ ok: true });

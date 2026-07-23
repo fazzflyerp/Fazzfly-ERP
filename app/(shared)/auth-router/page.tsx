@@ -2,11 +2,25 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 export default function AuthRouterPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
 
   useEffect(() => {
+    if (status === "loading") return;
+    if (status === "unauthenticated") {
+      router.replace("/login");
+      return;
+    }
+
+    // Credentials login ไม่มี Google OAuth accessToken → ส่งไป Demo system เสมอ
+    if (!(session as any)?.accessToken) {
+      router.replace("/select-system-demo");
+      return;
+    }
+
     fetch("/api/auth/branch-check")
       .then((r) => r.json())
       .then((data) => {
@@ -19,7 +33,7 @@ export default function AuthRouterPage() {
       .catch(() => {
         router.replace("/ERP/home");
       });
-  }, [router]);
+  }, [router, session, status]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">

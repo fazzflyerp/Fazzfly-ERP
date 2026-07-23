@@ -157,6 +157,18 @@ export default function ARPage() {
     setLoading(true);
     setError("");
     try {
+      // type 2 (rental shop) → ไม่มี AR/AP → redirect rental-stock
+      const mods = await fetch("/api/user/modules-demo").then((r) => r.json()).catch(() => ({}));
+      if ((mods.clientType || 1) === 2) {
+        const salesMod = (mods.modules || []).find((m: any) => {
+          const n = (m.moduleName || "").toUpperCase();
+          return n.includes("SALE") || n.includes("RENTAL");
+        });
+        const sid = salesMod?.spreadsheetId || "";
+        router.replace(`/ERP/rental-stock${sid ? `?spreadsheetId=${sid}` : ""}`);
+        return;
+      }
+
       const [authRes, debtsRes] = await Promise.all([
         fetch("/api/auth/branch-check").then((r) => r.json()),
         fetch("/api/ar/debts").then((r) => r.json()),
@@ -168,7 +180,7 @@ export default function ARPage() {
       if (debtsRes.spreadsheetId) setSpreadsheetId(debtsRes.spreadsheetId);
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
-  }, []);
+  }, [router]);
 
   useEffect(() => { load(); }, [load]);
 

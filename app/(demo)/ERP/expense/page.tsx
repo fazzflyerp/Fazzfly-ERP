@@ -108,6 +108,10 @@ function ExpensePage() {
   }>(null);
   const batchRanRef = useRef(false); // ยิงแค่ครั้งเดียวต่อ page load
 
+  // null = ยังไม่รู้ (รอผล API), true = มี, false = ไม่มี → lite mode
+  const [helperSalesAvailable,   setHelperSalesAvailable]   = useState<boolean | null>(null);
+  const [helperPayrollAvailable, setHelperPayrollAvailable] = useState<boolean | null>(null);
+
   // ── History (entries) ─────────────────────────────────────────────────────────
   const [entries,        setEntries]        = useState<EntryRow[]>([]);
   const [entryHeaders,   setEntryHeaders]   = useState<string[]>([]);
@@ -258,6 +262,8 @@ function ExpensePage() {
       const res  = await fetch(url);
       const data = await res.json();
       if (!res.ok) { setSalaryDebug(`API error ${res.status}: ${data.error || JSON.stringify(data)}`); return; }
+      if (data.sheetMissing) { setHelperPayrollAvailable(false); return; }
+      setHelperPayrollAvailable(true);
       const sampleStr = (data.sample || []).map((s: any) => `[p=${s.p}|b=${s.b}|net=${s.net}]`).join(" ");
       setSalaryDebug(`total=${data.total} count=${data.count} | colOffset=${data.colOffset} bCol=${data.bCol} nCol=${data.nCol} | ${sampleStr || "ไม่มี rows"} | payroll-headers: ${data.headerDump || "?"}`);
       setSalaryInfo({ total: data.total, count: data.count });
@@ -361,10 +367,17 @@ function ExpensePage() {
       console.log("[batch] response", res.status, data);
 
       if (!res.ok) {
-        setFeeError(data?.error || "batch auto-fee ไม่สำเร็จ");
-        batchRanRef.current = false; // allow retry on next load
+        const errMsg = (data?.error || "").toString();
+        if (errMsg.includes("Helper_Sales") || errMsg.includes("ไม่พบ")) {
+          // Helper_Sales ไม่มี → lite mode, ไม่แสดง error
+          setHelperSalesAvailable(false);
+        } else {
+          setFeeError(errMsg || "batch auto-fee ไม่สำเร็จ");
+        }
+        batchRanRef.current = false;
         return;
       }
+      setHelperSalesAvailable(true);
       setBatchDone(true);
       if (data.totalSaved > 0) loadEntries(period, effectiveBranchId);
     } catch (e: any) {
@@ -471,6 +484,7 @@ function ExpensePage() {
 
   // ── 6. Auto-save payroll row → Expense Transaction ───────────────────────────
   useEffect(() => {
+    if (helperPayrollAvailable === false) return;
     if (!salaryInfo || salaryInfo.total <= 0) return;
     if (salaryLoading || entriesLoading || !period) return;
 
@@ -978,83 +992,101 @@ function ExpensePage() {
             {/* Left: status chips */}
             <div className="flex items-center gap-2 flex-wrap">
 
-              {/* Batch auto-fee chip — แสดงระหว่างประมวลผล */}
-              {batchProcessing ? (
-                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-300">
-                  <span className="w-3 h-3 border-2 border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin shrink-0" />
-                  ประมวลผลค่าธรรมเนียมทุกสาขา...
-                </span>
-              ) : batchDone ? (
-                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-400">
-                  <svg className="w-3 h-3 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/></svg>
-                  ค่าธรรมเนียมอัปเดตแล้ว
-                </span>
-              ) : null}
-
-              {/* Salary chip */}
-              {salaryLoading ? (
-                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 border border-orange-500/20 rounded-xl text-xs text-orange-400">
-                  <span className="w-3 h-3 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
-                  ดึงค่าจ้าง...
-                </span>
-              ) : salaryInfo && salaryInfo.total > 0 ? (
-                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 border border-orange-500/20 rounded-xl text-xs text-orange-300">
-                  <svg className="w-3 h-3 text-orange-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+              {/* Lite mode badge — แสดงเมื่อไม่มีทั้ง Helper_Sales และ Helper payroll */}
+              {helperSalesAvailable === false && helperPayrollAvailable === false && (
+                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-500/10 border border-slate-500/20 rounded-xl text-xs text-slate-400">
+                  <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                   </svg>
-                  ค่าจ้างพนักงาน
-                  <span className="font-bold">฿{salaryInfo.total.toLocaleString("th-TH")}</span>
-                  <span className="text-orange-400/60">({salaryInfo.count} คน)</span>
+                  Expense module lite ver
                 </span>
-              ) : null}
+              )}
+
+              {/* Batch auto-fee chip — แสดงเฉพาะเมื่อมี Helper_Sales */}
+              {helperSalesAvailable !== false && (
+                batchProcessing ? (
+                  <span className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-300">
+                    <span className="w-3 h-3 border-2 border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin shrink-0" />
+                    ประมวลผลค่าธรรมเนียมทุกสาขา...
+                  </span>
+                ) : batchDone ? (
+                  <span className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-400">
+                    <svg className="w-3 h-3 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/></svg>
+                    ค่าธรรมเนียมอัปเดตแล้ว
+                  </span>
+                ) : null
+              )}
+
+              {/* Salary chip — แสดงเฉพาะเมื่อมี Helper payroll */}
+              {helperPayrollAvailable !== false && (
+                salaryLoading ? (
+                  <span className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 border border-orange-500/20 rounded-xl text-xs text-orange-400">
+                    <span className="w-3 h-3 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
+                    ดึงค่าจ้าง...
+                  </span>
+                ) : salaryInfo && salaryInfo.total > 0 ? (
+                  <span className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 border border-orange-500/20 rounded-xl text-xs text-orange-300">
+                    <svg className="w-3 h-3 text-orange-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    ค่าจ้างพนักงาน
+                    <span className="font-bold">฿{salaryInfo.total.toLocaleString("th-TH")}</span>
+                    <span className="text-orange-400/60">({salaryInfo.count} คน)</span>
+                  </span>
+                ) : null
+              )}
 
             </div>
 
             {/* Right: action buttons */}
             <div className="flex items-center gap-2 shrink-0">
-              {/* โหลดค่าจ้าง */}
-              <button
-                type="button"
-                title="โหลดยอดค่าจ้างจาก Payroll ใหม่"
-                onClick={() => pullPayrollSalary(period, effectiveBranchId, formFields)}
-                disabled={salaryLoading || !effectiveBranchId}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-orange-300 bg-orange-500/10 border border-orange-500/20 hover:bg-orange-500/20 rounded-xl disabled:opacity-40 transition-all"
-              >
-                {salaryLoading
-                  ? <span className="w-3 h-3 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
-                  : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>}
-                ค่าจ้าง
-              </button>
 
-              {/* รันค่าธรรมเนียมใหม่ทั้งหมด */}
-              <button
-                type="button"
-                title="รันค่าธรรมเนียมใหม่สำหรับทุก branch × period"
-                onClick={() => { batchRanRef.current = false; setBatchDone(false); runBatchAutoFee(); }}
-                disabled={batchProcessing}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-300 bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 rounded-xl disabled:opacity-40 transition-all"
-              >
-                {batchProcessing
-                  ? <span className="w-3 h-3 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
-                  : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>}
-                ค่าธรรมเนียม
-              </button>
+              {/* โหลดค่าจ้าง — เฉพาะเมื่อมี Helper payroll */}
+              {helperPayrollAvailable !== false && (
+                <button
+                  type="button"
+                  title="โหลดยอดค่าจ้างจาก Payroll ใหม่"
+                  onClick={() => pullPayrollSalary(period, effectiveBranchId, formFields)}
+                  disabled={salaryLoading || !effectiveBranchId}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-orange-300 bg-orange-500/10 border border-orange-500/20 hover:bg-orange-500/20 rounded-xl disabled:opacity-40 transition-all"
+                >
+                  {salaryLoading
+                    ? <span className="w-3 h-3 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
+                    : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>}
+                  ค่าจ้าง
+                </button>
+              )}
 
-              {/* ดูก่อน Append (dryRun) */}
-              <button
-                type="button"
-                title="ดูข้อมูลที่จะ append ก่อนบันทึกจริง"
-                onClick={runDryRun}
-                disabled={batchProcessing || previewLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 hover:bg-cyan-500/20 rounded-xl disabled:opacity-40 transition-all"
-              >
-                {previewLoading
-                  ? <span className="w-3 h-3 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
-                  : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>}
-                ดูก่อน
-              </button>
+              {/* ค่าธรรมเนียม + ดูก่อน — เฉพาะเมื่อมี Helper_Sales */}
+              {helperSalesAvailable !== false && (<>
+                <button
+                  type="button"
+                  title="รันค่าธรรมเนียมใหม่สำหรับทุก branch × period"
+                  onClick={() => { batchRanRef.current = false; setBatchDone(false); runBatchAutoFee(); }}
+                  disabled={batchProcessing}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-300 bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 rounded-xl disabled:opacity-40 transition-all"
+                >
+                  {batchProcessing
+                    ? <span className="w-3 h-3 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
+                    : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>}
+                  ค่าธรรมเนียม
+                </button>
 
-              {/* ตั้งค่าธรรมเนียม → ไปหน้า settings */}
+                <button
+                  type="button"
+                  title="ดูข้อมูลที่จะ append ก่อนบันทึกจริง"
+                  onClick={runDryRun}
+                  disabled={batchProcessing || previewLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 hover:bg-cyan-500/20 rounded-xl disabled:opacity-40 transition-all"
+                >
+                  {previewLoading
+                    ? <span className="w-3 h-3 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
+                    : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>}
+                  ดูก่อน
+                </button>
+              </>)}
+
+              {/* ตั้งค่าธรรมเนียม → ไปหน้า settings (แสดงเสมอ) */}
               <button
                 type="button"
                 title={isSuperAdmin ? "ตั้งค่า % ธรรมเนียมแต่ละช่องทาง" : "ดูค่าธรรมเนียมที่ตั้งไว้"}

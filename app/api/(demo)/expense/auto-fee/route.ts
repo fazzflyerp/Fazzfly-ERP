@@ -30,6 +30,12 @@ import { saReadRange, saAppendRow, saUpdateRow, saInvalidateCache } from "@/lib/
 
 const BRANCH_ID_COL = 8; // col I (0-based) ถ้าหาไม่เจอจาก header
 
+function colLetter(idx: number): string {
+  let s = "", n = idx + 1;
+  while (n > 0) { n--; s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26); }
+  return s || "A";
+}
+
 /** แปลง date string DD/MM/YYYY หรือ YYYY-MM-DD เป็น "MM/YYYY" */
 function extractPeriod(dateStr: string): string | null {
   const s = (dateStr ?? "").toString().trim();
@@ -297,11 +303,9 @@ export async function POST(request: NextRequest) {
     if (labelLookupCol) {
       const allRows = await saReadRange(spreadsheetId, `${histSheetName}!A:Z`, 0);
       allRows.slice(1).forEach((r: any[], i: number) => {
-        // ── กรองงวด (normalize format ก่อนเปรียบเทียบ) ───────────────────────
-        const rawPeriod = periodCol
-          ? (r[periodCol.idx] ?? "").toString()
-          : (r[0] ?? "").toString(); // fallback col A
-        const rp = normPeriodStr(rawPeriod);
+        // ── กรองงวด — อ่านจาก dateCol แล้ว extract MM/YYYY (ไม่พึ่ง col A formula) ──
+        const rawDate = dateCol ? (r[dateCol.idx] ?? "").toString() : "";
+        const rp = rawDate ? (extractPeriod(rawDate) ?? "") : "";
         if (rp && rp !== normTarget) return;
 
         // ── กรองสาขา (case-insensitive) ──────────────────────────────────────
@@ -318,45 +322,57 @@ export async function POST(request: NextRequest) {
       console.log("[auto-fee] existingMap keys:", [...existingMap.keys()]);
     }
 
-    let saved = 0;
-    let skipped = 0;
+    let saved = 0, skipped = 0, updated = 0;
     const maxCols = Math.max(headers.length, branchColIdx + 1);
 
     for (const calc of calculations) {
       if (calc.fee_amount <= 0) continue;
 
-      // lookup ด้วย normalized label (ตัด prefix + lowercase)
-      // ถ้าเจอ row เดิมสำหรับ period+branch นี้แล้ว → SKIP ทันที (idempotent)
       const lookupKey = normLbl(calc.label);
       const existing = labelLookupCol ? existingMap.get(lookupKey) : undefined;
       console.log(`[auto-fee] calc="${calc.label}" key="${lookupKey}" existing=${existing ? `row${existing.rowNum}` : "none"}`);
+
       if (existing) {
+        if (amtCol) {
+          const oldAmt = Number((existing.row[amtCol.idx] ?? "").toString().replace(/,/g, "")) || 0;
+          if (Math.abs(oldAmt - calc.fee_amount) >= 0.01) {
+            // ยอดเปลี่ยน → UPDATE เฉพาะ cell amount
+            await saUpdateRow(
+              spreadsheetId,
+              `${histSheetName}!${colLetter(amtCol.idx)}${existing.rowNum}`,
+              [calc.fee_amount],
+            );
+            updated++;
+            continue;
+          }
+        }
         skipped++;
         continue;
       }
 
-      // 🆕 ไม่มีแถวเดิม → INSERT ใหม่
+      // ไม่มีแถวเดิม → INSERT ใหม่
       const row: any[] = new Array(maxCols).fill("");
       row[branchColIdx] = branchId;
-
       if (catCol)  row[catCol.idx]  = calc.label;
       if (amtCol)  row[amtCol.idx]  = calc.fee_amount;
       if (chanCol) row[chanCol.idx] = calc.type === "vat" ? "VAT" : "ค่าธรรมเนียม";
       if (dateCol) row[dateCol.idx] = dateStr;
       if (srcCol)  row[srcCol.idx]  = "AUTO_FEE";
 
-      await saAppendRow(spreadsheetId, `${histSheetName}!A:Z`, row);
+      // ข้าม col A (Period formula) — เขียนตั้งแต่ col B เป็นต้นไป
+      await saAppendRow(spreadsheetId, `${histSheetName}!B:Z`, row.slice(1));
       saved++;
     }
 
     saInvalidateCache(spreadsheetId);
 
-    console.log(`[auto-fee] DONE branchId="${branchId}" period="${targetPeriod}" saved=${saved} skipped=${skipped} catCol=${catCol?.name ?? "null"}`);
+    console.log(`[auto-fee] DONE branchId="${branchId}" period="${targetPeriod}" saved=${saved} updated=${updated} skipped=${skipped}`);
     return NextResponse.json({
       ok: true,
       calculations,
       totalFees: Math.round(totalFees * 100) / 100,
       saved,
+      updated,
       skipped,
       period: targetPeriod,
       branchId,

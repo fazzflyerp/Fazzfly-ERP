@@ -24,8 +24,9 @@ export async function GET(request: NextRequest) {
     if (!spreadsheetId)
       return NextResponse.json({ error: "Missing spreadsheetId" }, { status: 400 });
 
-    const rows = await saReadRange(spreadsheetId, `${payrollSheet}!A:AJ`);
-    if (rows.length < 2) return NextResponse.json({ total: 0, count: 0 });
+    const rows = await saReadRange(spreadsheetId, `${payrollSheet}!A:AJ`).catch(() => [] as any[][]);
+    if (rows.length === 0) return NextResponse.json({ total: 0, count: 0, sheetMissing: true });
+    if (rows.length < 2)   return NextResponse.json({ total: 0, count: 0 });
 
     const THAI_MM: Record<string, string> = {
       "ม.ค.": "01", "ก.พ.": "02", "มี.ค.": "03", "เม.ย.": "04",

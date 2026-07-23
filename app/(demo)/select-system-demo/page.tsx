@@ -88,6 +88,30 @@ export default function SelectSystemDemoPage() {
 
         // ── ดึง CRM config จาก client_crm sheet ────────────────────────
         const clientId: string = modules.clientId || "";
+
+        // ── Training card — เฉพาะ C006 ─────────────────────────────────
+        if (clientId === "C006") {
+          setSystems(prev => {
+            if (prev.some(s => s.key === "training")) return prev;
+            return [...prev, {
+              key: "training",
+              label: "คู่มือการใช้งาน",
+              sub: "Training & Demo Guide",
+              route: "/training",
+              gradient: "from-amber-500 via-orange-400 to-yellow-400",
+              glowColor: "rgba(245,158,11,0.35)",
+              border: "border-amber-200/60",
+              demoLocked: false,
+              icon: (
+                <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                    d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+              ),
+            }];
+          });
+        }
+
         if (clientId) {
           fetch(`/api/crm/modules?clientId=${clientId}`)
             .then(r => r.json())

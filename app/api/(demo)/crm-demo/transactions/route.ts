@@ -59,12 +59,14 @@ export async function GET(request: NextRequest) {
       return -1;
     };
 
-    const custCol    = findCol("cust_id",        ["opd", "hn", "patient_id", "customer_id"]);
+    const custCol    = findCol("cust_id",        ["custid", "custID", "customer_id", "opd", "hn", "patient_id"]);
     const dateCol    = findCol("date",            ["วันที่", "date", "วันที่รักษา", "วันที่ทำรายการ", "วันที่บันทึก", "วันที่ใช้บริการ", "ว/ด/ป", "วัน", "transaction_date", "tx_date"]);
-    let   statusCol  = findCol("program_status",  ["สถานะ", "ประเภท", "ประเภทรายการ", "ประเภทบริการ", "ประเภทการใช้บริการ", "ประเภทสมาชิก", "status", "type", "transaction_type"]);
-    const programCol = findCol("program",         ["ชื่อโปรแกรม (เลือก)", "ชื่อโปรแกรม", "โปรแกรม"]);
+    let   statusCol  = findCol("status",          ["สถานะ", "status", "program_status", "ประเภท", "ประเภทรายการ", "ประเภทบริการ", "ประเภทสมาชิก", "type", "transaction_type"]);
+    const programCol = findCol("product",         ["product", "program", "รายการ", "ชื่อโปรแกรม (เลือก)", "ชื่อโปรแกรม", "โปรแกรม", "บริการ", "service"]);
     const qtyCol     = findCol("quantity",        ["จำนวน"]);
-    const priceCol   = findCol("price",           ["จำนวนเงิน", "ราคา", "amount"]);
+    // totalprice ก่อน, fallback price — สำหรับ type 2 (rental) ใช้ totalprice
+    let priceCol = findCol("totalprice",          ["totalprice", "total_price", "price_after_discount"]);
+    if (priceCol === -1) priceCol = findCol("price", ["จำนวนเงิน", "ราคา", "amount"]);
     const doctorCol  = findCol("doctor",          ["แพทย์", "เเพทย์", "หมอ"]);
     const staffCol   = findCol("staff",           ["พนักงาน bt", "bt", "บิวตี้"]);
     const usageCol          = findCol("program_usage",   ["ยังไม่ใช้", "ใช้คอร์ส"]);
@@ -91,9 +93,15 @@ export async function GET(request: NextRequest) {
       return isNaN(n) ? 0 : n;
     };
 
+    // fallback: ถ้า custCol ยังหาไม่เจอ ลอง scan header ด้วย pattern คล้าย custid/custID
+    let resolvedCustCol = custCol;
+    if (resolvedCustCol === -1) {
+      resolvedCustCol = txHeaders.findIndex(h => /^cust.?id$/i.test(h) || h === "customerid" || h === "id_cust");
+    }
+
     const allCustRows = txRows.slice(1).filter(row => {
-      if (custCol === -1) return false;
-      return (row[custCol] || "").toString().trim() === customerId;
+      if (resolvedCustCol === -1) return false;
+      return (row[resolvedCustCol] || "").toString().trim() === customerId;
     });
 
     const transactions = allCustRows
@@ -101,7 +109,7 @@ export async function GET(request: NextRequest) {
         rowIndex:       i + 2,
         date:           dateCol       !== -1 ? (row[dateCol]       || "").toString().trim() : "",
         program_status: statusCol     !== -1 ? (row[statusCol]     || "").toString().trim() : "",
-        program:        programCol    !== -1 ? (row[programCol]    || "").toString().trim() : "",
+        program:        programCol    !== -1 ? (row[programCol]    || "").toString().trim() : (row[3] || "").toString().trim(),
         quantity:       parseNum(qtyCol     !== -1 ? row[qtyCol]   : 0),
         price:          parseNum(priceCol   !== -1 ? row[priceCol] : 0),
         doctor:         doctorCol     !== -1 ? (row[doctorCol]     || "").toString().trim() : "",

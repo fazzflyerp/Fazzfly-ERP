@@ -366,6 +366,7 @@ function CRMDemoPage() {
   const [activeBranchName, setActiveBranchName] = useState("");
   const [allBranches,      setAllBranches]      = useState<{ branchId: string; branchName: string }[]>([]);
   const [userRole,         setUserRole]         = useState("STAFF");
+  const [clientType,       setClientType]       = useState(1);
   const isSuperAdmin = userRole === "SUPER_ADMIN";
   const isAdmin      = userRole === "ADMIN" || isSuperAdmin;
 
@@ -419,13 +420,15 @@ function CRMDemoPage() {
   const bootBranch = async () => {
     try {
       // 1. branch + modules config พร้อมกัน
-      const [branchRes, branchesRes, crmRes] = await Promise.all([
+      const [branchRes, branchesRes, crmRes, modsRes] = await Promise.all([
         fetch("/api/auth/branch-check").then(r => r.json()).catch(() => ({})),
         fetch("/api/auth/branches").then(r => r.json()).catch(() => ({ branches: [] })),
         urlClientId
           ? fetch(`/api/crm/modules?clientId=${urlClientId}`).then(r => r.json()).catch(() => ({}))
           : Promise.resolve({}),
+        fetch("/api/user/modules-demo").then(r => r.json()).catch(() => ({})),
       ]);
+      setClientType(modsRes.clientType || 1);
 
       const bid   = branchRes.branchId   || "";
       const bname = branchRes.branchName || "";
@@ -779,7 +782,7 @@ function CRMDemoPage() {
             allBranches={allBranches} onOpenCust={openCust} onEditCust={editCust}
             onTransfer={transferCust}
             txMod={txMod} clientId={effectiveClientId} activeBranchName={activeBranchName}
-            onOpenFollow={openFollow} onOpenApt={openAptForCust} />
+            onOpenFollow={openFollow} onOpenApt={openAptForCust} clientType={clientType} />
         )}
         {tab === "follows" && (
           <FollowTab follows={visibleFollows} branchId={activeBranchId}

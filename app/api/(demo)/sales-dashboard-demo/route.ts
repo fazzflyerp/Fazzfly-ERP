@@ -111,6 +111,10 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    const expSid        = searchParams.get("expenseSpreadsheetId") || spreadsheetId;
+    const expSheet      = searchParams.get("expenseSheetName")     || "";
+    const expConfigName = searchParams.get("expenseConfigName")    || "";
+
     const [configRows, dataRows] = await Promise.all([
       saReadRange(spreadsheetId, `${configName}!A:K`),
       saReadRange(spreadsheetId, `${sheetName}!A:ZZ`),
@@ -125,8 +129,55 @@ export async function GET(request: NextRequest) {
 
     const rows = parseRows(dataRows, config);
 
+    // aggregate expense — อ่าน config ก่อนเพื่อหา amount col และ date col
+    const expenseByPeriod: Record<string, number> = {};
+    if (expSheet && expConfigName) {
+      try {
+        const [expCfgRows, expDataRows] = await Promise.all([
+          saReadRange(expSid, `${expConfigName}!A:K`),
+          saReadRange(expSid, `${expSheet}!A:ZZ`),
+        ]);
+
+        const expConfig = parseConfigSheet(expCfgRows);
+        const amountField = expConfig.find((f) =>
+          ["amount","ยอดเงิน","total","รวม","จำนวน"].includes(f.fieldName.toLowerCase()) ||
+          f.label.toLowerCase().includes("ยอด") || f.label.toLowerCase().includes("amount")
+        );
+        const dateField = expConfig.find((f) =>
+          f.type.toLowerCase() === "date" ||
+          ["date","วันที่"].includes(f.fieldName.toLowerCase())
+        );
+
+        if (amountField && expDataRows.length >= 2) {
+          const amtIdx  = amountField.order - 1;
+          const dateIdx = dateField ? dateField.order - 1 : -1;
+
+          expDataRows.slice(1).forEach((row: any[]) => {
+            if (!row.some((c) => c !== "" && c != null)) return;
+
+            // derive period (MM/YYYY) จาก date field
+            let period = "";
+            if (dateIdx >= 0) {
+              const dv = (row[dateIdx] ?? "").toString().trim();
+              const m  = dv.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+              if (m) period = `${m[2].padStart(2,"0")}/${m[3]}`;
+              else {
+                const m2 = dv.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                if (m2) period = `${m2[2]}/${m2[1]}`;
+              }
+            }
+            if (!period) return;
+
+            const v = parseFloat((row[amtIdx] ?? "").toString().replace(/,/g, ""));
+            if (!isNaN(v) && v > 0)
+              expenseByPeriod[period] = (expenseByPeriod[period] || 0) + v;
+          });
+        }
+      } catch { /* expense sheet ไม่มี — ไม่ error */ }
+    }
+
     return NextResponse.json(
-      { config, rows },
+      { config, rows, expenseByPeriod },
       { headers: { "Cache-Control": "private, no-store" } }
     );
   } catch (error: any) {

@@ -36,6 +36,7 @@ interface Props {
   activeBranchName: string;
   onOpenFollow:     (c: Customer) => void;
   onOpenApt:        (c: Customer) => void;
+  clientType?:      number;
 }
 
 // ── Shared helpers (module-level — used by panel + modals) ────────────────────
@@ -608,7 +609,7 @@ function TransferModal({
 // ══════════════════════════════════════════════════════════════════════════════
 function DarkDetailPanel({
   cust, onClose, courses, apts, txMod, clientId, activeBranchName,
-  isSuperAdmin, allBranches, customers, onEditCust, onOpenFollow, onOpenApt,
+  isSuperAdmin, allBranches, customers, onEditCust, onOpenFollow, onOpenApt, clientType,
 }: {
   cust:             Customer;
   onClose:          () => void;
@@ -623,7 +624,9 @@ function DarkDetailPanel({
   onEditCust:       (c: Customer) => void;
   onOpenFollow:     (c: Customer) => void;
   onOpenApt:        (c: Customer) => void;
+  clientType?:      number;
 }) {
+  const isRental = clientType === 2;
   const [activeTab, setActiveTab] = useState("info");
 
   // ── Transaction state ─────────────────────────────────────────────────────
@@ -658,7 +661,7 @@ function DarkDetailPanel({
   }, [txMod, txLoaded]);
 
   useEffect(() => {
-    if ((activeTab === "treatment" || activeTab === "course") && cust) loadTx(cust.customer_id);
+    if ((activeTab === "treatment" || activeTab === "rental" || activeTab === "course" || activeTab === "points") && cust) loadTx(cust.customer_id);
   }, [activeTab, cust, loadTx]);
 
   useEffect(() => {
@@ -826,7 +829,12 @@ function DarkDetailPanel({
 
           {/* Tabs */}
           <div className="flex border-b border-white/[0.07] flex-shrink-0 overflow-x-auto scrollbar-hide">
-            {DETAIL_TABS.map(t => (
+            {(isRental ? [
+              { id: "info",    label: "ข้อมูล" },
+              { id: "rental",  label: "ประวัติการเช่า" },
+              { id: "points",  label: "แต้มสะสม" },
+              { id: "photo",   label: "รูปภาพ" },
+            ] : DETAIL_TABS).map(t => (
               <button key={t.id} onClick={() => setActiveTab(t.id)}
                 className={`flex-shrink-0 px-4 py-3 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap ${
                   activeTab === t.id ? "border-rose-500 text-rose-400" : "border-transparent text-slate-500 hover:text-slate-300"
@@ -894,8 +902,8 @@ function DarkDetailPanel({
               </div>
             )}
 
-            {/* ── Tab: ประวัติรักษา ── */}
-            {activeTab === "treatment" && (
+            {/* ── Tab: ประวัติรักษา / ประวัติการเช่า ── */}
+            {(activeTab === "treatment" || activeTab === "rental") && (
               <div className="px-4 py-3 space-y-2">
                 {!txMod && (
                   <div className="py-10 flex flex-col items-center text-center">
@@ -944,7 +952,43 @@ function DarkDetailPanel({
               </div>
             )}
 
-            {/* ── Tab: คอร์ส / Member ── */}
+            {/* ── Tab: แต้มสะสม (type 2 only) ── */}
+            {activeTab === "points" && (() => {
+              const totalPoints = txList.reduce((s, tx) => s + Math.max(0, tx.price), 0);
+              return (
+                <div className="px-4 py-4 space-y-4">
+                  {/* Summary */}
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-5 text-center">
+                    <p className="text-xs font-semibold text-amber-400/70 uppercase tracking-widest mb-1">แต้มสะสมทั้งหมด</p>
+                    <p className="text-4xl font-black text-amber-400">{totalPoints.toLocaleString()}</p>
+                    <p className="text-[10px] text-amber-400/50 mt-1">แต้ม (1 บาท = 1 แต้ม)</p>
+                  </div>
+                  {/* History */}
+                  {txLoading ? (
+                    <div className="flex justify-center py-6">
+                      <svg className="w-5 h-5 animate-spin text-amber-400" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                    </div>
+                  ) : txList.length === 0 ? (
+                    <p className="text-center text-sm text-slate-500 py-6">ยังไม่มีประวัติการเช่า</p>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">ประวัติ</p>
+                      {txList.slice(0, 10).map((tx, i) => (
+                        <div key={i} className="flex items-center justify-between bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2.5">
+                          <div>
+                            <p className="text-xs font-semibold text-white">{tx.program || "การเช่า"}</p>
+                            <p className="text-[10px] text-slate-500">{fmtDate(tx.date) || tx.date}</p>
+                          </div>
+                          <span className="text-sm font-bold text-amber-400">+{Math.max(0, tx.price).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ── Tab: คอร์ส / Member (type 1 only) ── */}
             {activeTab === "course" && (
               <div className="px-4 py-4 space-y-4">
                 {txLoading ? (
@@ -1286,7 +1330,7 @@ function DarkDetailPanel({
 export default function CustTab({
   customers, courses, apts, branchId, isSuperAdmin, allBranches,
   onOpenCust, onEditCust, onTransfer,
-  txMod, clientId, activeBranchName, onOpenFollow, onOpenApt,
+  txMod, clientId, activeBranchName, onOpenFollow, onOpenApt, clientType,
 }: Props) {
   const [q, setQ] = useState("");
   const [transferCust, setTransferCust] = useState<Customer | null>(null);
@@ -1398,6 +1442,7 @@ export default function CustTab({
           onEditCust={c => { onEditCust(c); setViewDetail(null); }}
           onOpenFollow={c => { onOpenFollow(c); setViewDetail(null); }}
           onOpenApt={c => { onOpenApt(c); setViewDetail(null); }}
+          clientType={clientType}
         />
       )}
 

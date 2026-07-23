@@ -9,6 +9,16 @@ import { withLogger } from "@/lib/with-logger";
 import { saBatchUpdate, saAppendRows, saLog, saInvalidateCache } from "@/lib/google-sa";
 import { verifySheetAccess } from "@/lib/verify-sheet-access";
 
+function getColumnLetter(colNum: number): string {
+  let letter = "";
+  while (colNum > 0) {
+    colNum--;
+    letter = String.fromCharCode(65 + (colNum % 26)) + letter;
+    colNum = Math.floor(colNum / 26);
+  }
+  return letter;
+}
+
 async function _POST(request: NextRequest) {
   try {
     const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
@@ -27,10 +37,18 @@ async function _POST(request: NextRequest) {
 
     console.log(`💾 [module/update] ${sheetName} — ${updates.length} rows`);
 
-    // Batch update existing rows
+    // Batch update existing rows — one range per cell, only config-specified columns
     const batchData = updates
       .filter((u: any) => !u.isNew)
-      .map((u: any) => ({ range: `${sheetName}!A${u.rowIndex}`, values: [u.data] }));
+      .flatMap((u: any) =>
+        (u.data as any[])
+          .map((val: any, colIdx: number) => ({ colIdx, val }))
+          .filter(({ val }: { val: any }) => val !== undefined && val !== null)
+          .map(({ colIdx, val }: { colIdx: number; val: any }) => ({
+            range: `${sheetName}!${getColumnLetter(colIdx + 1)}${u.rowIndex}`,
+            values: [[val]],
+          }))
+      );
 
     let totalUpdated = 0;
     if (batchData.length > 0) {

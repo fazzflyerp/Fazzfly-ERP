@@ -13,7 +13,7 @@ import {
   saReadRange,
   saGetSheetMeta,
   saStructuralBatchUpdate,
-  saWriteRange,
+  saBatchUpdate,
   saLog,
   saInvalidateCache,
 } from "@/lib/google-sa";
@@ -66,10 +66,9 @@ async function insertRowsWithDateSort(params: {
   sheetId: number;
   rowsToInsert: any[][];
   dateFieldIndex: number | null;
-  headerRow: any[];
   requestId: string;
 }) {
-  const { spreadsheetId, sheetName, sheetId, rowsToInsert, dateFieldIndex, headerRow, requestId } = params;
+  const { spreadsheetId, sheetName, sheetId, rowsToInsert, dateFieldIndex, requestId } = params;
 
   const existingRows = await saReadRange(spreadsheetId, sheetName);
   const headerRowIndex = 1;
@@ -122,8 +121,15 @@ async function insertRowsWithDateSort(params: {
       },
     }]);
 
-    const endCol = getColumnLetter(headerRow.length);
-    await saWriteRange(spreadsheetId, `${sheetName}!A${insertIndex}:${endCol}${insertIndex}`, [row]);
+    // Write only config-specified cells (skip columns not in config)
+    const cellWrites = row
+      .map((val: any, colIdx: number) => ({ colIdx, val }))
+      .filter(({ val }: { val: any }) => val !== undefined && val !== null && val !== "")
+      .map(({ colIdx, val }: { colIdx: number; val: any }) => ({
+        range: `${sheetName}!${getColumnLetter(colIdx + 1)}${insertIndex}`,
+        values: [[val]],
+      }));
+    if (cellWrites.length > 0) await saBatchUpdate(spreadsheetId, cellWrites);
     saInvalidateCache(spreadsheetId);
 
     console.log(`✅ [${requestId}] Row ${i + 1} inserted at ${insertIndex}`);
@@ -181,19 +187,26 @@ export async function POST(request: NextRequest) {
     const customerFields = (fields as FieldConfig[]).filter((f) => f.section === "customer");
     const lineItemFields  = (fields as FieldConfig[]).filter((f) => f.section === "lineitem");
 
+    const maxColIndex = Object.keys(columnIndices).length > 0
+      ? Math.max(...Object.values(columnIndices))
+      : headerRow.length - 1;
+
+    const SENTINEL = new Set(["__on__", "__selected__"]);
+    const cleanVal = (v: any) => { const s = String(v ?? ""); return SENTINEL.has(s) ? "" : v ?? ""; };
+
     const rowsToInsert: any[][] = lineItems.map((item: any, idx: number) => {
-      const row = new Array(headerRow.length).fill("");
+      const row = new Array(maxColIndex + 1).fill("");
 
       customerFields.forEach((f: FieldConfig) => {
         const col = columnIndices[f.fieldName];
         if (col !== undefined) {
           if (idx === 0) {
-            row[col] = customerData[f.fieldName] ?? "";
+            row[col] = cleanVal(customerData[f.fieldName]);
           } else {
             const name = f.fieldName.toLowerCase();
             if (f.type === "date" || name.includes("date") || name.includes("วันที่") ||
                 name.includes("id") || name === "cust_id" || name === "receipt_no") {
-              row[col] = customerData[f.fieldName] ?? "";
+              row[col] = cleanVal(customerData[f.fieldName]);
             }
           }
         }
@@ -201,14 +214,14 @@ export async function POST(request: NextRequest) {
 
       lineItemFields.forEach((f: FieldConfig) => {
         const col = columnIndices[f.fieldName];
-        if (col !== undefined) row[col] = item[f.fieldName] ?? "";
+        if (col !== undefined) row[col] = cleanVal(item[f.fieldName]);
       });
 
       return row;
     });
 
     const results = await insertRowsWithDateSort({
-      spreadsheetId, sheetName, sheetId, rowsToInsert, dateFieldIndex, headerRow, requestId,
+      spreadsheetId, sheetName, sheetId, rowsToInsert, dateFieldIndex, requestId,
     });
 
     const userEmail = ((token as any)?.email as string || "").toLowerCase();

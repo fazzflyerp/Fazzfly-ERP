@@ -95,6 +95,13 @@ export default function FinancePage() {
   const spreadsheetId = searchParams.get("spreadsheetId") || "";
   const sheetName     = searchParams.get("sheetName")     || "Finance";
   const moduleName    = searchParams.get("moduleName")    || "Financial Dashboard";
+  const clientType    = parseInt(searchParams.get("clientType") || "1") || 1;
+  const revSid        = searchParams.get("revSpreadsheetId") || "";
+  const revSheet      = searchParams.get("revSheetName")     || "";
+  const revCfg        = searchParams.get("revConfigName")    || "";
+  const expSid        = searchParams.get("expSpreadsheetId") || "";
+  const expSheet      = searchParams.get("expSheetName")     || "";
+  const expCfg        = searchParams.get("expConfigName")    || "";
 
   const [navOpen, setNavOpen] = useState(false);
   const [role, setRole]               = useState("");
@@ -106,6 +113,13 @@ export default function FinancePage() {
   const [loading, setLoading]   = useState(true);
   const [dataError, setDataError] = useState("");
   const [syncDebug, setSyncDebug] = useState<any>(null);
+  const [resolvedType,    setResolvedType]    = useState(clientType);
+  const [resolvedRevSid,  setResolvedRevSid]  = useState(revSid);
+  const [resolvedRevSheet,setResolvedRevSheet]= useState(revSheet);
+  const [resolvedRevCfg,  setResolvedRevCfg]  = useState(revCfg);
+  const [resolvedExpSid,  setResolvedExpSid]  = useState(expSid);
+  const [resolvedExpSheet,setResolvedExpSheet]= useState(expSheet);
+  const [resolvedExpCfg,  setResolvedExpCfg]  = useState(expCfg);
 
   const [liabilities, setLiabilities] = useState<{ liability_id: string; po_id: string; supplier_name: string; installment_no: string; due_date: string; amount: string; status: string }[]>([]);
 
@@ -136,18 +150,25 @@ export default function FinancePage() {
 
   // ─── data loading ────────────────────────────────────────────────────────────
 
-  const loadData = useCallback(async (bid: string, bname: string) => {
+  type LoadOpts = { type?: number; rSid?: string; rSheet?: string; rCfg?: string; eSid?: string; eSheet?: string; eCfg?: string };
+  const loadData = useCallback(async (bid: string, bname: string, opts: LoadOpts = {}) => {
     if (!spreadsheetId) return;
     setLoading(true);
     setDataError("");
     try {
-      const qs = [
-        bid   ? `&branchId=${encodeURIComponent(bid)}`     : "",
-        bname ? `&branchName=${encodeURIComponent(bname)}` : "",
-      ].join("");
-      const res  = await fetch(
-        `/api/finance/sync?spreadsheetId=${encodeURIComponent(spreadsheetId)}&sheetName=${encodeURIComponent(sheetName)}${qs}`
-      );
+      const ct = opts.type ?? resolvedType;
+      const p = new URLSearchParams({ spreadsheetId, sheetName, clientType: String(ct) });
+      if (bid)   p.set("branchId",   bid);
+      if (bname) p.set("branchName", bname);
+      if (ct === 2) {
+        const rs = opts.rSid   ?? resolvedRevSid;   if (rs)   p.set("revSpreadsheetId", rs);
+        const rv = opts.rSheet ?? resolvedRevSheet; if (rv)   p.set("revSheetName",     rv);
+        const rc = opts.rCfg   ?? resolvedRevCfg;   if (rc)   p.set("revConfigName",    rc);
+        const es = opts.eSid   ?? resolvedExpSid;   if (es)   p.set("expSpreadsheetId", es);
+        const ev = opts.eSheet ?? resolvedExpSheet; if (ev)   p.set("expSheetName",     ev);
+        const ec = opts.eCfg   ?? resolvedExpCfg;   if (ec)   p.set("expConfigName",    ec);
+      }
+      const res = await fetch(`/api/finance/sync?${p.toString()}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "โหลดไม่สำเร็จ");
       setRows(data.rows || []);
@@ -159,6 +180,29 @@ export default function FinancePage() {
   useEffect(() => {
     async function init() {
       try {
+        // 1. resolve clientType + module params
+        let opts: LoadOpts = {};
+        try {
+          const mods = await fetch("/api/user/modules-demo").then((r) => r.json());
+          const ct   = mods.clientType || 1;
+          setResolvedType(ct);
+          if (ct === 2) {
+            const allMods: any[] = mods.modules || [];
+            const sM = allMods.find((m: any) => { const n = (m.moduleName||"").toUpperCase(); return n.includes("SALE") || n.includes("RENTAL"); });
+            const eM = allMods.find((m: any) => { const n = (m.moduleName||"").toUpperCase(); return n.includes("EXPENSE") || n.includes("ค่าใช้จ่าย"); });
+            opts = {
+              type:   ct,
+              rSid:   sM?.spreadsheetId, rSheet: sM?.sheetName, rCfg: sM?.configName,
+              eSid:   eM?.spreadsheetId, eSheet: eM?.sheetName, eCfg: eM?.configName,
+            };
+            if (sM) { setResolvedRevSid(sM.spreadsheetId); setResolvedRevSheet(sM.sheetName); setResolvedRevCfg(sM.configName); }
+            if (eM) { setResolvedExpSid(eM.spreadsheetId); setResolvedExpSheet(eM.sheetName); setResolvedExpCfg(eM.configName); }
+          } else {
+            opts = { type: ct };
+          }
+        } catch { /* non-blocking */ }
+
+        // 2. branch check + load
         const auth = await fetch("/api/auth/branch-check").then((r) => r.json());
         setRole(auth.role || "");
         setBranchName(auth.branchName || "");
@@ -171,15 +215,17 @@ export default function FinancePage() {
           } catch {
             setBranches([{ id: "", name: "ทั้งหมด" }]);
           }
-          try {
-            const liaRes = await fetch("/api/inv/liabilities?status=PENDING");
-            if (liaRes.ok) setLiabilities((await liaRes.json()).liabilities || []);
-          } catch { /* liabilities optional */ }
-          await loadData("", "");
+          if (auth.role?.toUpperCase() === "SUPER_ADMIN") {
+            try {
+              const liaRes = await fetch("/api/inv/liabilities?status=PENDING");
+              if (liaRes.ok) setLiabilities((await liaRes.json()).liabilities || []);
+            } catch { /* liabilities optional */ }
+          }
+          await loadData("", "", opts);
         } else {
           setSelBranch(auth.branchId || "");
           setBranchName(auth.branchName || "");
-          await loadData(auth.branchId || "", auth.branchName || "");
+          await loadData(auth.branchId || "", auth.branchName || "", opts);
         }
       } catch (e: any) { setDataError(e.message); setLoading(false); }
     }
@@ -312,8 +358,10 @@ export default function FinancePage() {
     const matrix: Record<string, Record<string, YoyCell>> = {};
     months.forEach((m) => { matrix[m] = {}; years.forEach((y) => { matrix[m][y] = null; }); });
     filteredRows.forEach((r) => {
-      const [mm, yyyy] = r.period.split("/");
-      if (!mm || !yyyy) return;
+      const parts = r.period.split("/");
+      const mm   = parts[0]?.padStart(2, "0");
+      const yyyy = parts[1];
+      if (!mm || !yyyy || !matrix[mm]) return;
       const { revenue, cogs, expenses } = r.computed;
       matrix[mm][yyyy] = { revenue, cogs, net: revenue - cogs - expenses };
     });
@@ -1226,10 +1274,7 @@ export default function FinancePage() {
         {syncDebug && (
           <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl px-5 py-4 text-[10px] font-mono text-amber-400/80 space-y-1">
             <div className="font-bold text-amber-400 text-xs">[debug:sync] revenue = 0 ทุกงวด</div>
-            <div>branchName sent: &quot;{syncDebug.branchNameReceived}&quot; · HelperS rows: {syncDebug.helperSRows}</div>
-            {syncDebug.sampleHelperS?.map((s: any, i: number) => (
-              <div key={i}>row{i+1}: period=&quot;{s.period}&quot;({s.periodNorm}) amount=&quot;{s.amount}&quot; branch=&quot;{s.branchName}&quot;</div>
-            ))}
+            <div>clientType: {syncDebug.clientType} · branchName: &quot;{syncDebug.branchNameReceived}&quot;</div>
             <div>revenueMap: {JSON.stringify(syncDebug.revenueMapEntries)}</div>
           </div>
         )}

@@ -33,8 +33,12 @@ interface ModuleCard {
   actions: Action[];
 }
 
-function buildCards(modules: Module[]): ModuleCard[] {
+function buildCards(modules: Module[], clientType = 1, clientId = ""): ModuleCard[] {
   const cards: ModuleCard[] = [];
+
+  // หา Sales + Expense module สำหรับ type 2 Finance URL
+  const salesMod   = modules.find((m) => { const n = (m.moduleName||"").toUpperCase(); return n.includes("SALE") || n.includes("RENTAL") || n.includes("RENT"); });
+  const expenseMod = modules.find((m) => { const n = (m.moduleName||"").toUpperCase(); return n.includes("EXPENSE") || n.includes("ค่าใช้จ่าย"); });
 
   for (const m of modules) {
     const name   = (m.moduleName  || "").toUpperCase();
@@ -131,33 +135,63 @@ function buildCards(modules: Module[]): ModuleCard[] {
         actions: [
           {
             label: "ดู P&L Dashboard",
-            href:  `/ERP/finance?spreadsheetId=${m.spreadsheetId}&sheetName=${encodeURIComponent(m.sheetName)}&moduleName=${encodeURIComponent(m.moduleName || "Financial Dashboard")}`,
+            href: (() => {
+              const p = new URLSearchParams({
+                spreadsheetId: m.spreadsheetId,
+                sheetName:     m.sheetName,
+                moduleName:    m.moduleName || "Financial Dashboard",
+                clientType:    String(clientType),
+              });
+              if (clientType === 2) {
+                if (salesMod)   { p.set("revSpreadsheetId", salesMod.spreadsheetId);   p.set("revSheetName", salesMod.sheetName);   p.set("revConfigName", salesMod.configName); }
+                if (expenseMod) { p.set("expSpreadsheetId", expenseMod.spreadsheetId); p.set("expSheetName", expenseMod.sheetName); p.set("expConfigName", expenseMod.configName); }
+              }
+              return `/ERP/finance?${p.toString()}`;
+            })(),
             primary: true,
           },
         ],
       });
-      // card 2 — Accounting (AR / AP) ออกอัตโนมัติจาก Finance module
-      cards.push({
-        key:        `${m.moduleId}__accounting`,
-        group:      "การเงิน",
-        label:      "บัญชี",
-        sublabel:   "ลูกหนี้ · เจ้าหนี้ · Dashboard",
-        gradient:   "from-blue-500 to-violet-500",
-        shadowColor:"rgba(99,102,241,0.35)",
-        icon: (
-          <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-              d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-          </svg>
-        ),
-        actions: [
-          {
-            label: "ดูบัญชี AR · AP",
-            href:  `/ERP/accounting-demo?spreadsheetId=${m.spreadsheetId}`,
-            primary: true,
-          },
-        ],
-      });
+      // card 2 — AR (type 2 = ชุดที่ยังไม่คืน, type 1 = AR/AP)
+      if (clientType === 2) {
+        // ลูกหนี้ = ชุดที่ยังไม่คืน ดึงจาก spreadsheet ของ Sales module
+        const rentalSid = salesMod?.spreadsheetId || m.spreadsheetId;
+        cards.push({
+          key:        `${m.moduleId}__ar`,
+          group:      "การเงิน",
+          label:      "สต็อคชุด / ลูกหนี้",
+          sublabel:   "ชุดที่ยังไม่คืน · ว่าง",
+          gradient:   "from-orange-500 to-amber-400",
+          shadowColor:"rgba(249,115,22,0.35)",
+          icon: (
+            <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+          ),
+          actions: [
+            { label: "ดูสต็อคชุด", href: `/ERP/rental-stock?spreadsheetId=${rentalSid}`, primary: true },
+          ],
+        });
+      } else {
+        cards.push({
+          key:        `${m.moduleId}__accounting`,
+          group:      "การเงิน",
+          label:      "บัญชี",
+          sublabel:   "ลูกหนี้ · เจ้าหนี้ · Dashboard",
+          gradient:   "from-blue-500 to-violet-500",
+          shadowColor:"rgba(99,102,241,0.35)",
+          icon: (
+            <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            </svg>
+          ),
+          actions: [
+            { label: "ดูบัญชี AR · AP", href: `/ERP/accounting-demo?spreadsheetId=${m.spreadsheetId}`, primary: true },
+          ],
+        });
+      }
       continue;
     }
 
@@ -216,6 +250,14 @@ function buildCards(modules: Module[]): ModuleCard[] {
             label: "Sales Dashboard",
             href:  `/ERP/sales-dashboard-demo?spreadsheetId=${m.spreadsheetId}&configName=${encodeURIComponent(m.configName)}&sheetName=${encodeURIComponent(m.sheetName)}&moduleName=${encodeURIComponent(m.moduleName || "Sales")}`,
           },
+          {
+            label: "ออกใบเสร็จ",
+            href:  `/ERP/receipt?spreadsheetId=${m.spreadsheetId}`,
+          },
+          ...(clientType === 2 ? [{
+            label: "สต็อคชุด",
+            href:  `/ERP/rental-stock?spreadsheetId=${m.spreadsheetId}`,
+          }] : []),
         ],
       });
       continue;
@@ -239,7 +281,7 @@ function buildCards(modules: Module[]): ModuleCard[] {
         actions: [
           {
             label: "เปิด CRM",
-            href:  `/ERP/crm?spreadsheetId=${m.spreadsheetId}&aptSheet=${encodeURIComponent(m.sheetName || "appointments")}&title=${encodeURIComponent(m.moduleName || "CRM")}`,
+            href:  `/ERP/crm?spreadsheetId=${m.spreadsheetId}&aptSheet=${encodeURIComponent(m.sheetName || "appointments")}&title=${encodeURIComponent(m.moduleName || "CRM")}${clientId ? `&clientId=${encodeURIComponent(clientId)}` : ""}`,
             primary: true,
           },
         ],
@@ -271,6 +313,27 @@ function buildCards(modules: Module[]): ModuleCard[] {
           label: "เพิ่มข้อมูล",
           href:  `/ERP/form-demo?moduleId=${m.moduleId}&spreadsheetId=${m.spreadsheetId}&configName=${encodeURIComponent(m.configName)}&sheetName=${encodeURIComponent(m.sheetName)}`,
         }] : []),
+      ],
+    });
+  }
+
+  // ── Training card — เฉพาะ C006 (demo account) ─────────────────────
+  if (clientId === "C006") {
+    cards.push({
+      key:        "__training__",
+      group:      "อื่นๆ",
+      label:      "คู่มือการใช้งาน",
+      sublabel:   "Training & Demo Guide",
+      gradient:   "from-amber-500 to-orange-400",
+      shadowColor:"rgba(245,158,11,0.35)",
+      icon: (
+        <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+            d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+        </svg>
+      ),
+      actions: [
+        { label: "เปิดคู่มือ", href: "/training", primary: true },
       ],
     });
   }
@@ -375,7 +438,7 @@ export default function HomeDemoPage() {
         }
 
         setMods(mods);
-        setCards(buildCards(mods));
+        setCards(buildCards(mods, modulesData.clientType || 1, modulesData.clientId || ""));
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));

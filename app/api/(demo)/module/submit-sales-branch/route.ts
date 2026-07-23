@@ -1,6 +1,7 @@
 /**
  * POST /api/module/submit-sales-branch
- * เหมือน submit-sales แต่เขียน branchName ลง col AG (index 32) ทุกแถว
+ * เขียนเฉพาะ column ที่ระบุใน config เท่านั้น (sparse write via saBatchUpdate)
+ * branchName → เขียนลง column ที่ config ระบุ fieldName ขึ้นต้นด้วย "branch" เท่านั้น
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -9,12 +10,10 @@ import {
   saReadRange,
   saGetSheetMeta,
   saStructuralBatchUpdate,
-  saWriteRange,
+  saBatchUpdate,
   saLog,
   saInvalidateCache,
 } from "@/lib/google-sa";
-
-const COL_AG = 32; // col AG = index 32 (0-based)
 
 function getColumnLetter(colNum: number): string {
   let letter = "";
@@ -60,10 +59,9 @@ async function insertRowsWithDateSort(params: {
   sheetId: number;
   rowsToInsert: any[][];
   dateFieldIndex: number | null;
-  headerRow: any[];
   requestId: string;
 }) {
-  const { spreadsheetId, sheetName, sheetId, rowsToInsert, dateFieldIndex, headerRow, requestId } = params;
+  const { spreadsheetId, sheetName, sheetId, rowsToInsert, dateFieldIndex, requestId } = params;
 
   const existingRows = await saReadRange(spreadsheetId, sheetName);
   const headerRowIndex = 1;
@@ -94,7 +92,6 @@ async function insertRowsWithDateSort(params: {
       }
     }
 
-    // Safety: ห้ามเขียนทับ header row (row 1)
     if (insertIndex < 2) insertIndex = lastRow + 1;
 
     if (insertIndex > currentRowCount) {
@@ -115,11 +112,15 @@ async function insertRowsWithDateSort(params: {
       },
     }]);
 
-    // ── ensure row is long enough to reach col AG ──────────────────────────
-    while (row.length <= COL_AG) row.push("");
-
-    const endCol = getColumnLetter(Math.max(headerRow.length, COL_AG + 1));
-    await saWriteRange(spreadsheetId, `${sheetName}!A${insertIndex}:${endCol}${insertIndex}`, [row]);
+    // sparse write — เขียนเฉพาะ cell ที่มีค่าจาก config เท่านั้น
+    const cellWrites = row
+      .map((val: any, colIdx: number) => ({ colIdx, val }))
+      .filter(({ val }: { val: any }) => val !== undefined && val !== null && val !== "")
+      .map(({ colIdx, val }: { colIdx: number; val: any }) => ({
+        range: `${sheetName}!${getColumnLetter(colIdx + 1)}${insertIndex}`,
+        values: [[val]],
+      }));
+    if (cellWrites.length > 0) await saBatchUpdate(spreadsheetId, cellWrites);
     saInvalidateCache(spreadsheetId);
 
     dateValues.splice(insertIndex - headerRowIndex - 1, 0, dateFieldIndex !== null ? parseDate(row[dateFieldIndex]) : null);
@@ -150,10 +151,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No line items provided" }, { status: 400 });
 
     const { sheetId } = await saGetSheetMeta(spreadsheetId, sheetName);
-    const allRows = await saReadRange(spreadsheetId, sheetName);
-    const headerRow = allRows[0] || [];
 
     interface FieldConfig { fieldName: string; order: number; type: string; section: string; }
+
+    const COL_BRANCH = 32; // col AG — hardcoded เสมอ
 
     const columnIndices: Record<string, number> = {};
     let dateFieldIndex: number | null = null;
@@ -171,19 +172,24 @@ export async function POST(request: NextRequest) {
     const customerFields = (fields as FieldConfig[]).filter((f) => f.section === "customer");
     const lineItemFields  = (fields as FieldConfig[]).filter((f) => f.section === "lineitem");
 
+    const maxConfigCol = Math.max(...Object.values(columnIndices), COL_BRANCH);
+
+    const SENTINEL = new Set(["__on__", "__selected__"]);
+    const cleanVal = (v: any) => { const s = String(v ?? ""); return SENTINEL.has(s) ? "" : v ?? ""; };
+
     const rowsToInsert: any[][] = lineItems.map((item: any, idx: number) => {
-      const row = new Array(Math.max(headerRow.length, COL_AG + 1)).fill("");
+      const row = new Array(maxConfigCol + 1).fill("");
 
       customerFields.forEach((f: FieldConfig) => {
         const col = columnIndices[f.fieldName];
         if (col !== undefined) {
           if (idx === 0) {
-            row[col] = customerData[f.fieldName] ?? "";
+            row[col] = cleanVal(customerData[f.fieldName]);
           } else {
             const name = f.fieldName.toLowerCase();
             if (f.type === "date" || name.includes("date") || name.includes("วันที่") ||
                 name.includes("id") || name === "cust_id" || name === "receipt_no") {
-              row[col] = customerData[f.fieldName] ?? "";
+              row[col] = cleanVal(customerData[f.fieldName]);
             }
           }
         }
@@ -191,17 +197,16 @@ export async function POST(request: NextRequest) {
 
       lineItemFields.forEach((f: FieldConfig) => {
         const col = columnIndices[f.fieldName];
-        if (col !== undefined) row[col] = item[f.fieldName] ?? "";
+        if (col !== undefined) row[col] = cleanVal(item[f.fieldName]);
       });
 
-      // ── เขียน branchName ลง col AG ─────────────────────────────────────
-      if (branchName) row[COL_AG] = branchName;
+      if (branchName) row[COL_BRANCH] = branchName;
 
       return row;
     });
 
     const results = await insertRowsWithDateSort({
-      spreadsheetId, sheetName, sheetId, rowsToInsert, dateFieldIndex, headerRow, requestId,
+      spreadsheetId, sheetName, sheetId, rowsToInsert, dateFieldIndex, requestId,
     });
 
     const userEmail = ((token as any)?.email as string || "").toLowerCase();

@@ -113,7 +113,12 @@ export default function AccountingDemoPage() {
   const [payMsg, setPayMsg] = useState("");
 
   useEffect(() => {
-    if (status === "unauthenticated") router.push("/login");
+    if (status === "unauthenticated") { router.push("/login"); return; }
+    if (status !== "authenticated") return;
+    // type 2 (rental) ไม่มี AR/AP → redirect home
+    fetch("/api/user/modules-demo").then((r) => r.json()).then((mods) => {
+      if ((mods.clientType || 1) === 2) router.replace("/ERP/home");
+    }).catch(() => {});
   }, [status, router]);
 
   // ── Load AR — อ่านจาก AR module (AR_Debts) ───────────────────────────────

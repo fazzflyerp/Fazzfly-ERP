@@ -73,12 +73,14 @@ async function _GET(request: NextRequest) {
     const sectionIdx     = findHeader(["section", "section_name"]);
     const repeatableIdx  = findHeader(["repeatable"]);
     const notesIdx       = findHeader(["notes", "หมายเหตุ"]);
+    const statusIdx      = findHeader(["status", "สถานะ"]);
 
     if (fieldNameIdx === -1 || labelIdx === -1 || typeIdx === -1)
       return NextResponse.json({ error: "Invalid config sheet structure", code: "INVALID_STRUCTURE", found: headers }, { status: 400 });
 
     const fields = rows.slice(1)
       .filter(row => row[fieldNameIdx])
+      .filter(row => statusIdx === -1 || row[statusIdx]?.toString().toUpperCase() === "TRUE")
       .map((row, idx) => ({
         fieldName:   row[fieldNameIdx]?.toString()                                          || `field_${idx}`,
         label:       row[labelIdx]?.toString()                                              || "",

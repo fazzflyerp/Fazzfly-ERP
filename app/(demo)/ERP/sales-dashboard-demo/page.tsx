@@ -17,6 +17,7 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ConfigField { fieldName: string; label: string; type: string; order: number }
 interface SalesMod { moduleId: string; moduleName: string; spreadsheetId: string; sheetName: string; configName: string }
+interface ExpenseMod { spreadsheetId: string; sheetName: string; configName: string }
 
 // ─── Dynamic field finder (reads config, not hardcoded) ───────────────────────
 function findFieldName(
@@ -25,7 +26,7 @@ function findFieldName(
   labelHints: string[],
   type?: string
 ): string | null {
-  const pool = type ? config.filter((f) => f.type === type) : config;
+  const pool = type ? config.filter((f) => (f.type ?? "").toLowerCase() === type.toLowerCase()) : config;
   for (const name of exactNames) {
     const f = pool.find((f) => f.fieldName.toLowerCase() === name.toLowerCase());
     if (f) return f.fieldName;
@@ -34,23 +35,32 @@ function findFieldName(
     const f = pool.find((f) => f.label.toLowerCase().includes(hint.toLowerCase()));
     if (f) return f.fieldName;
   }
+  // fallback: ถ้า type filter ไม่เจอ ลองหาจาก exactNames โดยไม่กรอง type (เผื่อ sheet ใช้ type ต่างกัน)
+  if (type && pool.length === 0) {
+    for (const name of exactNames) {
+      const f = config.find((f) => f.fieldName.toLowerCase() === name.toLowerCase());
+      if (f) return f.fieldName;
+    }
+  }
   return null;
 }
 
 function deriveFields(config: ConfigField[]) {
   return {
-    period:     config.find((f) => f.type === "period")?.fieldName || null,
-    date:       config.find((f) => f.type === "date")?.fieldName   || null,
-    sales:      findFieldName(config, ["total_sales","sales","ยอดขาย"], ["ยอดขาย","sale","total_sale"], "number"),
+    period:     config.find((f) => (f.type ?? "").toLowerCase() === "period")?.fieldName || null,
+    date:       config.find((f) => (f.type ?? "").toLowerCase() === "date")?.fieldName   || null,
+    sales:      findFieldName(config, ["total_sales","totalprice","sales","ยอดขาย"], ["ยอดรวม","ยอดขาย","sale","total_sale","รวมทั้งหมด"], "number"),
     cost:       findFieldName(config, ["cost","ต้นทุน"], ["ต้นทุน","cost"], "number"),
     profit:     findFieldName(config, ["profit","กำไร"], ["กำไร","profit"], "number"),
-    custName:   findFieldName(config, ["cust_name","customer_name"], ["ชื่อลูกค้า","ลูกค้า","customer"]),
+    deposit:    findFieldName(config, ["deposit","มัดจำ"], ["มัดจำ","deposit"], "number"),
+    custName:   findFieldName(config, ["cust_name","customer_name"], ["ชื่อลูกค้า","นามลูกค้า","ลูกค้า","customer"]),
     custChan:   findFieldName(config, ["cust_chan","channel","ช่องทาง"], ["ช่องทาง","channel","chan"]),
-    custStatus: findFieldName(config, ["cust_status","status"], ["สถานะลูกค้า","สถานะ","new","ใหม่"]),
-    program:    findFieldName(config, ["program","service","บริการ"], ["โปรแกรม","program","บริการ","service"]),
+    custStatus: findFieldName(config, ["cust_status"], ["สถานะลูกค้า"]),
+    statusAny:  findFieldName(config, ["status","cust_status"], ["สถานะ"]),
+    program:    findFieldName(config, ["program","service","product","บริการ"], ["โปรแกรม","program","บริการ","service","รายการ"]),
     quantity:   findFieldName(config, ["quantity","จำนวน"], ["จำนวน","qty","quantity"]),
     branchId:   findFieldName(config, ["branch_id","branch"], ["สาขา","branch"]),
-    numberFields: config.filter((f) => f.type === "number"),
+    numberFields: config.filter((f) => (f.type ?? "").toLowerCase() === "number"),
   };
 }
 
@@ -93,15 +103,15 @@ function fmtRaw(n: number)  { return n.toLocaleString("th-TH", { minimumFraction
 
 // ─── Data generators ──────────────────────────────────────────────────────────
 function genKPI(rows: any[], fields: ReturnType<typeof deriveFields>) {
-  let sales = 0, cost = 0, profit = 0;
+  let sales = 0, cost = 0, profit = 0, deposit = 0;
   const custSet = new Set<string>();
   rows.forEach((r) => {
-    if (fields.sales)   sales  += parseNum(r[fields.sales]);
-    if (fields.cost)    cost   += parseNum(r[fields.cost]);
-    if (fields.profit)  profit += parseNum(r[fields.profit]);
+    if (fields.sales)   sales   += parseNum(r[fields.sales]);
+    if (fields.cost)    cost    += parseNum(r[fields.cost]);
+    if (fields.profit)  profit  += parseNum(r[fields.profit]);
+    if (fields.deposit) deposit += parseNum(r[fields.deposit]);
     if (fields.custName) custSet.add(String(r[fields.custName] ?? "").trim());
   });
-  // numeric KPIs per config number field
   const numKPI: Record<string, { sum: number; avg: number; max: number; count: number }> = {};
   fields.numberFields.forEach((f) => {
     const vals = rows.map((r) => parseNum(r[f.fieldName])).filter((v) => v !== 0 || rows.some((r) => r[f.fieldName] !== "" && r[f.fieldName] !== null));
@@ -111,7 +121,7 @@ function genKPI(rows: any[], fields: ReturnType<typeof deriveFields>) {
   });
   const newCount = fields.custStatus ? rows.filter((r) => String(r[fields.custStatus!] ?? "").includes("ใหม่")).length : 0;
   const oldCount = fields.custStatus ? rows.filter((r) => String(r[fields.custStatus!] ?? "").includes("เก่า")).length : 0;
-  return { sales, cost, profit, custCount: custSet.size - (custSet.has("") ? 1 : 0), count: rows.length, numKPI, newCount, oldCount };
+  return { sales, cost, profit, deposit, custCount: custSet.size - (custSet.has("") ? 1 : 0), count: rows.length, numKPI, newCount, oldCount };
 }
 
 function genLineDataDynamic(rows: any[], dateField: string | null, fields: ReturnType<typeof deriveFields>) {
@@ -151,7 +161,7 @@ function genProgramData(rows: any[], progField: string | null, fields: ReturnTyp
   });
   const sorted = Object.entries(m)
     .map(([name, d]) => ({ name, profit: d.profit, sales: d.sales, margin: d.sales > 0 ? (d.profit / d.sales) * 100 : 0 }))
-    .sort((a, b) => b.profit - a.profit);
+    .sort((a, b) => (b.profit || b.sales) - (a.profit || a.sales));
   const totProfit = sorted.reduce((s, x) => s + x.profit, 0);
   const totSales  = sorted.reduce((s, x) => s + x.sales, 0);
   return [...sorted, { name: "รวมทั้งหมด", profit: totProfit, sales: totSales, margin: totSales > 0 ? (totProfit / totSales) * 100 : 0 }];
@@ -172,6 +182,35 @@ function genRanking(rows: any[], custNameField: string | null, fields: ReturnTyp
     .map(([name, d]) => ({ name, ...d }))
     .sort((a, b) => b.sales - a.sales)
     .slice(0, 10);
+}
+
+function genStatusBreakdown(rows: any[], statusField: string | null) {
+  if (!statusField) return [] as { name: string; count: number; pct: number }[];
+  const m: Record<string, number> = {};
+  rows.forEach((r) => {
+    const s = String(r[statusField] ?? "").trim();
+    if (!s) return;
+    m[s] = (m[s] || 0) + 1;
+  });
+  const total = Object.values(m).reduce((a, b) => a + b, 0);
+  return Object.entries(m)
+    .map(([name, count]) => ({ name, count, pct: total > 0 ? (count / total) * 100 : 0 }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function genProductQty(rows: any[], programField: string | null, qtyField: string | null) {
+  if (!programField) return [] as { name: string; count: number }[];
+  const m: Record<string, number> = {};
+  rows.forEach((r) => {
+    const p = String(r[programField] ?? "").trim();
+    if (!p) return;
+    const qty = qtyField ? parseNum(r[qtyField]) || 1 : 1;
+    m[p] = (m[p] || 0) + qty;
+  });
+  return Object.entries(m)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
 }
 
 function getAvailDates(rows: any[], config: ConfigField[], period: string): string[] {
@@ -310,6 +349,8 @@ function SalesDashboardContent() {
   const [userBranchId,   setUserBranchId]   = useState<string | null>(null);
   const [userBranchName, setUserBranchName] = useState<string | null>(null);
   const [salesMods,     setSalesMods]     = useState<SalesMod[]>([]);
+  const [expenseMod,    setExpenseMod]    = useState<ExpenseMod | null>(null);
+  const [clientType,    setClientType]    = useState<number>(1);
   const [selectedMod,   setSelectedMod]   = useState<SalesMod | null>(null);
   const [clientName,    setClientName]    = useState("");
   const [authLoading,   setAuthLoading]   = useState(true);
@@ -326,12 +367,15 @@ function SalesDashboardContent() {
   const [showPdDrop,   setShowPdDrop]  = useState(false);
 
   // viz
-  const [filteredData, setFilteredData] = useState<any[]>([]);
-  const [kpi,          setKpi]          = useState<ReturnType<typeof genKPI> | null>(null);
-  const [lineData,     setLineData]     = useState<any[]>([]);
-  const [pieData,      setPieData]      = useState<any[]>([]);
-  const [progData,     setProgData]     = useState<any[]>([]);
-  const [rankData,     setRankData]     = useState<any[]>([]);
+  const [filteredData,  setFilteredData]  = useState<any[]>([]);
+  const [kpi,           setKpi]           = useState<ReturnType<typeof genKPI> | null>(null);
+  const [lineData,      setLineData]      = useState<any[]>([]);
+  const [pieData,       setPieData]       = useState<any[]>([]);
+  const [progData,      setProgData]      = useState<any[]>([]);
+  const [rankData,      setRankData]      = useState<any[]>([]);
+  const [statusData,    setStatusData]    = useState<{ name: string; count: number; pct: number }[]>([]);
+  const [productQtyData,setProductQtyData]= useState<{ name: string; count: number }[]>([]);
+  const [expenseByPeriod, setExpenseByPeriod] = useState<Record<string, number>>({});
 
   // UI
   const [showProgDetail, setShowProgDetail] = useState(false);
@@ -355,14 +399,9 @@ function SalesDashboardContent() {
       setUserBranchId(sa ? null : (auth.branchId || null));
       setUserBranchName(sa ? null : (auth.branchName || null));
       setClientName(mods.clientName || "");
+      setClientType(mods.clientType || 1);
       // อ่านจาก client_dashboard (dashboardItems) — กรองเฉพาะ Sales
       const all: SalesMod[] = (mods.dashboardItems || [])
-        .filter((m: any) => {
-          const c = (m.dashboardConfigName || "").toLowerCase();
-          const n = (m.dashboardName || "").toLowerCase();
-          const notes = (m.notes || "").toLowerCase();
-          return c.includes("sales") || n.includes("sales") || notes.includes("ขาย");
-        })
         .map((m: any) => ({
           moduleId:      m.dashboardId,
           moduleName:    m.dashboardName,
@@ -371,6 +410,20 @@ function SalesDashboardContent() {
           configName:    m.dashboardConfigName,
         }));
       setSalesMods(all);
+
+      // หา expense module จาก client_modules
+      const expMod = (mods.modules || []).find((m: any) => {
+        const n = (m.moduleName || "").toLowerCase();
+        return n.includes("expense") || n.includes("ค่าใช้จ่าย") || n.includes("cost");
+      });
+      if (expMod) {
+        setExpenseMod({
+          spreadsheetId: expMod.spreadsheetId,
+          sheetName:     expMod.sheetName,
+          configName:    expMod.configName,
+        });
+      }
+
       const def =
         (initSid && initConfig && initSheet)
           ? (all.find((m) => m.spreadsheetId === initSid) ||
@@ -387,12 +440,18 @@ function SalesDashboardContent() {
     setDataError(null);
     setAllData([]); setConfig([]); setSelPeriods([]); setSelDate(""); setSelBranch("");
     const p = new URLSearchParams({ spreadsheetId: selectedMod.spreadsheetId, configName: selectedMod.configName, sheetName: selectedMod.sheetName });
+    if (expenseMod) {
+      p.set("expenseSpreadsheetId", expenseMod.spreadsheetId);
+      p.set("expenseSheetName",     expenseMod.sheetName);
+      p.set("expenseConfigName",    expenseMod.configName);
+    }
     fetch(`/api/sales-dashboard-demo?${p}`)
       .then((r) => r.json())
       .then((d) => {
         if (d.error) throw new Error(d.error);
         setConfig(d.config || []);
         setAllData(d.rows  || []);
+        setExpenseByPeriod(d.expenseByPeriod || {});
       })
       .catch((e) => { setDataError(e.message); })
       .finally(() => setDataLoading(false));
@@ -443,9 +502,11 @@ function SalesDashboardContent() {
     setFilteredData(out);
     setKpi(genKPI(out, f));
     setLineData(genLineDataDynamic(out, f.date, f));
-    setPieData(genPieData(out, f.custChan));
+    setPieData(genPieData(out, f.custChan ?? f.statusAny));
     setProgData(genProgramData(out, f.program, f));
     setRankData(genRanking(out, f.custName, f));
+    setStatusData(genStatusBreakdown(out, f.statusAny));
+    setProductQtyData(genProductQty(out, f.program, f.quantity));
   }, []);
 
   useEffect(() => {
@@ -463,8 +524,30 @@ function SalesDashboardContent() {
   const toggleAll     = () => setSelPeriods((prev) => prev.length === periodOptions.length ? [] : [...periodOptions]);
   const clearFilters  = () => { setSelPeriods([]); setSelDate(""); setSelBranch(""); };
 
-  const wfDisplay = showTop10 ? progData.slice(0, 10) : progData.slice(0, -1);
-  const wfTotal   = progData[progData.length - 1];
+  const isRental     = clientType === 2;
+  const wfDisplay    = showTop10 ? progData.slice(0, 10) : progData.slice(0, -1);
+  const wfTotal      = progData[progData.length - 1];
+  const barKey: "profit" | "sales" = fields.profit ? "profit" : "sales";
+  const wfChartTitle = fields.profit ? "กำไรแยกตามรายการ / โปรแกรม" : "ยอดขายแยกตามรายการ / โปรแกรม";
+
+  // rental P&L — expense aggregated ตาม period ที่เลือก
+  const totalExpense = useMemo(() => {
+    if (!isRental || !Object.keys(expenseByPeriod).length) return 0;
+    if (selPeriods.length === 0) return Object.values(expenseByPeriod).reduce((s, v) => s + v, 0);
+    return selPeriods.reduce((s, p) => s + (expenseByPeriod[p] || 0), 0);
+  }, [isRental, expenseByPeriod, selPeriods]);
+
+  const rentalNetProfit = (kpi?.sales ?? 0) - totalExpense;
+
+  // เพิ่ม expense + netProfit เข้า lineData สำหรับ rental
+  const rentalLineData = useMemo(() => {
+    if (!isRental) return lineData;
+    return lineData.map((d) => ({
+      ...d,
+      ค่าใช้จ่าย: expenseByPeriod[d.date] || 0,
+      กำไรสุทธิ: (d.ยอดขาย || 0) - (expenseByPeriod[d.date] || 0),
+    }));
+  }, [isRental, lineData, expenseByPeriod]);
 
   if (status === "loading" || authLoading) return (
     <div className="min-h-screen flex items-center justify-center bg-[#080e1c]">
@@ -702,29 +785,50 @@ function SalesDashboardContent() {
 
         {!dataLoading && !dataError && allData.length > 0 && kpi && (
           <>
-            {/* ── KPI row (4 tiles) ────────────────────────────────────────── */}
+            {/* ── KPI row ──────────────────────────────────────────────────── */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {fields.sales && (
-                <KPITile label={config.find((f) => f.fieldName === fields.sales)?.label || "ยอดขายรวม"}
+                <KPITile label={config.find((f) => f.fieldName === fields.sales)?.label || "ยอดรวม"}
                   value={fmtNum(kpi.sales)} sub={kpi.count > 0 ? fmtNum(kpi.sales / kpi.count) : "—"} subLabel="เฉลี่ย/ครั้ง"
                   accent="#ec4899"
                   icon={<svg className="w-4.5 h-4.5" style={{ color: "#ec4899" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
                 />
               )}
-              {fields.cost && (
-                <KPITile label={config.find((f) => f.fieldName === fields.cost)?.label || "ต้นทุน"}
-                  value={fmtNum(kpi.cost)} sub={kpi.sales > 0 ? `${((kpi.cost / kpi.sales) * 100).toFixed(1)}%` : "—"} subLabel="% ยอดขาย"
-                  accent="#f87171"
-                  icon={<svg className="w-4.5 h-4.5" style={{ color: "#f87171" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>}
-                />
+              {/* Rental: expense + net profit — Clinic: cost + profit */}
+              {isRental ? (
+                <>
+                  <KPITile label="ค่าใช้จ่าย"
+                    value={fmtNum(totalExpense)}
+                    sub={kpi.sales > 0 ? `${((totalExpense / kpi.sales) * 100).toFixed(1)}%` : "—"} subLabel="% รายได้"
+                    accent="#f87171"
+                    icon={<svg className="w-4.5 h-4.5" style={{ color: "#f87171" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
+                  />
+                  <KPITile label="กำไรสุทธิ"
+                    value={fmtNum(rentalNetProfit)}
+                    sub={kpi.sales > 0 ? `${((rentalNetProfit / kpi.sales) * 100).toFixed(1)}%` : "—"} subLabel="Net Margin"
+                    accent={rentalNetProfit >= 0 ? "#34d399" : "#f87171"}
+                    icon={<svg className="w-4.5 h-4.5" style={{ color: rentalNetProfit >= 0 ? "#34d399" : "#f87171" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>}
+                  />
+                </>
+              ) : (
+                <>
+                  {fields.cost && (
+                    <KPITile label={config.find((f) => f.fieldName === fields.cost)?.label || "ต้นทุน"}
+                      value={fmtNum(kpi.cost)} sub={kpi.sales > 0 ? `${((kpi.cost / kpi.sales) * 100).toFixed(1)}%` : "—"} subLabel="% ยอดขาย"
+                      accent="#f87171"
+                      icon={<svg className="w-4.5 h-4.5" style={{ color: "#f87171" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>}
+                    />
+                  )}
+                  {fields.profit && (
+                    <KPITile label={config.find((f) => f.fieldName === fields.profit)?.label || "กำไร"}
+                      value={fmtNum(kpi.profit)} sub={kpi.sales > 0 ? `${((kpi.profit / kpi.sales) * 100).toFixed(1)}%` : "—"} subLabel="Margin"
+                      accent="#34d399"
+                      icon={<svg className="w-4.5 h-4.5" style={{ color: "#34d399" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>}
+                    />
+                  )}
+                </>
               )}
-              {fields.profit && (
-                <KPITile label={config.find((f) => f.fieldName === fields.profit)?.label || "กำไร"}
-                  value={fmtNum(kpi.profit)} sub={kpi.sales > 0 ? `${((kpi.profit / kpi.sales) * 100).toFixed(1)}%` : "—"} subLabel="Margin"
-                  accent="#34d399"
-                  icon={<svg className="w-4.5 h-4.5" style={{ color: "#34d399" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>}
-                />
-              )}
+              {/* Rental: rental count + customer count — Clinic: new/old breakdown */}
               {fields.custStatus ? (
                 <KPITile label="ลูกค้าที่ใช้บริการ"
                   value={(kpi.newCount + kpi.oldCount).toLocaleString()}
@@ -734,10 +838,11 @@ function SalesDashboardContent() {
                   icon={<svg className="w-4.5 h-4.5" style={{ color: "#a78bfa" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
                 />
               ) : (
-                <KPITile label="รายการ"
+                <KPITile
+                  label={isRental ? "จำนวนการเช่า" : "รายการ"}
                   value={kpi.count.toLocaleString()}
-                  sub={kpi.custCount > 0 ? `${kpi.custCount} คน` : `${allData.length} ทั้งหมด`}
-                  subLabel={kpi.custCount > 0 ? "ลูกค้าทั้งหมด" : "รายการทั้งหมด"}
+                  sub={kpi.custCount > 0 ? `${kpi.custCount} คน` : "—"}
+                  subLabel="ลูกค้าทั้งหมด"
                   accent="#fbbf24"
                   icon={<svg className="w-4.5 h-4.5" style={{ color: "#fbbf24" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>}
                 />
@@ -751,36 +856,62 @@ function SalesDashboardContent() {
               <div className="space-y-5">
 
                 {/* Line chart */}
-                {lineData.length > 0 && (
+                {(isRental ? rentalLineData : lineData).length > 0 && (
                   <GlassCard>
-                    <CardHeader title="แนวโน้มยอดขาย" badge={selPeriods.length === 1 ? selPeriods[0] : "ทั้งหมด"} />
+                    <CardHeader title={isRental ? "รายได้ vs ค่าใช้จ่าย" : "แนวโน้มยอดขาย"} badge={selPeriods.length === 1 ? selPeriods[0] : "ทั้งหมด"} />
                     <div className="p-5">
                       <ResponsiveContainer width="100%" height={260}>
-                        <LineChart data={lineData} margin={{ top: 5, right: 5, left: 0, bottom: 35 }}>
+                        <LineChart data={isRental ? rentalLineData : lineData} margin={{ top: 5, right: 5, left: 0, bottom: 35 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
                           <XAxis dataKey="date" tick={{ fill: "#475569", fontSize: 10 }} axisLine={false} tickLine={false}
                             angle={-35} textAnchor="end" height={50} interval="preserveStartEnd" />
                           <YAxis tick={{ fill: "#475569", fontSize: 10 }} axisLine={false} tickLine={false}
                             tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} width={45} />
                           <Tooltip contentStyle={TT} formatter={(v: any, n) => [`฿${Number(v).toLocaleString("th-TH")}`, n]} />
-                          {["ยอดขาย","ต้นทุน","กำไร"].map((key, i) => {
-                            const colors = ["#6366f1","#f87171","#34d399"];
-                            return (
-                              <Line key={key} type="monotone" dataKey={key} name={key} stroke={colors[i]} strokeWidth={2.5}
-                                dot={{ r: 3, fill: colors[i], stroke: "#080e1c", strokeWidth: 2 }}
-                                activeDot={{ r: 5, fill: colors[i], stroke: "#080e1c", strokeWidth: 2 }} />
-                            );
-                          })}
+                          {isRental ? (
+                            <>
+                              <Line type="monotone" dataKey="ยอดขาย"    name="รายได้"      stroke="#6366f1" strokeWidth={2.5} dot={{ r: 3, fill: "#6366f1", stroke: "#080e1c", strokeWidth: 2 }} activeDot={{ r: 5 }} />
+                              <Line type="monotone" dataKey="ค่าใช้จ่าย" name="ค่าใช้จ่าย"  stroke="#f87171" strokeWidth={2.5} dot={{ r: 3, fill: "#f87171", stroke: "#080e1c", strokeWidth: 2 }} activeDot={{ r: 5 }} />
+                              <Line type="monotone" dataKey="กำไรสุทธิ"  name="กำไรสุทธิ"  stroke="#34d399" strokeWidth={2.5} strokeDasharray="5 3" dot={{ r: 3, fill: "#34d399", stroke: "#080e1c", strokeWidth: 2 }} activeDot={{ r: 5 }} />
+                            </>
+                          ) : (
+                            ([
+                              { key: "ยอดขาย", color: "#6366f1", show: !!fields.sales },
+                              { key: "ต้นทุน",  color: "#f87171", show: !!fields.cost },
+                              { key: "กำไร",   color: "#34d399", show: !!fields.profit },
+                            ] as const).filter((l) => l.show).map(({ key, color }) => (
+                              <Line key={key} type="monotone" dataKey={key} name={key} stroke={color} strokeWidth={2.5}
+                                dot={{ r: 3, fill: color, stroke: "#080e1c", strokeWidth: 2 }}
+                                activeDot={{ r: 5, fill: color, stroke: "#080e1c", strokeWidth: 2 }} />
+                            ))
+                          )}
                         </LineChart>
                       </ResponsiveContainer>
                       {/* summary */}
                       <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-white/[0.06]">
-                        {[["ยอดขาย","#6366f1",kpi.sales],["ต้นทุน","#f87171",kpi.cost],["กำไร","#34d399",kpi.profit]].map(([l, c, v]) => (
-                          <div key={String(l)} className="text-center p-2 rounded-xl" style={{ background: `${c}12` }}>
-                            <p className="text-[9px] text-slate-500 mb-0.5">{String(l)}</p>
-                            <p className="text-xs font-bold" style={{ color: String(c) }}>{fmtNum(Number(v))}</p>
-                          </div>
-                        ))}
+                        {isRental ? (
+                          [
+                            { l: "รายได้",     c: "#6366f1", v: kpi.sales },
+                            { l: "ค่าใช้จ่าย", c: "#f87171", v: totalExpense },
+                            { l: "กำไรสุทธิ",  c: "#34d399", v: rentalNetProfit },
+                          ].map(({ l, c, v }) => (
+                            <div key={l} className="text-center">
+                              <div className="text-[10px] mb-1" style={{ color: c }}>{l}</div>
+                              <div className="text-sm font-bold text-white">{fmtNum(v)}</div>
+                            </div>
+                          ))
+                        ) : (
+                          [
+                            { l: "ยอดขาย", c: "#6366f1", v: kpi.sales,  show: !!fields.sales },
+                            { l: "ต้นทุน",  c: "#f87171", v: kpi.cost,   show: !!fields.cost },
+                            { l: "กำไร",   c: "#34d399", v: kpi.profit, show: !!fields.profit },
+                          ].filter((x) => x.show).map(({ l, c, v }) => (
+                            <div key={l} className="text-center p-2 rounded-xl" style={{ background: `${c}12` }}>
+                              <p className="text-[9px] text-slate-500 mb-0.5">{l}</p>
+                              <p className="text-xs font-bold" style={{ color: c }}>{fmtNum(v)}</p>
+                            </div>
+                          ))
+                        )}
                       </div>
                     </div>
                   </GlassCard>
@@ -789,7 +920,7 @@ function SalesDashboardContent() {
                 {/* Waterfall: profit by program */}
                 {progData.length > 1 && (
                   <GlassCard>
-                    <CardHeader title="กำไรแยกตามรายการ / โปรแกรม" badge={`${progData.length - 1} รายการ`} />
+                    <CardHeader title={wfChartTitle} badge={`${progData.length - 1} รายการ`} />
                     <div className="p-5">
                       <div className="flex justify-end mb-3">
                         {progData.length > 11 && (
@@ -809,31 +940,34 @@ function SalesDashboardContent() {
                             content={({ active, payload }) => {
                               if (!active || !payload?.length) return null;
                               const d = payload[0].payload;
+                              const bv: number = d[barKey] ?? 0;
                               return (
                                 <div style={{ ...TT, minWidth: 150 }}>
                                   <p className="font-bold text-white text-[11px] mb-1 truncate max-w-[180px]">{d.name}</p>
-                                  <p className="text-[11px]">กำไร: <span style={{ color: d.profit >= 0 ? "#34d399" : "#f87171" }}>฿{fmtRaw(d.profit)}</span></p>
-                                  <p className="text-[11px]">ยอดขาย: <span className="text-slate-300">฿{fmtRaw(d.sales)}</span></p>
-                                  <p className="text-[11px]">Margin: <span className="text-indigo-400">{d.margin.toFixed(1)}%</span></p>
+                                  <p className="text-[11px]">{fields.profit ? "กำไร" : "ยอดขาย"}: <span style={{ color: bv >= 0 ? "#34d399" : "#f87171" }}>฿{fmtRaw(bv)}</span></p>
+                                  {fields.profit && <p className="text-[11px]">ยอดขาย: <span className="text-slate-300">฿{fmtRaw(d.sales)}</span></p>}
+                                  {fields.profit && <p className="text-[11px]">Margin: <span className="text-indigo-400">{d.margin.toFixed(1)}%</span></p>}
                                 </div>
                               );
                             }}
                           />
-                          <Bar dataKey="profit" radius={[0, 4, 4, 0]}>
-                            {wfDisplay.map((d, i) => <Cell key={i} fill={d.profit >= 0 ? "#34d399" : "#f87171"} fillOpacity={0.85} />)}
+                          <Bar dataKey={barKey} radius={[0, 4, 4, 0]}>
+                            {wfDisplay.map((d, i) => <Cell key={i} fill={(d[barKey] ?? 0) >= 0 ? "#34d399" : "#f87171"} fillOpacity={0.85} />)}
                           </Bar>
                         </BarChart>
                       </ResponsiveContainer>
                       {wfTotal && (
-                        <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-white/[0.06]">
+                        <div className={`grid gap-2 mt-4 pt-4 border-t border-white/[0.06] ${fields.profit ? "grid-cols-2" : "grid-cols-1"}`}>
                           <div className="flex justify-between items-center px-3 py-2 rounded-xl bg-indigo-500/10">
-                            <span className="text-[10px] text-slate-400">กำไรรวม</span>
-                            <span className="text-xs font-bold text-indigo-300">{fmtFull(wfTotal.profit)}</span>
+                            <span className="text-[10px] text-slate-400">{fields.profit ? "กำไรรวม" : "ยอดขายรวม"}</span>
+                            <span className="text-xs font-bold text-indigo-300">{fmtFull(wfTotal[barKey] ?? 0)}</span>
                           </div>
-                          <div className="flex justify-between items-center px-3 py-2 rounded-xl bg-emerald-500/10">
-                            <span className="text-[10px] text-slate-400">% กำไร</span>
-                            <span className="text-xs font-bold text-emerald-400">{wfTotal.margin.toFixed(1)}%</span>
-                          </div>
+                          {fields.profit && (
+                            <div className="flex justify-between items-center px-3 py-2 rounded-xl bg-emerald-500/10">
+                              <span className="text-[10px] text-slate-400">% กำไร</span>
+                              <span className="text-xs font-bold text-emerald-400">{wfTotal.margin.toFixed(1)}%</span>
+                            </div>
+                          )}
                         </div>
                       )}
                       {/* detail table toggle */}
@@ -851,7 +985,7 @@ function SalesDashboardContent() {
                             <table className="w-full text-xs">
                               <thead>
                                 <tr style={{ background: "rgba(255,255,255,0.03)" }} className="border-b border-white/[0.06]">
-                                  {["รายการ","ยอดขาย","กำไร","Margin"].map((h, i) => (
+                                  {(fields.profit ? ["รายการ","ยอดขาย","กำไร","Margin"] : ["รายการ","ยอดขาย"]).map((h, i) => (
                                     <th key={h} className={`px-3 py-2.5 font-bold text-slate-500 ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>
                                   ))}
                                 </tr>
@@ -861,22 +995,26 @@ function SalesDashboardContent() {
                                   <tr key={i} className="border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors">
                                     <td className="px-3 py-2 font-medium text-slate-300 truncate max-w-[160px]">{d.name}</td>
                                     <td className="px-3 py-2 text-right text-slate-400">{fmtFull(d.sales)}</td>
-                                    <td className="px-3 py-2 text-right font-semibold" style={{ color: d.profit >= 0 ? "#34d399" : "#f87171" }}>{fmtFull(d.profit)}</td>
-                                    <td className="px-3 py-2 text-right">
-                                      <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-bold ${d.margin >= 30 ? "bg-emerald-500/15 text-emerald-400" : d.margin >= 15 ? "bg-yellow-500/15 text-yellow-400" : "bg-red-500/15 text-red-400"}`}>
-                                        {d.margin.toFixed(1)}%
-                                      </span>
-                                    </td>
+                                    {fields.profit && <td className="px-3 py-2 text-right font-semibold" style={{ color: d.profit >= 0 ? "#34d399" : "#f87171" }}>{fmtFull(d.profit)}</td>}
+                                    {fields.profit && (
+                                      <td className="px-3 py-2 text-right">
+                                        <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-bold ${d.margin >= 30 ? "bg-emerald-500/15 text-emerald-400" : d.margin >= 15 ? "bg-yellow-500/15 text-yellow-400" : "bg-red-500/15 text-red-400"}`}>
+                                          {d.margin.toFixed(1)}%
+                                        </span>
+                                      </td>
+                                    )}
                                   </tr>
                                 ))}
                                 {wfTotal && (
                                   <tr className="border-t-2 border-indigo-500/20" style={{ background: "rgba(99,102,241,0.07)" }}>
                                     <td className="px-3 py-2.5 font-bold text-indigo-300">รวมทั้งหมด</td>
                                     <td className="px-3 py-2.5 text-right font-bold text-slate-300">{fmtFull(wfTotal.sales)}</td>
-                                    <td className="px-3 py-2.5 text-right font-bold text-indigo-300">{fmtFull(wfTotal.profit)}</td>
-                                    <td className="px-3 py-2.5 text-right">
-                                      <span className="inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-400">{wfTotal.margin.toFixed(1)}%</span>
-                                    </td>
+                                    {fields.profit && <td className="px-3 py-2.5 text-right font-bold text-indigo-300">{fmtFull(wfTotal.profit)}</td>}
+                                    {fields.profit && (
+                                      <td className="px-3 py-2.5 text-right">
+                                        <span className="inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-400">{wfTotal.margin.toFixed(1)}%</span>
+                                      </td>
+                                    )}
                                   </tr>
                                 )}
                               </tbody>
@@ -892,10 +1030,76 @@ function SalesDashboardContent() {
               {/* RIGHT column */}
               <div className="space-y-5">
 
-                {/* Pie: channels */}
-                {pieData.length > 0 && (
+                {/* Rental: Status distribution bars */}
+                {isRental && statusData.length > 0 && (
                   <GlassCard>
-                    <CardHeader title="ช่องทางนัดหมายยอดนิยม" badge={`${pieData.length} ช่องทาง`} />
+                    <CardHeader title="สถานะการเช่า" badge={`${filteredData.length} รายการ`} />
+                    <div className="p-5 space-y-3">
+                      {statusData.map((s, i) => {
+                        const STATUS_COLORS = ["#34d399","#60a5fa","#f59e0b","#f87171","#a78bfa","#2dd4bf","#fb923c","#e879f9"];
+                        const col = STATUS_COLORS[i % STATUS_COLORS.length];
+                        return (
+                          <div key={s.name}>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: col }} />
+                                <span className="text-sm font-semibold text-slate-200">{s.name}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold" style={{ color: col }}>{s.count.toLocaleString()}</span>
+                                <span className="text-[10px] text-slate-600 w-10 text-right">{s.pct.toFixed(1)}%</span>
+                              </div>
+                            </div>
+                            <div className="h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+                              <div className="h-full rounded-full transition-all duration-700"
+                                style={{ width: `${s.pct}%`, background: `linear-gradient(90deg, ${col}, ${col}99)` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </GlassCard>
+                )}
+
+                {/* Rental: Top items by quantity */}
+                {isRental && productQtyData.length > 0 && (
+                  <GlassCard>
+                    <CardHeader
+                      title={`${config.find(f => f.fieldName === fields.program)?.label || "รายการ"}ยอดนิยม`}
+                      badge="จำนวนครั้ง"
+                    />
+                    <div className="p-5 space-y-2">
+                      {productQtyData.map((item, i) => {
+                        const maxCount = productQtyData[0]?.count || 1;
+                        const pct = (item.count / maxCount) * 100;
+                        const ITEM_COLORS = ["#6366f1","#a78bfa","#60a5fa","#34d399","#f59e0b","#ec4899","#2dd4bf","#fb923c"];
+                        const col = ITEM_COLORS[i % ITEM_COLORS.length];
+                        return (
+                          <div key={item.name} className="flex items-center gap-3">
+                            <span className="w-5 text-center text-[11px] font-bold flex-shrink-0" style={{ color: "#475569" }}>{i + 1}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between text-[12px] mb-1">
+                                <span className="text-slate-300 font-medium truncate">{item.name}</span>
+                                <span className="font-bold flex-shrink-0 ml-2" style={{ color: col }}>{item.count.toLocaleString()}</span>
+                              </div>
+                              <div className="h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.06)" }}>
+                                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: col }} />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </GlassCard>
+                )}
+
+                {/* Clinic / generic: Pie chart */}
+                {!isRental && pieData.length > 0 && (
+                  <GlassCard>
+                    <CardHeader
+                      title={`${config.find(f => f.fieldName === (fields.custChan ?? fields.statusAny))?.label ?? "หมวดหมู่"}ยอดนิยม`}
+                      badge={`${pieData.length} หมวด`}
+                    />
                     <div className="p-5">
                       <div className="flex items-center gap-4">
                         <div className="flex-shrink-0" style={{ width: 160, height: 160 }}>
@@ -911,6 +1115,51 @@ function SalesDashboardContent() {
                         </div>
                         <div className="flex-1 space-y-2 min-w-0">
                           {[...pieData].sort((a, b) => b.value - a.value).map((d, i) => {
+                            const total = pieData.reduce((s, x) => s + x.value, 0);
+                            const pct = ((d.value / total) * 100).toFixed(1);
+                            return (
+                              <div key={d.name} className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: CHAN_COLORS[i % CHAN_COLORS.length] }} />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex justify-between text-[11px] mb-0.5">
+                                    <span className="text-slate-300 font-medium truncate">{d.name}</span>
+                                    <span className="text-slate-500 flex-shrink-0 ml-1">{pct}%</span>
+                                  </div>
+                                  <div className="h-1 rounded-full bg-white/[0.06] overflow-hidden">
+                                    <div className="h-full rounded-full" style={{ width: `${(d.value / pieData[0].value) * 100}%`, background: CHAN_COLORS[i % CHAN_COLORS.length] }} />
+                                  </div>
+                                </div>
+                                <span className="text-[10px] text-slate-600 flex-shrink-0">{d.value.toLocaleString()}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </GlassCard>
+                )}
+
+                {/* Rental: generic pie as fallback when no status bars */}
+                {isRental && statusData.length === 0 && pieData.length > 0 && (
+                  <GlassCard>
+                    <CardHeader
+                      title={`${config.find(f => f.fieldName === (fields.custChan ?? fields.statusAny))?.label ?? "หมวดหมู่"}ยอดนิยม`}
+                      badge={`${pieData.length} หมวด`}
+                    />
+                    <div className="p-5">
+                      <div className="flex items-center gap-4">
+                        <div className="flex-shrink-0" style={{ width: 160, height: 160 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie data={pieData} cx="50%" cy="50%" innerRadius={42} outerRadius={70} dataKey="value" paddingAngle={0} strokeWidth={0}>
+                                {pieData.map((_, i) => <Cell key={i} fill={CHAN_COLORS[i % CHAN_COLORS.length]} />)}
+                              </Pie>
+                              <Tooltip contentStyle={TT} formatter={(v: any) => [`${Number(v).toLocaleString()} ครั้ง`, "จำนวน"]} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="flex-1 space-y-2 min-w-0">
+                          {pieData.map((d, i) => {
                             const total = pieData.reduce((s, x) => s + x.value, 0);
                             const pct = ((d.value / total) * 100).toFixed(1);
                             return (
@@ -988,14 +1237,16 @@ function SalesDashboardContent() {
                       <thead>
                         <tr className="border-b border-white/[0.07]" style={{ background: "rgba(255,255,255,0.03)" }}>
                           {[
-                            { h: "วันที่",   left: true },
-                            { h: "ชื่อลูกค้า", left: true },
-                            { h: "โปรแกรม",  left: true },
-                            { h: "จำนวน",   left: false },
-                            { h: "ยอดขาย",  left: false },
-                            { h: "ต้นทุน",   left: false },
-                            { h: "กำไร",    left: false },
-                          ].map(({ h, left }) => (
+                            { h: "วันที่", left: true, show: !!fields.date },
+                            { h: fields.custName ? (config.find(f=>f.fieldName===fields.custName)?.label||"ลูกค้า") : "ลูกค้า", left: true, show: !!fields.custName },
+                            { h: fields.program ? (config.find(f=>f.fieldName===fields.program)?.label||"รายการ") : "รายการ", left: true, show: !!fields.program },
+                            { h: fields.quantity ? (config.find(f=>f.fieldName===fields.quantity)?.label||"จำนวน") : "จำนวน", left: false, show: !!fields.quantity },
+                            { h: fields.sales ? (config.find(f=>f.fieldName===fields.sales)?.label||"ยอดรวม") : "ยอดรวม", left: false, show: !!fields.sales },
+                            { h: fields.deposit ? (config.find(f=>f.fieldName===fields.deposit)?.label||"มัดจำ") : "มัดจำ", left: false, show: isRental && !!fields.deposit },
+                            { h: fields.statusAny ? (config.find(f=>f.fieldName===fields.statusAny)?.label||"สถานะ") : "สถานะ", left: true, show: isRental && !!fields.statusAny },
+                            { h: "ต้นทุน", left: false, show: !isRental && !!fields.cost },
+                            { h: "กำไร",   left: false, show: !isRental && !!fields.profit },
+                          ].filter(c => c.show).map(({ h, left }) => (
                             <th key={h} className={`px-4 py-3 font-bold text-slate-500 whitespace-nowrap ${left ? "text-left" : "text-right"}`}>{h}</th>
                           ))}
                         </tr>
@@ -1003,18 +1254,22 @@ function SalesDashboardContent() {
                       <tbody>
                         {filteredData
                           .filter((r) => fields.custName ? String(r[fields.custName] ?? "").trim() : true)
-                          .sort((a, b) => fields.custName ? String(a[fields.custName!] ?? "").localeCompare(String(b[fields.custName!] ?? ""), "th-TH") : 0)
+                          .sort((a, b) => fields.date ? String(b[fields.date!] ?? "").localeCompare(String(a[fields.date!] ?? "")) : 0)
                           .map((r, i) => (
                             <tr key={i} className="border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors">
-                              <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{fields.date ? fmtDate(r[fields.date]) : "-"}</td>
-                              <td className="px-4 py-2.5 font-semibold text-slate-300 max-w-[140px] truncate">{fields.custName ? String(r[fields.custName] ?? "-") : "-"}</td>
-                              <td className="px-4 py-2.5 text-slate-400 max-w-[140px] truncate">{fields.program ? String(r[fields.program] ?? "-") : "-"}</td>
-                              <td className="px-4 py-2.5 text-right">
-                                {fields.quantity && <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/15 text-indigo-400">{r[fields.quantity] || "-"}</span>}
-                              </td>
-                              <td className="px-4 py-2.5 text-right font-semibold text-white whitespace-nowrap">{fields.sales ? fmtFull(parseNum(r[fields.sales])) : "-"}</td>
-                              <td className="px-4 py-2.5 text-right text-slate-400 whitespace-nowrap">{fields.cost ? fmtFull(parseNum(r[fields.cost])) : "-"}</td>
-                              <td className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: "#34d399" }}>{fields.profit ? fmtFull(parseNum(r[fields.profit])) : "-"}</td>
+                              {fields.date && <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{fmtDate(r[fields.date])}</td>}
+                              {fields.custName && <td className="px-4 py-2.5 font-semibold text-slate-300 max-w-[140px] truncate">{String(r[fields.custName] ?? "-")}</td>}
+                              {fields.program && <td className="px-4 py-2.5 text-slate-400 max-w-[140px] truncate">{String(r[fields.program] ?? "-")}</td>}
+                              {fields.quantity && <td className="px-4 py-2.5 text-right"><span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/15 text-indigo-400">{r[fields.quantity] || "-"}</span></td>}
+                              {fields.sales && <td className="px-4 py-2.5 text-right font-semibold text-white whitespace-nowrap">{fmtFull(parseNum(r[fields.sales]))}</td>}
+                              {isRental && fields.deposit && <td className="px-4 py-2.5 text-right text-blue-400 whitespace-nowrap">{fmtFull(parseNum(r[fields.deposit]))}</td>}
+                              {isRental && fields.statusAny && (
+                                <td className="px-4 py-2.5 text-left">
+                                  <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/[0.07] text-slate-300">{String(r[fields.statusAny] ?? "-")}</span>
+                                </td>
+                              )}
+                              {!isRental && fields.cost && <td className="px-4 py-2.5 text-right text-slate-400 whitespace-nowrap">{fmtFull(parseNum(r[fields.cost]))}</td>}
+                              {!isRental && fields.profit && <td className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: "#34d399" }}>{fmtFull(parseNum(r[fields.profit]))}</td>}
                             </tr>
                           ))}
                       </tbody>

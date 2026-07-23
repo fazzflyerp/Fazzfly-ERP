@@ -49,13 +49,14 @@ export async function GET(request: NextRequest) {
       label:     headers.findIndex((h: string) => h.toLowerCase() === "label"),
       type:      headers.findIndex((h: string) => h.toLowerCase() === "type"),
       order:     headers.findIndex((h: string) => h.toLowerCase() === "order"),
+      helper:    headers.findIndex((h: string) => h.toLowerCase() === "helper"),
     };
 
-    const missingColumns = (Object.keys(columnIndices) as (keyof typeof columnIndices)[])
+    const requiredColumns = (["fieldName", "label", "type", "order"] as const)
       .filter((k) => columnIndices[k] === -1);
 
-    if (missingColumns.length > 0) {
-      return NextResponse.json({ error: "Invalid config structure", code: "MISSING_COLUMNS", missingColumns }, { status: 500 });
+    if (requiredColumns.length > 0) {
+      return NextResponse.json({ error: "Invalid config structure", code: "MISSING_COLUMNS", missingColumns: requiredColumns }, { status: 500 });
     }
 
     const configFields: ReceiptConfigField[] = dataRows
@@ -67,6 +68,7 @@ export async function GET(request: NextRequest) {
           label:     row[columnIndices.label]?.toString().trim() || "",
           type:      row[columnIndices.type]?.toString().trim() || "text",
           order:     orderValue && orderValue !== "" ? parseInt(orderValue) : null,
+          helper:    columnIndices.helper >= 0 ? row[columnIndices.helper]?.toString().trim() || null : null,
         };
       });
 
