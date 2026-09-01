@@ -8,7 +8,9 @@
 import NextAuth, { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { saReadRange } from "@/lib/google-sa";
+// lazy-load แทน static import — lib/google-sa.ts ดึง googleapis ทั้งก้อนเข้ามา ทำให้ Turbopack
+// ต้อง compile module graph มหาศาลทุกครั้งที่มีคน hit /api/auth/* (session/providers ก็โดนไปด้วย
+// ทั้งที่ไม่ได้ใช้ Sheets เลย) โหลดเฉพาะตอน authorize() เรียกใช้จริงแทน
 
 const MASTER_SHEET_ID = process.env.MASTER_SHEET_ID!;
 
@@ -47,6 +49,7 @@ const authOptions: NextAuthOptions = {
         const email = credentials.email.toLowerCase().trim();
 
         try {
+          const { saReadRange } = await import("@/lib/google-sa");
           // client_user: A=client_id B=email C=role D=is_active E=notes F=password_hash G=branch_id H=branch_name
           const rows = await saReadRange(MASTER_SHEET_ID, "client_user!A:H");
           const row  = rows.slice(1).find((r) => (r[1] ?? "").toString().toLowerCase().trim() === email);

@@ -58,15 +58,15 @@ function AnimatedNumber({ value, suffix = "" }: { value: number; suffix?: string
 const SYSTEMS = [
   {
     key: "erp",
-    label: "Fazzfly ERP",
+    label: "Poff Clinic ERP",
     sub: "ระบบบริหารจัดการองค์กร",
     route: "/ERP/home",
-    gradient: "from-blue-500 to-cyan-500",
-    glow: "shadow-blue-500/30",
-    border: "border-blue-200",
-    bg: "bg-blue-50",
-    textGrad: "from-blue-600 to-cyan-500",
-    dot: "bg-blue-500",
+    gradient: "from-rose-700 to-rose-900",
+    glow: "shadow-rose-700/30",
+    border: "border-rose-200",
+    bg: "bg-rose-50",
+    textGrad: "from-rose-700 to-rose-900",
+    dot: "bg-rose-700",
     icon: (
       <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -77,7 +77,7 @@ const SYSTEMS = [
   },
   {
     key: "crm",
-    label: "Fazzfly CRM",
+    label: "Poff Clinic CRM",
     sub: "ระบบบริหารลูกค้าสัมพันธ์",
     route: "/CRM/home",
     gradient: "from-purple-500 to-pink-500",
@@ -96,7 +96,7 @@ const SYSTEMS = [
   },
   {
     key: "tasks",
-    label: "Fazzfly Task Manager",
+    label: "Task Manager",
     sub: "ระบบมอบหมายและติดตามงาน",
     route: "/tasks",
     gradient: "from-violet-500 to-fuchsia-500",
@@ -202,7 +202,7 @@ export default function SystemSelectorPage() {
 
   if (status === "loading" || !userData) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50">
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#f9f6ef" }}>
         <div className="text-center">
           {loadError ? (
             <>
@@ -211,14 +211,14 @@ export default function SystemSelectorPage() {
               <p className="text-slate-500 text-sm mb-4">{loadError}</p>
               <button
                 onClick={() => { setLoadError(null); window.location.reload(); }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                className="px-4 py-2 text-white rounded-lg text-sm" style={{ background: "#990011" }}
               >
                 ลองใหม่
               </button>
             </>
           ) : (
             <>
-              <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4" />
+              <div className="animate-spin rounded-full h-16 w-16 border-b-4 mx-auto mb-4" style={{ borderColor: "#990011" }} />
               <p className="text-slate-600 font-medium">กำลังโหลด...</p>
             </>
           )}
@@ -245,31 +245,25 @@ export default function SystemSelectorPage() {
 
   return (
     <div
-      className="h-screen flex flex-col overflow-hidden bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50"
+      className="h-screen flex flex-col overflow-hidden" style={{ background: "#f9f6ef" }}
       style={{ fontFamily: "var(--font-noto-sans-thai), sans-serif" }}
     >
       <QuickNav isOpen={navOpen} onClose={() => setNavOpen(false)} />
 
-      {/* Animated Background Blobs */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob" />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-cyan-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000" />
-        <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-sky-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000" />
-      </div>
 
       {/* Top Header */}
-      <div className="relative z-20 flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 bg-white/80 backdrop-blur-xl border-b border-blue-100">
+      <div className="relative z-20 flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 bg-white border-b" style={{ borderColor: "#f0e8e8" }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="md:hidden">
               <QuickNavTrigger onClick={() => setNavOpen(true)} />
             </div>
-            <Image src="/logo2.png" alt="Fazzfly Logo" width={40} height={40} className="object-contain" />
+            <Image src="/poff_logo_red.png" alt="Poff Clinic" width={40} height={40} className="object-contain" />
             <div>
-              <h1 className="text-lg font-bold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent leading-none">
-                Fazzfly Platform
+              <h1 className="text-lg font-bold leading-none" style={{ color: "#990011" }}>
+                Poff Clinic
               </h1>
-              <p className="text-[10px] text-slate-400 tracking-widest uppercase mt-0.5">Enterprise Solutions</p>
+              <p className="text-[10px] text-slate-400 tracking-widest uppercase mt-0.5">Management System</p>
             </div>
           </div>
 
@@ -281,7 +275,7 @@ export default function SystemSelectorPage() {
             {session?.user?.image ? (
               <img src={session.user.image} alt="Profile" width={28} height={28} className="rounded-full" />
             ) : (
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-cyan-400 flex items-center justify-center text-white text-xs font-semibold">
+              <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold" style={{ background: "#990011" }}>
                 {session?.user?.name?.charAt(0) || "U"}
               </div>
             )}
@@ -301,7 +295,7 @@ export default function SystemSelectorPage() {
       <div className="relative z-10 flex flex-1 overflow-hidden">
 
         {/* ── Sidebar ─────────────────────────────────────────── */}
-        <aside className={`hidden md:flex flex-shrink-0 w-72 bg-white/80 backdrop-blur-xl border-r border-blue-100 flex-col transition-all duration-700 ${loaded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4"}`}>
+        <aside className={`hidden md:flex flex-shrink-0 w-72 bg-white border-r flex-col transition-all duration-700 ${loaded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4"}`} style={{ borderColor: "#f0e8e8" }}>
 
 
           {/* System Nav — Accordion */}
@@ -314,7 +308,7 @@ export default function SystemSelectorPage() {
               const subItems: { label: string; sub?: string; color: string; onClick: () => void; section?: boolean }[] = [];
 
               if (sys.key === "erp") {
-                subItems.push({ label: "หน้าหลัก ERP", color: "bg-blue-500", onClick: () => router.push("/ERP/home") });
+                subItems.push({ label: "หน้าหลัก ERP", color: "bg-rose-700", onClick: () => router.push("/ERP/home") });
 
                 if (modules.length > 0) {
                   subItems.push({ label: "── โมดูล ──", color: "bg-slate-300", onClick: () => {}, section: true });
@@ -420,7 +414,7 @@ export default function SystemSelectorPage() {
           <div className="px-5 py-4 border-t border-slate-100">
             <p className="text-[10px] text-slate-400 text-center">
               <Link href={ROUTES.SUPPORT} className="hover:text-blue-600 transition-colors">ติดต่อฝ่ายสนับสนุน</Link>
-              {" · "}© 2025 Fazzfly
+              {" · "}© 2025 Poff Clinic
             </p>
           </div>
         </aside>
@@ -433,15 +427,14 @@ export default function SystemSelectorPage() {
             <div className="mb-6 sm:mb-10 text-center">
               {/* Role badge */}
               {!roleLoading && role && (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-4
-                  bg-gradient-to-r from-blue-100 to-cyan-100 border border-blue-200">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-4 border" style={{ background: "#fdf5f5", borderColor: "#f5c5c5" }}>
                   <span className={`w-2 h-2 rounded-full animate-pulse ${
-                    role === "SUPER_ADMIN" ? "bg-rose-500" :
-                    role === "ADMIN" ? "bg-blue-500" : "bg-green-500"
+                    role === "SUPER_ADMIN" ? "bg-rose-600" :
+                    role === "ADMIN" ? "bg-rose-500" : "bg-green-500"
                   }`} />
                   <span className={`text-xs font-bold tracking-wide ${
-                    role === "SUPER_ADMIN" ? "text-rose-600" :
-                    role === "ADMIN" ? "text-blue-600" : "text-green-600"
+                    role === "SUPER_ADMIN" ? "text-rose-700" :
+                    role === "ADMIN" ? "text-rose-600" : "text-green-600"
                   }`}>
                     {role === "SUPER_ADMIN" ? "Super Admin" :
                      role === "ADMIN" ? "Admin" : "Staff"}
@@ -451,26 +444,26 @@ export default function SystemSelectorPage() {
 
               <h2 className="text-3xl sm:text-5xl font-bold text-slate-800 mb-2 leading-tight">
                 ยินดีต้อนรับ,{" "}
-                <span className="bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">
+                <span style={{ color: "#990011" }}>
                   {userData.clientName}
                 </span>
               </h2>
               <p className="text-slate-400 mb-4 sm:mb-8">เลือกระบบจากแถบซ้ายเพื่อเริ่มใช้งาน</p>
 
               <div className="flex items-stretch gap-2 sm:gap-4 flex-wrap justify-center">
-                <div className="bg-white/90 backdrop-blur-xl rounded-2xl px-4 sm:px-8 py-4 sm:py-5 border border-blue-100 shadow-lg text-center flex-1 min-w-[90px]">
+                <div className="bg-white rounded-2xl px-4 sm:px-8 py-4 sm:py-5 border shadow-lg text-center flex-1 min-w-[90px]" style={{ borderColor: "#f0e8e8" }}>
                   <p className="text-[10px] sm:text-xs text-slate-400 font-medium mb-1.5">แพ็คเกจ</p>
                   <p className="text-base sm:text-xl font-bold text-slate-800">{userData.package}</p>
                 </div>
-                <div className={`bg-white/90 backdrop-blur-xl rounded-2xl px-4 sm:px-8 py-4 sm:py-5 border shadow-lg text-center flex-1 min-w-[90px] ${isExpiringSoon ? "border-amber-200" : "border-green-200"}`}>
+                <div className={`bg-white rounded-2xl px-4 sm:px-8 py-4 sm:py-5 border shadow-lg text-center flex-1 min-w-[90px] ${isExpiringSoon ? "border-amber-200" : "border-green-200"}`}>
                   <p className="text-[10px] sm:text-xs text-slate-400 font-medium mb-1.5">คงเหลือ</p>
                   <p className={`text-base sm:text-xl font-bold ${isExpiringSoon ? "text-amber-600" : "text-green-600"}`}>
                     <AnimatedNumber value={userData.daysRemaining} /> วัน
                   </p>
                 </div>
-                <div className="bg-white/90 backdrop-blur-xl rounded-2xl px-4 sm:px-8 py-4 sm:py-5 border border-blue-100 shadow-lg text-center flex-1 min-w-[90px]">
+                <div className="bg-white rounded-2xl px-4 sm:px-8 py-4 sm:py-5 border shadow-lg text-center flex-1 min-w-[90px]" style={{ borderColor: "#f0e8e8" }}>
                   <p className="text-[10px] sm:text-xs text-slate-400 font-medium mb-1.5">Client ID</p>
-                  <p className="text-base sm:text-xl font-bold text-blue-600">{userData.clientId}</p>
+                  <p className="text-base sm:text-xl font-bold" style={{ color: "#990011" }}>{userData.clientId}</p>
                 </div>
               </div>
             </div>
@@ -489,13 +482,13 @@ export default function SystemSelectorPage() {
                   <div className="space-y-6">
                     {/* Overview Dashboard — อยู่บนสุด */}
                     {dashboardItems.length > 0 && (
-                      <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-blue-100 shadow-lg shadow-blue-100/30 p-4 sm:p-6">
+                      <div className="bg-white rounded-3xl border shadow-lg p-4 sm:p-6" style={{ borderColor: "#f0e8e8" }}>
                         <OverviewDashboard dashboardItems={dashboardItems} />
                       </div>
                     )}
 
                     {/* Task Summary */}
-                    <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-violet-100 shadow-lg p-4 sm:p-6">
+                    <div className="bg-white rounded-3xl border shadow-lg p-4 sm:p-6" style={{ borderColor: "#f0e8e8" }}>
                       <div className="flex items-center justify-between mb-5">
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-md">
@@ -548,7 +541,7 @@ export default function SystemSelectorPage() {
 
                 {/* ── Staff: Today's Tasks ── */}
                 {!isAdmin() && (
-                  <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-violet-100 shadow-lg p-4 sm:p-6">
+                  <div className="bg-white rounded-3xl border shadow-lg p-4 sm:p-6" style={{ borderColor: "#f0e8e8" }}>
                     <div className="flex items-center justify-between mb-5">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-md">

@@ -15,24 +15,7 @@ export default function AuthRouterPage() {
       return;
     }
 
-    // Credentials login ไม่มี Google OAuth accessToken → ส่งไป Demo system เสมอ
-    if (!(session as any)?.accessToken) {
-      router.replace("/select-system-demo");
-      return;
-    }
-
-    fetch("/api/auth/branch-check")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.branchId) {
-          router.replace("/select-system-demo");
-        } else {
-          router.replace("/ERP/home");
-        }
-      })
-      .catch(() => {
-        router.replace("/ERP/home");
-      });
+    router.replace("/ERP/home");
   }, [router, session, status]);
 
   return (

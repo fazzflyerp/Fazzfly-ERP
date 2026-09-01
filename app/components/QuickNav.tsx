@@ -138,7 +138,8 @@ function HomeCard({ icon, label, sub, grad, onClick }: {
 export function QuickNavTrigger({ onClick }: { onClick: () => void }) {
   return (
     <button onClick={onClick} aria-label="Quick Navigation"
-      className="w-9 h-9 flex flex-col items-center justify-center gap-[5px] bg-blue-600 rounded-xl shadow-sm hover:bg-blue-700 transition-all active:scale-95 flex-shrink-0">
+      className="w-9 h-9 flex flex-col items-center justify-center gap-[5px] rounded-xl shadow-sm transition-all active:scale-95 flex-shrink-0"
+      style={{ background: "#990011" }}>
       <span className="w-4 h-[2px] bg-white rounded-full"/>
       <span className="w-4 h-[2px] bg-white rounded-full"/>
       <span className="w-4 h-[2px] bg-white rounded-full"/>
@@ -162,7 +163,7 @@ export function QuickNavBell({ items = [], loading = false, onBellClick }: { ite
   return (
     <div className="relative flex-shrink-0" ref={ref}>
       <button onClick={() => setOpen(o => !o)} aria-label="Notifications"
-        className="relative w-9 h-9 flex items-center justify-center bg-blue-600 rounded-xl shadow-sm hover:bg-blue-700 transition-all active:scale-95">
+        className="relative w-9 h-9 flex items-center justify-center rounded-xl shadow-sm transition-all active:scale-95" style={{ background: "#990011" }}>
         <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
         </svg>
@@ -190,7 +191,7 @@ export function QuickNavBell({ items = [], loading = false, onBellClick }: { ite
                   ))}
           </div>
           <div className="px-4 py-2.5 border-t border-slate-100">
-            <button onClick={() => { setOpen(false); onBellClick?.(); }} className="w-full text-xs font-semibold text-blue-500 hover:text-blue-700 text-center">ดู INV Dashboard →</button>
+            <button onClick={() => { setOpen(false); onBellClick?.(); }} className="w-full text-xs font-semibold text-center" style={{ color: "#990011" }}>ดู INV Dashboard →</button>
           </div>
         </div>
       )}
@@ -281,12 +282,12 @@ export default function QuickNav({ isOpen, onClose }: { isOpen: boolean; onClose
         <div className="flex-none px-4 pt-5 pb-4 bg-white border-b border-slate-100">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center text-white shadow-sm">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white shadow-sm" style={{ background: "#990011" }}>
                 {I.grid}
               </div>
               <div>
                 <p className="text-sm font-bold text-slate-800 leading-none">Quick Nav</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">Fazzfly Platform</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">Poff Clinic</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -306,7 +307,7 @@ export default function QuickNav({ isOpen, onClose }: { isOpen: boolean; onClose
             />
             <HomeCard
               icon={I.erp} label="ERP" sub="หน้าหลัก"
-              grad="bg-gradient-to-br from-blue-600 to-cyan-500"
+              grad="bg-[#990011]"
               onClick={() => go("/ERP/home")}
             />
             {hasCRM && (
@@ -408,7 +409,7 @@ export default function QuickNav({ isOpen, onClose }: { isOpen: boolean; onClose
 
         {/* ── Footer ─────────────────────────────────────────────────────── */}
         <div className="flex-none px-4 py-3 border-t border-slate-100 bg-white">
-          <p className="text-[10px] text-slate-400 text-center">Fazzfly Platform · Quick Navigation</p>
+          <p className="text-[10px] text-slate-400 text-center">Poff Clinic · Quick Navigation</p>
         </div>
       </div>
     </>

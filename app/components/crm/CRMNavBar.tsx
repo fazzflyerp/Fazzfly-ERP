@@ -50,14 +50,14 @@ export default function CRMNavBar({ userName, pendingCount, follows, onFollowCli
           </Link>
 
           <div className="w-8 lg:w-10 h-8 lg:h-10 flex items-center justify-center flex-shrink-0">
-            <Image src="/logo2.png" alt="Fazzfly Logo" width={40} height={40} className="object-contain"/>
+            <Image src="/poff_logo_red.png" alt="Poff Clinic" width={40} height={40} className="object-contain"/>
           </div>
 
           <div className="hidden md:block">
-            <span className="text-lg lg:text-xl font-bold text-rose-600">Fazzfly CRM</span>
+            <span className="text-lg lg:text-xl font-bold" style={{ color: "#990011" }}>Poff Clinic CRM</span>
             <p className="text-xs text-slate-500">ระบบดูแลลูกค้าคลินิก</p>
           </div>
-          <span className="text-base font-bold text-rose-600 md:hidden">Fazzfly CRM</span>
+          <span className="text-base font-bold md:hidden" style={{ color: "#990011" }}>Poff Clinic CRM</span>
         </div>
 
         <div className="flex items-center gap-2 lg:gap-4 ml-auto">

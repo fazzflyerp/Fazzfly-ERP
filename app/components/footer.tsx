@@ -140,7 +140,7 @@ export default function Footer() {
         {/* Bottom Bar */}
         <div className="border-t border-slate-200 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="text-sm text-slate-500">
-            © 2025 Fazzfly ERP. All rights reserved.
+            © 2025 Poff Clinic. All rights reserved.
           </div>
           <div className="flex gap-6 text-sm text-slate-600">
             <Link href="/privacy" className="hover:text-blue-600 transition">

@@ -563,7 +563,7 @@ export default function HomePage() {
   if (error && !userData) {
     return (
       <div
-        className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 p-4"
+        className="min-h-screen flex items-center justify-center p-4" style={{ background: "#f9f6ef" }}
         style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
       >
         <div className="text-center bg-white rounded-3xl p-6 lg:p-8 shadow-lg max-w-md w-full">
@@ -577,7 +577,7 @@ export default function HomePage() {
               setError(null);
               fetchUserModules();
             }}
-            className="w-full px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            className="w-full px-6 py-2 text-white rounded-lg transition-colors font-medium" style={{ background: "#990011" }}
           >
             ลองใหม่อีกครั้ง
           </button>
@@ -591,19 +591,13 @@ export default function HomePage() {
 
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 pb-20 lg:pb-0"
+      className="min-h-screen pb-20 lg:pb-0" style={{ background: "#f9f6ef" }}
       style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
     >
       <QuickNav isOpen={navOpen} onClose={() => setNavOpen(false)} />
-      {/* Animated Background */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 lg:w-96 h-80 lg:h-96 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-40 animate-blob"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 lg:w-96 h-80 lg:h-96 bg-cyan-200 rounded-full mix-blend-multiply filter blur-3xl opacity-40 animate-blob animation-delay-2000"></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 lg:w-96 h-80 lg:h-96 bg-sky-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
-      </div>
 
       {/* Top Navigation - Mobile Optimized with CLEAR Back Button */}
-      <nav className="relative z-20 bg-white/80 backdrop-blur-xl border-b border-blue-100 sticky top-0">
+      <nav className="relative z-20 bg-white border-b sticky top-0" style={{ borderColor: "#f0e8e8" }}>
         <div className="max-w-7xl mx-auto px-4 lg:px-6 py-3 lg:py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 lg:gap-4 min-w-0">
             {/* Hamburger */}
@@ -612,17 +606,17 @@ export default function HomePage() {
             {/* ✅ ENHANCED Back to System Selector Button - มองเห็นชัดเจน */}
             <Link
               href="/select-system"
-              className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-slate-100 to-slate-50 hover:from-blue-50 hover:to-cyan-50 border border-slate-200 hover:border-blue-300 rounded-xl transition-all duration-300 group shadow-sm hover:shadow-md flex-shrink-0"
+              className="flex items-center gap-2 px-3 py-2 bg-slate-50 hover:bg-red-50 border border-slate-200 hover:border-red-200 rounded-xl transition-all duration-300 group shadow-sm flex-shrink-0"
             >
               <svg
-                className="w-5 h-5 text-slate-600 group-hover:text-blue-600 transition-colors"
+                className="w-5 h-5 text-slate-600 group-hover:text-red-700 transition-colors"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
               >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              <span className="text-sm font-semibold text-slate-700 group-hover:text-blue-600 transition-colors hidden sm:inline">
+              <span className="text-sm font-semibold text-slate-700 group-hover:text-red-700 transition-colors hidden sm:inline">
                 ย้อนกลับ
               </span>
             </Link>
@@ -630,8 +624,8 @@ export default function HomePage() {
             {/* Logo */}
             <div className="w-8 lg:w-10 h-8 lg:h-10 flex items-center justify-center flex-shrink-0">
               <Image
-                src="/logo2.png"
-                alt="Fazzfly Logo"
+                src="/poff_logo_red.png"
+                alt="Poff Clinic"
                 width={40}
                 height={40}
                 className="object-contain"
@@ -640,15 +634,15 @@ export default function HomePage() {
 
             {/* Title */}
             <div className="hidden md:block">
-              <span className="text-lg lg:text-xl font-bold bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-500 bg-clip-text text-transparent">
-                Fazzfly ERP
+              <span className="text-lg lg:text-xl font-bold" style={{ color: "#990011" }}>
+                Poff Clinic ERP
               </span>
               <p className="text-xs text-slate-500">ระบบบริหารจัดการ</p>
             </div>
 
             {/* Mobile Title */}
-            <span className="text-base font-bold bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-500 bg-clip-text text-transparent md:hidden">
-              Fazzfly ERP
+            <span className="text-base font-bold md:hidden" style={{ color: "#990011" }}>
+              Poff Clinic ERP
             </span>
           </div>
 
@@ -662,7 +656,7 @@ export default function HomePage() {
             </div>
 
             {/* User Avatar - Mobile */}
-            <div className="sm:hidden w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-sm">
+            <div className="sm:hidden w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm" style={{ background: "#990011" }}>
               {(session as any)?.user?.name?.charAt(0) || "U"}
             </div>
 
@@ -691,7 +685,7 @@ export default function HomePage() {
           <h1 className="text-2xl sm:text-3xl lg:text-5xl font-bold text-slate-800 mb-2 lg:mb-3 break-words">
             ยินดีต้อนรับกลับ,{' '}
             {userData ? (
-              <span className="bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">
+              <span style={{ color: "#990011" }}>
                 {userData.clientName}
               </span>
             ) : (
@@ -704,13 +698,14 @@ export default function HomePage() {
         </div>
 
         {/* Tab Navigation - Mobile Optimized */}
-        <div className="flex gap-2 mb-6 lg:mb-8 overflow-x-auto scrollbar-hide bg-white/50 backdrop-blur-md rounded-xl lg:rounded-2xl p-2 border border-blue-100/50 min-h-[52px]">
+        <div className="flex gap-2 mb-6 lg:mb-8 overflow-x-auto scrollbar-hide bg-white rounded-xl lg:rounded-2xl p-2 border min-h-[52px]" style={{ borderColor: "#f0e8e8" }}>
           <button
             onClick={() => setActiveTab("modules")}
             className={`px-4 lg:px-6 py-2.5 lg:py-3 font-semibold transition-all relative whitespace-nowrap text-sm lg:text-base ${activeTab === "modules"
-              ? "text-blue-600"
+              ? ""
               : "text-slate-600 hover:text-slate-800"
               }`}
+            style={activeTab === "modules" ? { color: "#990011" } : {}}
           >
             <span className="flex items-center gap-1 lg:gap-2">
               <svg className="w-4 lg:w-5 h-4 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -719,16 +714,17 @@ export default function HomePage() {
               โมดูล
             </span>
             {activeTab === "modules" && (
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-full"></div>
+              <div className="absolute bottom-0 left-0 right-0 h-1 rounded-full" style={{ background: "#990011" }}></div>
             )}
           </button>
           {(userData?.dashboardItems?.length ?? 0) > 0 && isAdmin() && (
             <button
               onClick={() => setActiveTab("dashboard")}
               className={`px-4 lg:px-6 py-2.5 lg:py-3 font-semibold transition-all relative whitespace-nowrap text-sm lg:text-base ${activeTab === "dashboard"
-                ? "text-blue-600"
+                ? ""
                 : "text-slate-600 hover:text-slate-800"
                 }`}
+            style={activeTab === "dashboard" ? { color: "#990011" } : {}}
             >
               <span className="flex items-center gap-1 lg:gap-2">
                 <svg className="w-4 lg:w-5 h-4 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -737,7 +733,7 @@ export default function HomePage() {
                 Dashboard
               </span>
               {activeTab === "dashboard" && (
-                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-full"></div>
+                <div className="absolute bottom-0 left-0 right-0 h-1 rounded-full" style={{ background: "#990011" }}></div>
               )}
             </button>
           )}
@@ -767,14 +763,15 @@ export default function HomePage() {
           </button>
 
 
-          {/* ✅ Tab ข้อมูลหลัก — SUPER_ADMIN only */}
-          {isSuperAdmin() && (
+          {/* ✅ Tab ข้อมูลหลัก — Admin only */}
+          {isAdmin() && (
           <button
               onClick={() => setActiveTab("masterdata")}
               className={`px-4 lg:px-6 py-2.5 lg:py-3 font-semibold transition-all relative whitespace-nowrap text-sm lg:text-base ${activeTab === "masterdata"
-                ? "text-indigo-600"
+                ? ""
                 : "text-slate-600 hover:text-slate-800"
                 }`}
+              style={activeTab === "masterdata" ? { color: "#990011" } : {}}
             >
               <span className="flex items-center gap-1 lg:gap-2">
                 <svg className="w-4 lg:w-5 h-4 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -782,13 +779,13 @@ export default function HomePage() {
                 </svg>
                 ข้อมูลหลัก
                 {masterDatabases.length > 0 && (
-                  <span className="ml-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded-full font-bold">
+                  <span className="ml-1 px-1.5 py-0.5 bg-red-100 text-xs rounded-full font-bold" style={{ color: "#990011" }}>
                     {masterDatabases.length}
                   </span>
                 )}
               </span>
               {activeTab === "masterdata" && (
-                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-600 to-purple-500 rounded-full"></div>
+                <div className="absolute bottom-0 left-0 right-0 h-1 rounded-full" style={{ background: "#990011" }}></div>
               )}
             </button>
           )}
@@ -822,7 +819,7 @@ export default function HomePage() {
             <div className="h-8 w-64 bg-slate-200 animate-pulse rounded-lg mb-6 lg:mb-8" />
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="bg-white/90 rounded-2xl lg:rounded-3xl shadow-lg p-5 lg:p-7 border border-blue-100/50 animate-pulse">
+                <div key={i} className="bg-white rounded-2xl lg:rounded-3xl shadow-lg p-5 lg:p-7 border animate-pulse" style={{ borderColor: "#f0e8e8" }}>
                   <div className="w-12 h-12 bg-slate-200 rounded-2xl mb-4" />
                   <div className="h-5 bg-slate-200 rounded mb-2 w-3/4" />
                   <div className="h-4 bg-slate-100 rounded mb-1 w-full" />
@@ -839,16 +836,17 @@ export default function HomePage() {
         {activeTab === "modules" && !loading && validModules.length > 0 && (
           <div className="animate-fadeIn">
             <h2 className="text-2xl lg:text-3xl font-bold text-slate-800 mb-4 lg:mb-8">
-              โมดูลที่สามารถใช้งาน <span className="text-blue-600">({validModules.length})</span>
+              โมดูลที่สามารถใช้งาน <span style={{ color: "#990011" }}>({validModules.length})</span>
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
               {validModules.map((module) => (
                 <div
                   key={module.moduleId}
-                  className="bg-white/90 backdrop-blur-xl rounded-2xl lg:rounded-3xl shadow-lg shadow-blue-100/50 p-5 lg:p-7 border border-blue-100/50 hover:shadow-2xl hover:shadow-blue-200 hover:-translate-y-2 transition-all duration-300 group h-full"
+                  className="bg-white rounded-2xl lg:rounded-3xl shadow-lg p-5 lg:p-7 border hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 group h-full"
+                  style={{ borderColor: "#f0e8e8" }}
                 >
                   <div className="flex items-center justify-between mb-4 lg:mb-5">
-                    <div className="p-3 lg:p-4 rounded-xl lg:rounded-2xl bg-gradient-to-br from-blue-500 via-sky-500 to-cyan-500 text-white group-hover:scale-110 transition-transform">
+                    <div className="p-3 lg:p-4 rounded-xl lg:rounded-2xl text-white group-hover:scale-110 transition-transform" style={{ background: "#990011" }}>
                       <svg className="w-5 lg:w-7 h-5 lg:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
                       </svg>
@@ -1615,12 +1613,12 @@ export default function HomePage() {
 
         {/* Empty State - Modules */}
         {activeTab === "modules" && validModules.length === 0 && !error && (
-          <div className="bg-blue-50 border border-blue-200 rounded-2xl lg:rounded-3xl p-8 lg:p-12 text-center">
-            <svg className="w-12 lg:w-16 h-12 lg:h-16 text-blue-300 mx-auto mb-3 lg:mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="rounded-2xl lg:rounded-3xl p-8 lg:p-12 text-center border" style={{ background: "#fdf5f5", borderColor: "#f5d5d5" }}>
+            <svg className="w-12 lg:w-16 h-12 lg:h-16 mx-auto mb-3 lg:mb-4" style={{ color: "#f5b0b0" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
-            <p className="text-blue-700 text-base lg:text-lg font-semibold">ยังไม่มีโมดูลที่สามารถใช้งาน</p>
-            <p className="text-blue-600 text-xs lg:text-sm mt-2">กรุณาติดต่อผู้ดูแลระบบเพื่อเพิ่มโมดูล</p>
+            <p className="text-base lg:text-lg font-semibold" style={{ color: "#990011" }}>ยังไม่มีโมดูลที่สามารถใช้งาน</p>
+            <p className="text-xs lg:text-sm mt-2 text-slate-500">กรุณาติดต่อผู้ดูแลระบบเพื่อเพิ่มโมดูล</p>
           </div>
         )}
       </div>
