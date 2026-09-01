@@ -13,12 +13,15 @@ function generateRequestId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
 
+const LANDING_ONLY_PATHS = ["/", "/contact", "/pricing", "/solution"];
+
 export async function middleware(request: NextRequest) {
   const startTime = Date.now();
   const requestId = generateRequestId();
   const path = request.nextUrl.pathname;
   const method = request.method;
   const timestamp = new Date().toISOString();
+  const hostname = request.headers.get("host") ?? "";
 
   // ✅ Skip static files
   if (
@@ -28,6 +31,12 @@ export async function middleware(request: NextRequest) {
     path.match(/\.(ico|png|jpg|jpeg|svg|css|js|woff|woff2|ttf)$/)
   ) {
     return NextResponse.next();
+  }
+
+  // บล็อก ERP routes บน fazzfly.com — ให้แค่ landing page เท่านั้น
+  const isFazzflydomain = hostname.includes("fazzfly.com") && !hostname.includes("app.fazzfly");
+  if (isFazzflydomain && !LANDING_ONLY_PATHS.includes(path)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   let userEmail: string | undefined;
@@ -100,5 +109,12 @@ export const config = {
   matcher: [
     "/api/:path*",
     "/debug/:path*",
+    "/login",
+    "/ERP/:path*",
+    "/CRM/:path*",
+    "/tasks",
+    "/select-system",
+    "/auth-router",
+    "/test",
   ],
 };
