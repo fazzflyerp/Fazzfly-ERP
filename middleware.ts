@@ -39,6 +39,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  // บน poffclinic.com — redirect / ไป /login
+  const isPoffDomain = hostname.includes("poffclinic.com");
+  if (isPoffDomain && path === "/") {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
   let userEmail: string | undefined;
   
   try {
@@ -107,6 +113,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/",
     "/api/:path*",
     "/debug/:path*",
     "/login",
