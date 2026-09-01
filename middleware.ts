@@ -42,7 +42,7 @@ export async function middleware(request: NextRequest) {
   // บน poffclinic.com — redirect / ไป /login
   const isPoffDomain = hostname.includes("poffclinic.com");
   if (isPoffDomain && path === "/") {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(new URL("/select-system", request.url));
   }
 
   let userEmail: string | undefined;
