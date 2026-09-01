@@ -47,15 +47,6 @@ export default function LoginPage() {
         <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-sky-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000" />
       </div>
 
-      {/* Home Button */}
-      <Link href="/">
-        <button className="fixed top-6 left-6 z-50 inline-flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-xl border border-blue-100 rounded-xl hover:bg-white hover:shadow-lg transition-all duration-300 text-blue-600 font-medium">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-          </svg>
-          กลับหน้าหลัก
-        </button>
-      </Link>
 
       <div className="relative z-10 min-h-screen flex items-center justify-center px-4">
         <div className="w-full max-w-md">
