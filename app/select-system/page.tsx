@@ -245,8 +245,8 @@ export default function SystemSelectorPage() {
 
   return (
     <div
-      className="h-screen flex flex-col overflow-hidden" style={{ background: "#f9f6ef" }}
-      style={{ fontFamily: "var(--font-noto-sans-thai), sans-serif" }}
+      className="h-screen flex flex-col overflow-hidden"
+      style={{ background: "#f9f6ef", fontFamily: "var(--font-noto-sans-thai), sans-serif" }}
     >
       <QuickNav isOpen={navOpen} onClose={() => setNavOpen(false)} />
 

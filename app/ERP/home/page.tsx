@@ -563,8 +563,8 @@ export default function HomePage() {
   if (error && !userData) {
     return (
       <div
-        className="min-h-screen flex items-center justify-center p-4" style={{ background: "#f9f6ef" }}
-        style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
+        className="min-h-screen flex items-center justify-center p-4"
+        style={{ background: "#f9f6ef", fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
       >
         <div className="text-center bg-white rounded-3xl p-6 lg:p-8 shadow-lg max-w-md w-full">
           <svg className="w-16 h-16 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -591,8 +591,8 @@ export default function HomePage() {
 
   return (
     <div
-      className="min-h-screen pb-20 lg:pb-0" style={{ background: "#f9f6ef" }}
-      style={{ fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
+      className="min-h-screen pb-20 lg:pb-0"
+      style={{ background: "#f9f6ef", fontFamily: 'var(--font-noto-sans-thai), sans-serif' }}
     >
       <QuickNav isOpen={navOpen} onClose={() => setNavOpen(false)} />
 
