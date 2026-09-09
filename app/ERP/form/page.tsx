@@ -473,25 +473,56 @@ export default function FormPage() {
         const rawPriceVal = priceSourceFn ? getValue(priceSourceFn) : "";
         const priceVal = rawPriceVal && rawPriceVal !== "__on__" && rawPriceVal !== "__selected__" ? rawPriceVal : "";
 
+        // ── Gowabi detection ──────────────────────────────────────────────────
+        const gowabiField = group.find(f => /gowabi/i.test(f.label) || /gowabi/i.test(f.fieldName));
+        const gowabiIsActive = gowabiField ? getValue(gowabiField.fieldName) !== "" : false;
+        const priceTypeFields_ = allFields.filter(f => isPriceTypeField(f.fieldName));
+        const gowabiPriceTypeFn = gowabiField
+            ? (priceTypeFields_.find(f => /gowabi/i.test(f.label) || /gowabi/i.test(f.fieldName))?.fieldName ?? "")
+            : "";
+        const staffField_ = allFields.find(f => f.fieldName === "staff");
+        const staffOpts = staffField_?.helper ? (helperOptions[staffField_.helper] || []) : [];
+
         const togglePayment = (fieldName: string) => {
             const isOn = selectedNames.includes(fieldName);
+            const isGowabiToggle = gowabiField?.fieldName === fieldName;
             const updates: Record<string, string> = {};
+
             if (isOn) {
                 // ปิด → clear
                 updates[fieldName] = "";
+                if (isGowabiToggle) {
+                    if (gowabiPriceTypeFn) updates[gowabiPriceTypeFn] = "";
+                    updates["gowabi_seller"] = "";
+                }
             } else {
-                if (selectedNames.length === 0) {
-                    // เลือกอันแรก → auto-fill จาก price
+                if (isGowabiToggle) {
+                    // Gowabi เปิด → deselect channel อื่น, auto-select gowabi price_type
+                    selectedNames.forEach(prev => { updates[prev] = ""; });
                     updates[fieldName] = priceVal || "__on__";
+                    if (gowabiPriceTypeFn) {
+                        priceTypeFields_.forEach(f => { updates[f.fieldName] = ""; });
+                        updates[gowabiPriceTypeFn] = priceVal || "__selected__";
+                    }
                 } else {
-                    // เลือกเพิ่ม → switch ทุกอันที่ auto-fill มาเป็น manual (__on__)
-                    selectedNames.forEach(prev => {
-                        const cur = getValue(prev);
-                        if (cur === priceVal || cur === "__on__" || cur === "__selected__") {
-                            updates[prev] = "__on__"; // ยังเลือกอยู่ แต่ให้กรอก manual
-                        }
-                    });
-                    updates[fieldName] = "__on__";
+                    // Channel อื่นเปิด → ถ้า Gowabi ถูกเลือกอยู่ให้ deselect ก่อน
+                    if (gowabiIsActive && gowabiField) {
+                        updates[gowabiField.fieldName] = "";
+                        updates["gowabi_seller"] = "";
+                        if (gowabiPriceTypeFn) updates[gowabiPriceTypeFn] = "";
+                    }
+                    const nonGowabi = selectedNames.filter(n => n !== gowabiField?.fieldName);
+                    if (nonGowabi.length === 0) {
+                        updates[fieldName] = priceVal || "__on__";
+                    } else {
+                        nonGowabi.forEach(prev => {
+                            const cur = getValue(prev);
+                            if (cur === priceVal || cur === "__on__" || cur === "__selected__") {
+                                updates[prev] = "__on__";
+                            }
+                        });
+                        updates[fieldName] = "__on__";
+                    }
                 }
             }
             setValues(updates);
@@ -514,12 +545,16 @@ export default function FormPage() {
                         <div className="flex flex-wrap gap-2">
                             {group.map((f, i) => {
                                 const on = selectedNames.includes(f.fieldName);
+                                const isGowabi = gowabiField?.fieldName === f.fieldName;
                                 return (
                                     <button key={`${f.fieldName}-${i}`} type="button"
                                         onClick={() => togglePayment(f.fieldName)}
                                         className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                                            on ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
-                                               : "bg-white border-slate-300 text-slate-500 hover:border-indigo-400 hover:text-indigo-600"
+                                            on && isGowabi
+                                                ? "bg-amber-500 border-amber-500 text-white shadow-sm"
+                                                : on
+                                                ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
+                                                : "bg-white border-slate-300 text-slate-500 hover:border-indigo-400 hover:text-indigo-600"
                                         }`}
                                     >{f.label}</button>
                                 );
@@ -527,9 +562,10 @@ export default function FormPage() {
                         </div>
                         {/* inputs */}
                         {selected.length === 1 && priceVal && getValue(selected[0].fieldName) === priceVal ? (
-                            <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-lg">
-                                <span className="text-xs text-indigo-500 font-medium">{selected[0].label}</span>
-                                <span className="text-sm font-bold text-indigo-700">฿{Number(priceVal).toLocaleString('th-TH')}</span>
+                            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${gowabiIsActive ? "bg-amber-50 border-amber-200" : "bg-indigo-50 border-indigo-200"}`}>
+                                <span className={`text-xs font-medium ${gowabiIsActive ? "text-amber-600" : "text-indigo-500"}`}>{selected[0].label}</span>
+                                <span className={`text-sm font-bold ${gowabiIsActive ? "text-amber-700" : "text-indigo-700"}`}>฿{Number(priceVal).toLocaleString('th-TH')}</span>
+                                {gowabiIsActive && <span className="ml-auto text-[10px] font-semibold text-amber-500 bg-amber-100 px-1.5 py-0.5 rounded">ราคา Gowabi</span>}
                             </div>
                         ) : selected.length > 0 ? (
                             <div className="space-y-2">
@@ -553,6 +589,40 @@ export default function FormPage() {
                                 })}
                             </div>
                         ) : null}
+                        {/* ── Gowabi sales staff ── */}
+                        {gowabiIsActive && (
+                            <div className="mt-1 p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5">
+                                <div className="flex items-center gap-1.5">
+                                    <svg className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"/>
+                                    </svg>
+                                    <span className="text-xs font-semibold text-amber-800">พนักงานขาย Gowabi</span>
+                                    <span className="text-[10px] text-amber-500">— สำหรับคำนวณค่าคอม</span>
+                                </div>
+                                {staffOpts.length > 0 ? (
+                                    <select
+                                        value={getValue("gowabi_seller") || ""}
+                                        onChange={e => setValues({ gowabi_seller: e.target.value })}
+                                        className={baseInputClass}
+                                    >
+                                        <option value="">-- เลือกพนักงานขาย --</option>
+                                        {staffOpts.map((opt, si) => (
+                                            <option key={si} value={opt.value}>
+                                                {opt.value}{opt.label ? ` — ${opt.label}` : ""}
+                                            </option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <input
+                                        type="text"
+                                        value={getValue("gowabi_seller") || ""}
+                                        onChange={e => setValues({ gowabi_seller: e.target.value })}
+                                        placeholder="ชื่อพนักงานขาย"
+                                        className={baseInputClass}
+                                    />
+                                )}
+                            </div>
+                        )}
                     </>
                 )}
             </div>
