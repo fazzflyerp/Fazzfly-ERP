@@ -59,6 +59,7 @@ const SYSTEMS = [
   {
     key: "erp",
     label: "Poff Clinic ERP",
+    fazzflyLabel: "Fazzfly ERP",
     sub: "ระบบบริหารจัดการองค์กร",
     route: "/ERP/home",
     gradient: "from-rose-700 to-rose-900",
@@ -78,6 +79,7 @@ const SYSTEMS = [
   {
     key: "crm",
     label: "Poff Clinic CRM",
+    fazzflyLabel: "Fazzfly CRM",
     sub: "ระบบบริหารลูกค้าสัมพันธ์",
     route: "/CRM/home",
     gradient: "from-purple-500 to-pink-500",
@@ -132,6 +134,22 @@ export default function SystemSelectorPage() {
   const [inboxTasks, setInboxTasks] = useState<any[]>([]);
   const [sentTasks, setSentTasks] = useState<any[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
+  const [isPoffClinic, setIsPoffClinic] = useState(false);
+
+  useEffect(() => {
+    setIsPoffClinic(typeof window !== "undefined" && window.location.hostname.includes("poffclinic"));
+  }, []);
+
+  const brand = {
+    logo: isPoffClinic ? "/poff_logo_red.png" : "/logo2.png",
+    logoAlt: isPoffClinic ? "Poff Clinic" : "Fazzfly",
+    name: isPoffClinic ? "Poff Clinic" : "Fazzfly",
+    tagline: isPoffClinic ? "Management System" : "All-in-One Business System",
+    accent: isPoffClinic ? "#990011" : "#4f46e5",
+    pageBg: isPoffClinic ? "#f9f6ef" : "#f8fafc",
+    borderColor: isPoffClinic ? "#f0e8e8" : "#e2e8f0",
+    copyright: isPoffClinic ? "Poff Clinic" : "Fazzfly ERP",
+  };
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
@@ -202,7 +220,7 @@ export default function SystemSelectorPage() {
 
   if (status === "loading" || !userData) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#f9f6ef" }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: brand.pageBg }}>
         <div className="text-center">
           {loadError ? (
             <>
@@ -211,14 +229,14 @@ export default function SystemSelectorPage() {
               <p className="text-slate-500 text-sm mb-4">{loadError}</p>
               <button
                 onClick={() => { setLoadError(null); window.location.reload(); }}
-                className="px-4 py-2 text-white rounded-lg text-sm" style={{ background: "#990011" }}
+                className="px-4 py-2 text-white rounded-lg text-sm" style={{ background: brand.accent }}
               >
                 ลองใหม่
               </button>
             </>
           ) : (
             <>
-              <div className="animate-spin rounded-full h-16 w-16 border-b-4 mx-auto mb-4" style={{ borderColor: "#990011" }} />
+              <div className="animate-spin rounded-full h-16 w-16 border-b-4 mx-auto mb-4" style={{ borderColor: brand.accent }} />
               <p className="text-slate-600 font-medium">กำลังโหลด...</p>
             </>
           )}
@@ -246,24 +264,24 @@ export default function SystemSelectorPage() {
   return (
     <div
       className="h-screen flex flex-col overflow-hidden"
-      style={{ background: "#f9f6ef", fontFamily: "var(--font-noto-sans-thai), sans-serif" }}
+      style={{ background: brand.pageBg, fontFamily: "var(--font-noto-sans-thai), sans-serif" }}
     >
       <QuickNav isOpen={navOpen} onClose={() => setNavOpen(false)} />
 
 
       {/* Top Header */}
-      <div className="relative z-20 flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 bg-white border-b" style={{ borderColor: "#f0e8e8" }}>
+      <div className="relative z-20 flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 bg-white border-b" style={{ borderColor: brand.borderColor }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="md:hidden">
               <QuickNavTrigger onClick={() => setNavOpen(true)} />
             </div>
-            <Image src="/poff_logo_red.png" alt="Poff Clinic" width={40} height={40} className="object-contain" />
+            <Image src={brand.logo} alt={brand.logoAlt} width={40} height={40} className="object-contain" />
             <div>
-              <h1 className="text-lg font-bold leading-none" style={{ color: "#990011" }}>
-                Poff Clinic
+              <h1 className="text-lg font-bold leading-none" style={{ color: brand.accent }}>
+                {brand.name}
               </h1>
-              <p className="text-[10px] text-slate-400 tracking-widest uppercase mt-0.5">Management System</p>
+              <p className="text-[10px] text-slate-400 tracking-widest uppercase mt-0.5">{brand.tagline}</p>
             </div>
           </div>
 
@@ -275,7 +293,7 @@ export default function SystemSelectorPage() {
             {session?.user?.image ? (
               <img src={session.user.image} alt="Profile" width={28} height={28} className="rounded-full" />
             ) : (
-              <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold" style={{ background: "#990011" }}>
+              <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold" style={{ background: brand.accent }}>
                 {session?.user?.name?.charAt(0) || "U"}
               </div>
             )}
@@ -295,7 +313,7 @@ export default function SystemSelectorPage() {
       <div className="relative z-10 flex flex-1 overflow-hidden">
 
         {/* ── Sidebar ─────────────────────────────────────────── */}
-        <aside className={`hidden md:flex flex-shrink-0 w-72 bg-white border-r flex-col transition-all duration-700 ${loaded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4"}`} style={{ borderColor: "#f0e8e8" }}>
+        <aside className={`hidden md:flex flex-shrink-0 w-72 bg-white border-r flex-col transition-all duration-700 ${loaded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4"}`} style={{ borderColor: brand.borderColor }}>
 
 
           {/* System Nav — Accordion */}
@@ -367,7 +385,7 @@ export default function SystemSelectorPage() {
                       {sys.icon}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold truncate text-slate-800">{sys.label}</p>
+                      <p className="text-sm font-semibold truncate text-slate-800">{isPoffClinic ? sys.label : ((sys as any).fazzflyLabel || sys.label)}</p>
                       <p className="text-[11px] truncate text-slate-400">{sys.sub}</p>
                     </div>
                     <svg
@@ -414,7 +432,7 @@ export default function SystemSelectorPage() {
           <div className="px-5 py-4 border-t border-slate-100">
             <p className="text-[10px] text-slate-400 text-center">
               <Link href={ROUTES.SUPPORT} className="hover:text-blue-600 transition-colors">ติดต่อฝ่ายสนับสนุน</Link>
-              {" · "}© 2025 Poff Clinic
+              {" · "}© 2025 {brand.copyright}
             </p>
           </div>
         </aside>
@@ -427,31 +445,26 @@ export default function SystemSelectorPage() {
             <div className="mb-6 sm:mb-10 text-center">
               {/* Role badge */}
               {!roleLoading && role && (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-4 border" style={{ background: "#fdf5f5", borderColor: "#f5c5c5" }}>
-                  <span className={`w-2 h-2 rounded-full animate-pulse ${
-                    role === "SUPER_ADMIN" ? "bg-rose-600" :
-                    role === "ADMIN" ? "bg-rose-500" : "bg-green-500"
-                  }`} />
-                  <span className={`text-xs font-bold tracking-wide ${
-                    role === "SUPER_ADMIN" ? "text-rose-700" :
-                    role === "ADMIN" ? "text-rose-600" : "text-green-600"
-                  }`}>
-                    {role === "SUPER_ADMIN" ? "Super Admin" :
-                     role === "ADMIN" ? "Admin" : "Staff"}
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-4 border"
+                  style={{ background: isPoffClinic ? "#fdf5f5" : "#eef2ff", borderColor: isPoffClinic ? "#f5c5c5" : "#c7d2fe" }}>
+                  <span className={`w-2 h-2 rounded-full animate-pulse ${role === "SUPER_ADMIN" || role === "ADMIN" ? "" : "bg-green-500"}`}
+                    style={role === "SUPER_ADMIN" || role === "ADMIN" ? { background: brand.accent } : {}} />
+                  <span className="text-xs font-bold tracking-wide" style={{ color: role === "STAFF" ? "#16a34a" : brand.accent }}>
+                    {role === "SUPER_ADMIN" ? "Super Admin" : role === "ADMIN" ? "Admin" : "Staff"}
                   </span>
                 </div>
               )}
 
               <h2 className="text-3xl sm:text-5xl font-bold text-slate-800 mb-2 leading-tight">
                 ยินดีต้อนรับ,{" "}
-                <span style={{ color: "#990011" }}>
+                <span style={{ color: brand.accent }}>
                   {userData.clientName}
                 </span>
               </h2>
               <p className="text-slate-400 mb-4 sm:mb-8">เลือกระบบจากแถบซ้ายเพื่อเริ่มใช้งาน</p>
 
               <div className="flex items-stretch gap-2 sm:gap-4 flex-wrap justify-center">
-                <div className="bg-white rounded-2xl px-4 sm:px-8 py-4 sm:py-5 border shadow-lg text-center flex-1 min-w-[90px]" style={{ borderColor: "#f0e8e8" }}>
+                <div className="bg-white rounded-2xl px-4 sm:px-8 py-4 sm:py-5 border shadow-lg text-center flex-1 min-w-[90px]" style={{ borderColor: brand.borderColor }}>
                   <p className="text-[10px] sm:text-xs text-slate-400 font-medium mb-1.5">แพ็คเกจ</p>
                   <p className="text-base sm:text-xl font-bold text-slate-800">{userData.package}</p>
                 </div>
@@ -461,9 +474,9 @@ export default function SystemSelectorPage() {
                     <AnimatedNumber value={userData.daysRemaining} /> วัน
                   </p>
                 </div>
-                <div className="bg-white rounded-2xl px-4 sm:px-8 py-4 sm:py-5 border shadow-lg text-center flex-1 min-w-[90px]" style={{ borderColor: "#f0e8e8" }}>
+                <div className="bg-white rounded-2xl px-4 sm:px-8 py-4 sm:py-5 border shadow-lg text-center flex-1 min-w-[90px]" style={{ borderColor: brand.borderColor }}>
                   <p className="text-[10px] sm:text-xs text-slate-400 font-medium mb-1.5">Client ID</p>
-                  <p className="text-base sm:text-xl font-bold" style={{ color: "#990011" }}>{userData.clientId}</p>
+                  <p className="text-base sm:text-xl font-bold" style={{ color: brand.accent }}>{userData.clientId}</p>
                 </div>
               </div>
             </div>
@@ -482,13 +495,13 @@ export default function SystemSelectorPage() {
                   <div className="space-y-6">
                     {/* Overview Dashboard — อยู่บนสุด */}
                     {dashboardItems.length > 0 && (
-                      <div className="bg-white rounded-3xl border shadow-lg p-4 sm:p-6" style={{ borderColor: "#f0e8e8" }}>
+                      <div className="bg-white rounded-3xl border shadow-lg p-4 sm:p-6" style={{ borderColor: brand.borderColor }}>
                         <OverviewDashboard dashboardItems={dashboardItems} />
                       </div>
                     )}
 
                     {/* Task Summary */}
-                    <div className="bg-white rounded-3xl border shadow-lg p-4 sm:p-6" style={{ borderColor: "#f0e8e8" }}>
+                    <div className="bg-white rounded-3xl border shadow-lg p-4 sm:p-6" style={{ borderColor: brand.borderColor }}>
                       <div className="flex items-center justify-between mb-5">
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-md">
@@ -541,7 +554,7 @@ export default function SystemSelectorPage() {
 
                 {/* ── Staff: Today's Tasks ── */}
                 {!isAdmin() && (
-                  <div className="bg-white rounded-3xl border shadow-lg p-4 sm:p-6" style={{ borderColor: "#f0e8e8" }}>
+                  <div className="bg-white rounded-3xl border shadow-lg p-4 sm:p-6" style={{ borderColor: brand.borderColor }}>
                     <div className="flex items-center justify-between mb-5">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-md">
