@@ -385,6 +385,10 @@ export default function FormPage() {
     // เลือกได้แค่อันเดียวต่อ 1 รายการ
     const isPriceTypeField = (fieldName: string) => /^price_type_/i.test(fieldName);
 
+    // ตรวจว่า Gowabi payment ถูกเลือกอยู่ใน data row นั้นหรือเปล่า
+    const isGowabiActiveFor = (data: Record<string, string>, fields: FormField[]) =>
+        fields.some(f => isPaymentField(f.fieldName) && (/gowabi/i.test(f.label) || /gowabi/i.test(f.fieldName)) && !!data[f.fieldName] && data[f.fieldName] !== "");
+
     const renderPriceTypeGroup = (
         group: FormField[],
         getValue: (fieldName: string) => string,
@@ -630,7 +634,7 @@ export default function FormPage() {
     };
 
     // ✅ Render Field Function
-    const renderField = (field: FormField, value: string, onChange: (val: string) => void) => {
+    const renderField = (field: FormField, value: string, onChange: (val: string) => void, readOnly = false) => {
 
         switch (field.type) {
             case "image":
@@ -721,15 +725,19 @@ export default function FormPage() {
                     <div className="group">
                         <label className={baseLabel}>
                             {field.label}
-                            {field.required && <span className="text-red-500 ml-1">*</span>}
+                            {field.required && !readOnly && <span className="text-red-500 ml-1">*</span>}
+                            {readOnly && (
+                                <span className="ml-2 text-[10px] font-semibold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded">🔒 ราคา Gowabi</span>
+                            )}
                         </label>
                         <input
                             type="number"
                             value={value}
-                            onChange={(e) => onChange(e.target.value)}
-                            placeholder={field.placeholder}
-                            className={baseInputClass}
-                            required={field.required}
+                            onChange={readOnly ? undefined : (e) => onChange(e.target.value)}
+                            readOnly={readOnly}
+                            placeholder={readOnly ? "" : field.placeholder}
+                            className={`${baseInputClass} ${readOnly ? "bg-amber-50 border-amber-200 cursor-not-allowed text-amber-800 font-semibold" : ""}`}
+                            required={!readOnly && field.required}
                             step="any"
                         />
                     </div>
@@ -908,11 +916,12 @@ export default function FormPage() {
                                         ...customerFields.filter(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && !isBottomField(f.fieldName) && !(isPayroll && f.type === "date")),
                                         ...customerFields.filter(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && isBottomField(f.fieldName) && !(isPayroll && f.type === "date")),
                                     ];
+                                    const gowabiActive = isGowabiActiveFor(customerData, customerFields);
                                     return regularFields.length > 0 ? (
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                                             {regularFields.map(field => (
                                                 <div key={field.fieldName} className={field.type === "textarea" || field.type === "image" ? "md:col-span-2 lg:col-span-3" : ""}>
-                                                    {renderField(field, customerData[field.fieldName] || "", (val) => handleCustomerChange(field.fieldName, val, field.helper!))}
+                                                    {renderField(field, customerData[field.fieldName] || "", (val) => handleCustomerChange(field.fieldName, val, field.helper!), gowabiActive && field.type === "number")}
                                                 </div>
                                             ))}
                                         </div>
@@ -964,11 +973,12 @@ export default function FormPage() {
                                                 ...allF.filter(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && f.fieldName !== "staff" && f.fieldName !== "doctor" && !(isPayroll && f.type === "date")),
                                                 ...allF.filter(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && (f.fieldName === "staff" || f.fieldName === "doctor") && !(isPayroll && f.type === "date")),
                                             ];
+                                            const gowabiActive = isGowabiActiveFor(row, allF);
                                             return regularFields.length > 0 ? (
                                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                                                     {regularFields.map(field => (
                                                         <div key={field.fieldName} className={field.type === "textarea" || field.type === "image" ? "md:col-span-2 lg:col-span-3" : ""}>
-                                                            {renderField(field, row[field.fieldName] || "", (val) => handleLineItemChange(field.fieldName, val, idx, field.helper!))}
+                                                            {renderField(field, row[field.fieldName] || "", (val) => handleLineItemChange(field.fieldName, val, idx, field.helper!), gowabiActive && field.type === "number")}
                                                         </div>
                                                     ))}
                                                 </div>
