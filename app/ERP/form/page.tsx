@@ -439,7 +439,7 @@ export default function FormPage() {
                     </div>
                 ) : gowabiLocked ? (
                     <div className="flex items-center gap-2 px-3 py-2 bg-amber-100 border border-amber-300 rounded-lg">
-                        <span className="text-xs text-amber-700 font-medium">{selectedField?.label || "ราคา Gowabi"}</span>
+                        <span className="text-xs text-amber-700 font-medium">ราคาพิเศษ</span>
                         {displayAmount && <span className="text-sm font-bold text-amber-800">฿{Number(displayAmount).toLocaleString('th-TH')}</span>}
                     </div>
                 ) : (
