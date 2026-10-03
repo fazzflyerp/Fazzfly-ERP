@@ -495,8 +495,6 @@ export default function FormPage() {
         const gowabiPriceTypeFn = gowabiField
             ? (priceTypeFields_.find(f => /gowabi/i.test(f.label) || /gowabi/i.test(f.fieldName))?.fieldName ?? "")
             : "";
-        const staffField_ = allFields.find(f => f.fieldName === "staff");
-        const staffOpts = staffField_?.helper ? (helperOptions[staffField_.helper] || []) : [];
 
         const togglePayment = (fieldName: string) => {
             const isOn = selectedNames.includes(fieldName);
@@ -508,7 +506,6 @@ export default function FormPage() {
                 updates[fieldName] = "";
                 if (isGowabiToggle) {
                     if (gowabiPriceTypeFn) updates[gowabiPriceTypeFn] = "";
-                    updates["gowabi_seller"] = "";
                 }
             } else {
                 if (isGowabiToggle) {
@@ -613,40 +610,6 @@ export default function FormPage() {
                                 })}
                             </div>
                         ) : null}
-                        {/* ── Gowabi sales staff ── */}
-                        {gowabiIsActive && (
-                            <div className="mt-1 p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5">
-                                <div className="flex items-center gap-1.5">
-                                    <svg className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"/>
-                                    </svg>
-                                    <span className="text-xs font-semibold text-amber-800">พนักงานขาย Gowabi</span>
-                                    <span className="text-[10px] text-amber-500">— สำหรับคำนวณค่าคอม</span>
-                                </div>
-                                {staffOpts.length > 0 ? (
-                                    <select
-                                        value={getValue("gowabi_seller") || ""}
-                                        onChange={e => setValues({ gowabi_seller: e.target.value })}
-                                        className={baseInputClass}
-                                    >
-                                        <option value="">-- เลือกพนักงานขาย --</option>
-                                        {staffOpts.map((opt, si) => (
-                                            <option key={si} value={opt.value}>
-                                                {opt.value}{opt.label ? ` — ${opt.label}` : ""}
-                                            </option>
-                                        ))}
-                                    </select>
-                                ) : (
-                                    <input
-                                        type="text"
-                                        value={getValue("gowabi_seller") || ""}
-                                        onChange={e => setValues({ gowabi_seller: e.target.value })}
-                                        placeholder="ชื่อพนักงานขาย"
-                                        className={baseInputClass}
-                                    />
-                                )}
-                            </div>
-                        )}
                     </>
                 )}
             </div>
