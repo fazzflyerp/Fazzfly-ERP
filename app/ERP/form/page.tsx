@@ -512,12 +512,14 @@ export default function FormPage() {
                 }
             } else {
                 if (isGowabiToggle) {
-                    // Gowabi เปิด → deselect channel อื่น, auto-select gowabi price_type
+                    // Gowabi เปิด → deselect channel อื่น, ล้างราคาเดิม, lock gowabi price_type
                     selectedNames.forEach(prev => { updates[prev] = ""; });
-                    updates[fieldName] = priceVal || "__on__";
+                    // ล้างราคาเดิมออก เพื่อไม่ให้ราคาปกติติดมาด้วย
+                    if (priceSourceFn) updates[priceSourceFn] = "";
+                    updates[fieldName] = "__on__"; // รอกรอกราคา Gowabi
                     if (gowabiPriceTypeFn) {
                         priceTypeFields_.forEach(f => { updates[f.fieldName] = ""; });
-                        updates[gowabiPriceTypeFn] = priceVal || "__selected__";
+                        updates[gowabiPriceTypeFn] = "__selected__"; // mark ว่าเลือก gowabi type แล้ว
                     }
                 } else {
                     // Channel อื่นเปิด → ถ้า Gowabi ถูกเลือกอยู่ให้ deselect ก่อน
@@ -543,7 +545,8 @@ export default function FormPage() {
             setValues(updates);
         };
 
-        const paymentLocked = !priceVal;
+        // lock ถ้าไม่มีราคา ยกเว้นกรณี Gowabi ถูกเลือกแล้ว (รอกรอกราคา Gowabi)
+        const paymentLocked = !priceVal && !gowabiIsActive;
         return (
             <div key="__paymentGroup" className="space-y-2 bg-slate-50 rounded-xl p-4 border border-slate-200">
                 <label className={`${baseLabel} ${paymentLocked ? "opacity-40" : ""}`}>
@@ -575,6 +578,12 @@ export default function FormPage() {
                                 );
                             })}
                         </div>
+                        {/* hint เมื่อ Gowabi active แต่ยังไม่ได้กรอกราคา */}
+                        {gowabiIsActive && !priceVal && (
+                            <div className="px-3 py-2.5 bg-amber-50 border border-dashed border-amber-300 rounded-lg text-xs text-amber-700 text-center font-medium">
+                                ↑ กรอกราคา Gowabi ในช่องจำนวนเงินด้านบน
+                            </div>
+                        )}
                         {/* inputs */}
                         {selected.length === 1 && priceVal && getValue(selected[0].fieldName) === priceVal ? (
                             <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${gowabiIsActive ? "bg-amber-50 border-amber-200" : "bg-indigo-50 border-indigo-200"}`}>
@@ -927,12 +936,11 @@ export default function FormPage() {
                                         ...customerFields.filter(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && !isBottomField(f.fieldName) && !(isPayroll && f.type === "date")),
                                         ...customerFields.filter(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && isBottomField(f.fieldName) && !(isPayroll && f.type === "date")),
                                     ];
-                                    const gowabiActive = isGowabiActiveFor(customerData, customerFields);
                                     return regularFields.length > 0 ? (
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                                             {regularFields.map(field => (
                                                 <div key={field.fieldName} className={field.type === "textarea" || field.type === "image" ? "md:col-span-2 lg:col-span-3" : ""}>
-                                                    {renderField(field, customerData[field.fieldName] || "", (val) => handleCustomerChange(field.fieldName, val, field.helper!), gowabiActive && field.type === "number")}
+                                                    {renderField(field, customerData[field.fieldName] || "", (val) => handleCustomerChange(field.fieldName, val, field.helper!))}
                                                 </div>
                                             ))}
                                         </div>
@@ -984,12 +992,11 @@ export default function FormPage() {
                                                 ...allF.filter(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && f.fieldName !== "staff" && f.fieldName !== "doctor" && !(isPayroll && f.type === "date")),
                                                 ...allF.filter(f => !isPriceTypeField(f.fieldName) && !isPaymentField(f.fieldName) && (f.fieldName === "staff" || f.fieldName === "doctor") && !(isPayroll && f.type === "date")),
                                             ];
-                                            const gowabiActive = isGowabiActiveFor(row, allF);
                                             return regularFields.length > 0 ? (
                                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                                                     {regularFields.map(field => (
                                                         <div key={field.fieldName} className={field.type === "textarea" || field.type === "image" ? "md:col-span-2 lg:col-span-3" : ""}>
-                                                            {renderField(field, row[field.fieldName] || "", (val) => handleLineItemChange(field.fieldName, val, idx, field.helper!), gowabiActive && field.type === "number")}
+                                                            {renderField(field, row[field.fieldName] || "", (val) => handleLineItemChange(field.fieldName, val, idx, field.helper!))}
                                                         </div>
                                                     ))}
                                                 </div>
