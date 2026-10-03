@@ -409,7 +409,12 @@ export default function FormPage() {
         const selectedField = group.find(f => getValue(f.fieldName) !== "");
         const selectedFieldName = selectedField?.fieldName ?? "";
 
+        // ตรวจว่า Gowabi payment active อยู่ → lock price type
+        const gowabiPayField = allFields.find(f => isPaymentField(f.fieldName) && (/gowabi/i.test(f.label) || /gowabi/i.test(f.fieldName)));
+        const gowabiLocked = gowabiPayField ? getValue(gowabiPayField.fieldName) !== "" : false;
+
         const handleSelect = (selectedFn: string) => {
+            if (gowabiLocked) return;
             group.forEach(g => setValue(g.fieldName, ""));
             if (!selectedFn) return;
             setValue(selectedFn, displayAmount || "__selected__");
@@ -422,14 +427,20 @@ export default function FormPage() {
 
         const locked = !displayAmount;
         return (
-            <div key="__priceTypeGroup" className="space-y-2 bg-slate-50 rounded-xl p-4 border border-slate-200">
+            <div key="__priceTypeGroup" className={`space-y-2 rounded-xl p-4 border ${gowabiLocked ? "bg-amber-50 border-amber-200" : "bg-slate-50 border-slate-200"}`}>
                 <label className={`${baseLabel} ${locked ? "opacity-40" : ""}`}>
                     ประเภทของราคา
-                    {isRequired && <span className="text-red-500 ml-1">*</span>}
+                    {isRequired && !gowabiLocked && <span className="text-red-500 ml-1">*</span>}
+                    {gowabiLocked && <span className="ml-2 text-[10px] font-semibold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded">🔒 Gowabi</span>}
                 </label>
                 {locked ? (
                     <div className="w-full px-3 py-2.5 bg-white border border-dashed border-slate-300 rounded-lg text-sm text-slate-400 text-center">
                         กรอกจำนวนเงินก่อน
+                    </div>
+                ) : gowabiLocked ? (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-amber-100 border border-amber-300 rounded-lg">
+                        <span className="text-xs text-amber-700 font-medium">{selectedField?.label || "ราคา Gowabi"}</span>
+                        {displayAmount && <span className="text-sm font-bold text-amber-800">฿{Number(displayAmount).toLocaleString('th-TH')}</span>}
                     </div>
                 ) : (
                     <>
