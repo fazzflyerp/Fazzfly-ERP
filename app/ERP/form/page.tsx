@@ -509,20 +509,17 @@ export default function FormPage() {
                 }
             } else {
                 if (isGowabiToggle) {
-                    // Gowabi เปิด → deselect channel อื่น, ล้างราคาเดิม, lock gowabi price_type
+                    // Gowabi เปิด → deselect channel อื่น, auto-select gowabi price_type
                     selectedNames.forEach(prev => { updates[prev] = ""; });
-                    // ล้างราคาเดิมออก เพื่อไม่ให้ราคาปกติติดมาด้วย
-                    if (priceSourceFn) updates[priceSourceFn] = "";
-                    updates[fieldName] = "__on__"; // รอกรอกราคา Gowabi
+                    updates[fieldName] = priceVal || "__on__";
                     if (gowabiPriceTypeFn) {
                         priceTypeFields_.forEach(f => { updates[f.fieldName] = ""; });
-                        updates[gowabiPriceTypeFn] = "__selected__"; // mark ว่าเลือก gowabi type แล้ว
+                        updates[gowabiPriceTypeFn] = priceVal || "__selected__";
                     }
                 } else {
                     // Channel อื่นเปิด → ถ้า Gowabi ถูกเลือกอยู่ให้ deselect ก่อน
                     if (gowabiIsActive && gowabiField) {
                         updates[gowabiField.fieldName] = "";
-                        updates["gowabi_seller"] = "";
                         if (gowabiPriceTypeFn) updates[gowabiPriceTypeFn] = "";
                     }
                     const nonGowabi = selectedNames.filter(n => n !== gowabiField?.fieldName);
@@ -542,8 +539,7 @@ export default function FormPage() {
             setValues(updates);
         };
 
-        // lock ถ้าไม่มีราคา ยกเว้นกรณี Gowabi ถูกเลือกแล้ว (รอกรอกราคา Gowabi)
-        const paymentLocked = !priceVal && !gowabiIsActive;
+        const paymentLocked = !priceVal;
         return (
             <div key="__paymentGroup" className="space-y-2 bg-slate-50 rounded-xl p-4 border border-slate-200">
                 <label className={`${baseLabel} ${paymentLocked ? "opacity-40" : ""}`}>
@@ -575,18 +571,12 @@ export default function FormPage() {
                                 );
                             })}
                         </div>
-                        {/* hint เมื่อ Gowabi active แต่ยังไม่ได้กรอกราคา */}
-                        {gowabiIsActive && !priceVal && (
-                            <div className="px-3 py-2.5 bg-amber-50 border border-dashed border-amber-300 rounded-lg text-xs text-amber-700 text-center font-medium">
-                                ↑ กรอกราคา Gowabi ในช่องจำนวนเงินด้านบน
-                            </div>
-                        )}
                         {/* inputs */}
                         {selected.length === 1 && priceVal && getValue(selected[0].fieldName) === priceVal ? (
                             <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${gowabiIsActive ? "bg-amber-50 border-amber-200" : "bg-indigo-50 border-indigo-200"}`}>
                                 <span className={`text-xs font-medium ${gowabiIsActive ? "text-amber-600" : "text-indigo-500"}`}>{selected[0].label}</span>
                                 <span className={`text-sm font-bold ${gowabiIsActive ? "text-amber-700" : "text-indigo-700"}`}>฿{Number(priceVal).toLocaleString('th-TH')}</span>
-                                {gowabiIsActive && <span className="ml-auto text-[10px] font-semibold text-amber-500 bg-amber-100 px-1.5 py-0.5 rounded">ราคา Gowabi</span>}
+                                {gowabiIsActive && <span className="ml-auto text-[10px] font-semibold text-amber-500 bg-amber-100 px-1.5 py-0.5 rounded">ราคาพิเศษ</span>}
                             </div>
                         ) : selected.length > 0 ? (
                             <div className="space-y-2">
