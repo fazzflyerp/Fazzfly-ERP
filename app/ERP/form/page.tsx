@@ -274,6 +274,18 @@ export default function FormPage() {
                     const salesErr = validateSalesRow(row, lineItemFields, `สินค้าที่ ${i + 1}`);
                     if (salesErr) { setError(salesErr); return; }
                 }
+
+                // Gowabi: ถ้าเลือก Gowabi ให้ auto-set price_type เป็น ราคาพิเศษ เสมอ
+                const gowabiPayF = lineItemFields.find(f => isPaymentField(f.fieldName) && (/gowabi/i.test(f.label) || /gowabi/i.test(f.fieldName)));
+                const gowabiPtF  = lineItemFields.find(f => isPriceTypeField(f.fieldName) && /พิเศษ/.test(f.label));
+                if (gowabiPayF && gowabiPtF) {
+                    const payVal = String(row[gowabiPayF.fieldName] ?? "");
+                    const SENT   = new Set(["__on__", "__selected__", ""]);
+                    if (payVal && !SENT.has(payVal)) {
+                        lineItemFields.filter(f => isPriceTypeField(f.fieldName)).forEach(f => { row[f.fieldName] = ""; });
+                        row[gowabiPtF.fieldName] = payVal;
+                    }
+                }
             }
         } else {
             const filledRows = lineItems.filter((row) =>
@@ -300,6 +312,18 @@ export default function FormPage() {
                 if (isSales) {
                     const salesErr = validateSalesRow(row, formFields, `รายการที่ ${i + 1}`);
                     if (salesErr) { setError(salesErr); return; }
+                }
+
+                // Gowabi: ถ้าเลือก Gowabi ให้ auto-set price_type เป็น ราคาพิเศษ เสมอ
+                const gowabiPayF = formFields.find(f => isPaymentField(f.fieldName) && (/gowabi/i.test(f.label) || /gowabi/i.test(f.fieldName)));
+                const gowabiPtF  = formFields.find(f => isPriceTypeField(f.fieldName) && /พิเศษ/.test(f.label));
+                if (gowabiPayF && gowabiPtF) {
+                    const payVal = String(row[gowabiPayF.fieldName] ?? "");
+                    const SENT   = new Set(["__on__", "__selected__", ""]);
+                    if (payVal && !SENT.has(payVal)) {
+                        formFields.filter(f => isPriceTypeField(f.fieldName)).forEach(f => { row[f.fieldName] = ""; });
+                        row[gowabiPtF.fieldName] = payVal;
+                    }
                 }
             }
         }
@@ -493,7 +517,7 @@ export default function FormPage() {
         const gowabiIsActive = gowabiField ? getValue(gowabiField.fieldName) !== "" : false;
         const priceTypeFields_ = allFields.filter(f => isPriceTypeField(f.fieldName));
         const gowabiPriceTypeFn = gowabiField
-            ? (priceTypeFields_.find(f => /gowabi/i.test(f.label) || /gowabi/i.test(f.fieldName))?.fieldName ?? "")
+            ? (priceTypeFields_.find(f => /พิเศษ/.test(f.label))?.fieldName ?? "")
             : "";
 
         const togglePayment = (fieldName: string) => {
