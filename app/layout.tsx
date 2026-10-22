@@ -3,8 +3,8 @@ import Providers from "./providers-wrapper";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Poff Clinic",
-  description: "Poff Clinic Management System",
+  title: "Fazzfly ERP",
+  description: "Fazzfly All-in-One Business System",
   other: {
     google: "notranslate",
   },
