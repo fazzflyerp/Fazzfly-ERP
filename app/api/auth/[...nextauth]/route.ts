@@ -164,7 +164,16 @@ const authOptions: NextAuthOptions = {
     },
     
     async redirect({ url, baseUrl }) {
+      const TRUSTED = ["app.fazzfly.com", "app.poffclinic.com"];
+      // relative URL → prepend baseUrl
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      // same baseUrl → allow
       if (url.startsWith(baseUrl)) return url;
+      // trusted domain with same path → allow (multi-domain deployment)
+      try {
+        const parsed = new URL(url);
+        if (TRUSTED.some(d => parsed.hostname === d)) return url;
+      } catch { /* ignore */ }
       return `${baseUrl}/auth-router`;
     },
   },
