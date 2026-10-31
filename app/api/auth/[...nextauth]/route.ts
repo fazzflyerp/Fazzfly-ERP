@@ -50,13 +50,13 @@ const authOptions: NextAuthOptions = {
 
         try {
           const { saReadRange } = await import("@/lib/google-sa");
-          // client_user: A=client_id B=email C=role D=is_active E=notes F=password_hash G=branch_id H=branch_name
-          const rows = await saReadRange(MASTER_SHEET_ID, "client_user!A:H");
-          const row  = rows.slice(1).find((r) => (r[1] ?? "").toString().toLowerCase().trim() === email);
+          // client_user: A=client_id B=client_name C=email D=plan_type E=status F=created_at G=expires_at H=modules I=admin_refresh_token J=version_edition K=type L=? M=pass
+          const rows = await saReadRange(MASTER_SHEET_ID, "client_user!A:M");
+          const row  = rows.slice(1).find((r) => (r[2] ?? "").toString().toLowerCase().trim() === email);
           if (!row) return null;
 
-          const isActive = (row[3] ?? "").toString().toUpperCase() === "TRUE";
-          const stored   = (row[5] ?? "").toString().trim();
+          const isActive = (row[4] ?? "").toString().toLowerCase() === "active";
+          const stored   = (row[12] ?? "").toString().trim();
           if (!isActive || !stored) return null;
 
           // plain text comparison — demo only
@@ -65,7 +65,7 @@ const authOptions: NextAuthOptions = {
           return {
             id:    email,
             email: email,
-            name:  (row[7] ?? row[0] ?? email).toString(),
+            name:  (row[1] ?? row[0] ?? email).toString(),
           };
         } catch {
           return null;
